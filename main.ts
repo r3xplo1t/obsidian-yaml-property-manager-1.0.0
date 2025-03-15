@@ -275,7 +275,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                 if (success) successCount++;
             }
             
-            new Notice(`Applied template to ${successCount} of ${targetFiles.length} files`);
+            new Notice(`Applied template to ${successCount} of ${targetFiles.length} ${targetFiles.length === 1 ? 'file' : 'files'}`);
             return successCount;
         } catch (error) {
             console.error('Error applying template:', error);

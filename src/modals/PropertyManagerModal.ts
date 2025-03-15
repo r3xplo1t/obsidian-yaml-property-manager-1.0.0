@@ -116,7 +116,7 @@ export class PropertyManagerModal extends Modal {
         
         selectedFilesCountEl.createSpan({
             text: this.plugin.selectedFiles.length > 0 
-                ? `${this.plugin.selectedFiles.length} files selected` 
+                ? `${this.plugin.selectedFiles.length} ${this.plugin.selectedFiles.length === 1 ? 'file' : 'files'} selected` 
                 : 'No files selected',
             cls: 'yaml-direct-path-text'
         });

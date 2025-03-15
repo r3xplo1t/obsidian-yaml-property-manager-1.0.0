@@ -40,11 +40,11 @@ export class TemplateFileSelectorModal extends Modal {
         } else {
             let text = '';
             if (fileCount > 0) {
-                text += `${fileCount} file${fileCount !== 1 ? 's' : ''}`;
+                text += `${fileCount} ${fileCount === 1 ? 'file' : 'files'}`;
             }
             if (folderCount > 0) {
                 if (fileCount > 0) text += ' and ';
-                text += `${folderCount} folder${folderCount !== 1 ? 's' : ''}`;
+                text += `${folderCount} ${folderCount === 1 ? 'file' : 'files'}`;
             }
             text += ' selected';
             countEl.textContent = text;

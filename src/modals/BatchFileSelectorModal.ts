@@ -340,20 +340,20 @@ export class BatchFileSelectorModal extends Modal {
         return files;
     }
     
-    updateSelectedCount(countEl: HTMLElement) {
+    updateSelectedCount(selectedCountEl: HTMLElement) {
         const count = this.selectedFiles.length;
-        countEl.textContent = count === 0 
+        selectedCountEl.textContent = count === 0 
             ? 'No files selected' 
-            : `${count} file${count === 1 ? '' : 's'} selected`;
+            : `${count} ${count === 1 ? 'file' : 'files'} selected`;
         
         // Enable/disable confirm button
         const confirmButton = this.contentEl.querySelector('.yaml-button--confirm') as HTMLButtonElement;
         if (confirmButton) {
             confirmButton.disabled = count === 0;
             if (count === 0) {
-                confirmButton.classList.add('yaml-button--disabled');
+                confirmButton.addClass('yaml-button--disabled');
             } else {
-                confirmButton.classList.remove('yaml-button--disabled');
+                confirmButton.removeClass('yaml-button--disabled');
             }
         }
     }
