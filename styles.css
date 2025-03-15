@@ -1423,20 +1423,20 @@
    7. BULK PROPERTY EDITOR WINDOW
    =========================================== */
 /* Base container styles */
-.yaml-window__bulk-editor {
+.yaml-window__bulk-editor .modal {
   padding: 20px;
   width: auto;
-  max-width: 600px;
+  min-width: 600px;
+  max-width: 1200px;
   max-height: 85vh;
   overflow-y: auto;
   overflow-x: hidden;
   margin: 0 auto;
+  position: relative;
 }
 
 .modal-container .modal:has(.yaml-window__bulk-editor) {
   width: fit-content !important;
-  max-width: 650px !important;
-  min-width: 300px !important;
   margin: 0 auto !important;
   display: flex !important;
   flex-direction: column !important;
@@ -1446,19 +1446,31 @@
 /* ===========================================
     Cancel and Apply Buttons
    =========================================== */
-/* Button container styling */
-.yaml-window__bulk-editor .bulk-editor-button .bulk-editor-button-container {
+/* Buttons container */
+.yaml-window__bulk-editor .yaml-button-container {
   margin-top: 20px !important;
   padding: 8px 0 !important;
   display: flex !important;
   justify-content: flex-end !important;
   gap: 8px !important;
   width: 100% !important;
-  border-top: 1px solid var(--background-modifier-border) !important;
-  padding-top: 12px !important;
 }
 
-/* Button styling */
+/* Sticky button container */
+.modal .yaml-window__bulk-editor .yaml-button-container--sticky {
+  position: sticky !important;
+  bottom: 0 !important;
+  left: 0 !important;
+  right: 0 !important;
+  width: 100% !important;
+  background: var(--background-primary) !important;
+  padding: 12px 20px !important;
+  border-top: 1px solid var(--background-modifier-border) !important;
+  z-index: 10 !important;
+  box-shadow: 0 -5px 10px rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Buttons */
 .yaml-window__bulk-editor .bulk-editor-button {
   border-radius: var(--button-radius) !important;
   font-size: var(--font-ui-small) !important;
@@ -1479,7 +1491,6 @@
   box-shadow: var(--input-shadow-hover) !important;
 }
 
-/* Apply button styling */
 .yaml-window__bulk-editor .bulk-editor-button--apply {
   background-color: var(--interactive-accent) !important;
   color: var(--text-on-accent) !important;
@@ -1491,16 +1502,7 @@
 
 /* Disabled button */
 .yaml-window__bulk-editor .bulk-editor-button--disabled {
-  opacity: 0.5 !important;
   cursor: not-allowed !important;
-  pointer-events: none !important;
-  margin: 0 !important;
-}
-
-/* Cancel button */
-.yaml-window__bulk-editor .bulk-editor-button--cancel {
-  background-color: var(--interactive-normal) !important;
-  color: var(--text-normal) !important;
 }
 
 /* ===========================================

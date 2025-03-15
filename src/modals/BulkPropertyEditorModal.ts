@@ -13,13 +13,12 @@ export class BulkPropertyEditorModal extends Modal {
 
     async onOpen() {
         const { contentEl } = this;
-        contentEl.addClass('yaml-window');
         contentEl.addClass('yaml-window__bulk-editor');
                 
         // Empty modal with no content
 
         // Buttons container
-        const buttonContainer = contentEl.createDiv({ cls: 'buttons-container' });
+        const buttonContainer = contentEl.createDiv({ cls: 'yaml-button-container' });
 
         // Apply button
         const applyButton = buttonContainer.createEl('button', { 
