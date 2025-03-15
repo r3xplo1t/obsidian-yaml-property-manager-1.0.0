@@ -1,5 +1,4 @@
 export { PropertyManagerModal } from './PropertyManagerModal';
-export { SingleFilePropertyModal } from './SingleFilePropertyModal';
 export { TemplateSelectionModal } from './TemplateSelectionModal';
 export { BatchFileSelectorModal } from './BatchFileSelectorModal';
 export { BulkPropertyEditorModal } from './BulkPropertyEditorModal';

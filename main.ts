@@ -3,7 +3,6 @@ import { YAMLPropertyManagerSettings, DEFAULT_SETTINGS } from './src/models';
 import { formatYamlValue } from './src/utils';
 import {
     PropertyManagerModal,
-    SingleFilePropertyModal,
     TemplateSelectionModal,
     BatchFileSelectorModal,
     BulkPropertyEditorModal,
@@ -25,22 +24,6 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             name: 'Open Property Manager',
             callback: () => {
                 new PropertyManagerModal(this.app, this).open();
-            }
-        });
-
-        // Add command to manage properties of current file
-        this.addCommand({
-            id: 'manage-current-file-properties',
-            name: 'Manage Current File Properties',
-            checkCallback: (checking: boolean) => {
-                const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-                if (activeView) {
-                    if (!checking) {
-                        new SingleFilePropertyModal(this.app, this, activeView.file).open();
-                    }
-                    return true;
-                }
-                return false;
             }
         });
 
@@ -336,11 +319,6 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
         switch (targetModalType) {
             case 'main':
                 new PropertyManagerModal(this.app, this).open();
-                break;
-            case 'singleFile':
-                if (args[0] instanceof TFile) {
-                    new SingleFilePropertyModal(this.app, this, args[0]).open();
-                }
                 break;
             case 'template':
                 if (this.selectedFiles.length === 0 && Array.isArray(args[0]) && args[0].length > 0) {

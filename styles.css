@@ -29,391 +29,168 @@
    2. PROPERTY MANAGER WINDOW
    =========================================== */
 
-.yaml-window__property-manager .modal {
-  padding: 20px 20px 20px 20px; /* top right bottom left */
-  width: 300px; /* Set a specific width instead of auto */
-  height: auto;
-  max-width: 450px; /* Increase from previous 300px to accommodate content */
-  max-height: none;
-  overflow: visible;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  align-items: center; /* Center the content horizontally */
-}
+/* -----------------------------------------
+   2.1 Basic Container & Layout
+   ----------------------------------------- */
+   .yaml-window__property-manager .modal {
+    padding: 20px;
+    width: 300px;
+    height: auto;
+    max-width: 450px;
+    max-height: none;
+    overflow: visible;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+  
+  .modal-container .modal:has(.yaml-window__property-manager) {
+    width: fit-content !important;
+    max-width: 500px !important;
+    min-width: 280px !important;
+    margin: 0 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+  }
+  
+  .yaml-window__property-manager .yaml-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  .yaml-window__property-manager .yaml-action-section {
+    border-radius: 4px;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    align-self: center;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  
+  .yaml-window__property-manager .yaml-action-section__divider {
+    margin: 15px 0 !important;
+    border: none;
+    border-top: 1px solid var(--background-modifier-border);
+    width: 100%;
+  }
 
-.modal-container .modal:has(.yaml-window__property-manager) {
-  width: fit-content !important; /* Fit to content instead of fixed width */
-  max-width: 500px !important; /* Reasonable max-width to prevent it being too wide */
-  min-width: 280px !important; /* Ensure it doesn't get too narrow */
-  margin: 0 auto !important; /* Center the modal */
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-}
-
-.yaml-window__property-manager h2 {
-  font-size: var(--h2-size) !important;
-  color: var(--h2-color, var(--text-normal)) !important;
-  font-weight: var(--h2-weight) !important;
-  line-height: var(--h2-line-height) !important;
-  margin-bottom: var(--h2-margin-bottom, 20px) !important;
-  border-bottom: var(--h2-border-bottom, none) !important;
-  text-align: center !important;
-}
-
-.yaml-window__property-manager h3 {
-  font-size: var(--h3-size) !important;
-  color: var(--h3-color, var(--text-normal)) !important;
-  font-weight: var(--h3-weight) !important;
-  line-height: var(--h3-line-height) !important;
-  margin-bottom: var(--h3-margin-bottom, 16px) !important;
-}
-
-.yaml-window__property-manager p, 
-.yaml-window__property-manager span, 
-.yaml-window__property-manager div {
-  color: var(--text-normal);
-  font-size: var(--font-text-size, 16px);
-  line-height: var(--line-height-normal, 1.5);
-}
-
-.yaml-window__property-manager .yaml-file-selection__count {
-  color: var(--text-muted);
-  font-size: var(--font-smaller);
-  margin-top: 4px;
-  font-style: italic;
-}
-
-.yaml-window__property-manager .yaml-button {
-  border-radius: var(--button-radius) !important;
-  font-size: var(--font-ui-small) !important;
-  font-weight: var(--font-normal) !important;
-  padding: var(--size-4-1) var(--size-4-3) !important;
-  height: var(--input-height) !important;
-  background-color: var(--interactive-normal) !important;
-  color: var(--text-normal) !important;
-  border: 1px solid var(--background-modifier-border) !important;
-  cursor: pointer !important;
-  transition: all 0.15s ease !important;
-  min-width: 120px !important;
-  display: block !important;
-  width: 100% !important;
-  margin: 8px 0 !important;
-  text-align: center !important;
-  box-shadow: var(--input-shadow) !important;
-  box-sizing: border-box !important;
-}
-
-.yaml-window__property-manager .yaml-button:hover {
-  background-color: var(--interactive-hover) !important;
-  box-shadow: var(--input-shadow-hover) !important;
-}
-
-.yaml-window__property-manager .yaml-button--disabled {
-  opacity: 0.5 !important;
-  cursor: not-allowed !important;
-  background-color: var(--interactive-normal) !important;
-  color: var(--text-muted) !important;
-}
-
-.yaml-window__property-manager .yaml-button--primary {
-  background-color: var(--interactive-normal) !important;
-  color: var(--text-normal) !important;
-  border-color: var(--background-modifier-border) !important;
-}
-
-.yaml-window__property-manager .yaml-button--bulk-edit {
-  background-color: var(--interactive-normal) !important;
-}
-
-.yaml-window__property-manager .yaml-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-  width: 100%;
-  box-sizing: border-box;
-  margin: 8px 0;
-}
-
-.yaml-window__property-manager .yaml-action-section {
-  padding: 12px 0;
-  border-radius: 4px;
-  box-sizing: border-box;
-  width: 100%;
-  max-width: 100%;
-  align-self: center;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.yaml-window__property-manager .yaml-action-section__divider {
-  margin: 15px 0 !important;
-  border: none;
-  border-top: 1px solid var(--background-modifier-border);
-}
-
-.yaml-window__property-manager .yaml-file-selection {
-  width: 100%;
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.yaml-window__property-manager .yaml-button--file-selection {
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.yaml-window__property-manager .yaml-button--file-action {
-  width: 100%;
-}
-
-/* Make buttons have consistent spacing */
-.yaml-window__property-manager .yaml-file-selection,
-.yaml-window__property-manager .yaml-action-buttons {
-  display: flex;
-  flex-direction: column;
-  gap: 10px !important; /* Set consistent gap between buttons */
-  margin-bottom: 15px !important; /* Space after button groups */
-}
-
-/* Space between the file selection count and buttons */
-.yaml-window__property-manager .yaml-file-selection__count {
-  margin-top: 10px !important;
-  margin-bottom: 5px !important;
-}
-
-/* Remove borders from all buttons*/
-.yaml-window__property-manager .yaml-button {
-  border: none !important; /* Remove borders */
-}
-
-/* ===========================================
-   3. SINGLE FILE PROPERTY WINDOW
-   =========================================== */
-
-.yaml-window__single-file {
-  padding: 20px;
-  width: auto;
-  max-width: 900px;
-  max-height: 85vh;
-  overflow-y: auto !important;
-  overflow-x: visible;
-  margin: 0 auto;
-}
-
-.yaml-window__single-file h2 {
-  font-size: var(--h2-size) !important;
-  color: var(--h2-color, var(--text-normal)) !important;
-  font-weight: var(--h2-weight) !important;
-  line-height: var(--h2-line-height) !important;
-  margin-bottom: var(--h2-margin-bottom, 20px) !important;
-  border-bottom: var(--h2-border-bottom, none) !important;
-  text-align: left !important;
-}
-
-.yaml-window__single-file h3 {
-  font-size: var(--h3-size) !important;
-  color: var(--h3-color, var(--text-normal)) !important;
-  font-weight: var(--h3-weight) !important;
-  line-height: var(--h3-line-height) !important;
-  margin-bottom: var(--h3-margin-bottom, 16px) !important;
-}
-
-.yaml-window__single-file p, 
-.yaml-window__single-file span, 
-.yaml-window__single-file div {
-  color: var(--text-normal);
-  font-size: var(--font-text-size, 16px);
-  line-height: var(--line-height-normal, 1.5);
-}
-
-.yaml-window__single-file .yaml-header {
-  display: flex;
-  align-items: center;
-  margin-bottom: var(--size-4-4, 12px);
-  width: 100%;
-  box-sizing: border-box;
-  border-bottom: var(--divider-width, 1px) solid var(--background-modifier-border);
-  padding-bottom: var(--size-4-2, 8px);
-}
-
-.yaml-window__single-file .yaml-header__back-button {
-  margin-right: 8px;
-}
-
-.yaml-window__single-file .yaml-header__title {
-  margin: 0;
-  font-size: var(--font-ui-medium);
-  font-weight: var(--font-medium);
-  color: var(--h4-color, var(--text-normal));
-}
-
-.yaml-window__single-file .yaml-property-container {
-  width: 100%;
-  margin: 12px 0;
-  max-height: 400px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  border-radius: 4px;
-  padding: 8px;
-  box-sizing: border-box;
-}
-
-.yaml-window__single-file .yaml-property-list {
-  display: block;
-  width: 100%;
-  min-width: 700px;
-}
-
-.yaml-window__single-file .yaml-property-item {
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  width: 100%;
-  flex-wrap: nowrap;
-  margin-bottom: 8px;
-  padding: 4px 0;
-  min-width: 700px;
-}
-
-.yaml-window__single-file .yaml-property-item--header {
-  font-weight: bold;
-  border-bottom: 1px solid var(--background-modifier-border);
-  margin-bottom: 8px;
-  padding-bottom: 8px;
-}
-
-.yaml-window__single-file .yaml-property-item__name {
-  flex: 1;
-  min-width: 100px;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.yaml-window__single-file .yaml-property-item__type {
-  width: 120px;
-  flex-shrink: 0;
-}
-
-.yaml-window__single-file .yaml-property-item__value {
-  flex: 2;
-  min-width: 150px !important;
-  max-width: none !important;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: normal;
-  word-break: break-word;
-  overflow-wrap: break-word;
-}
-
-.yaml-window__single-file .yaml-property-item__actions {
-  width: 60px;
-  flex-shrink: 0;
-  text-align: center;
-  display: flex;
-  justify-content: center;
-  gap: 4px;
-}
-
-.yaml-window__single-file .yaml-button {
-  border-radius: var(--button-radius) !important;
-  font-size: var(--font-ui-small) !important;
-  font-weight: var(--font-normal) !important;
-  padding: var(--size-4-1) var(--size-4-3) !important;
-  height: var(--input-height) !important;
-  background-color: var(--interactive-normal) !important;
-  color: var(--text-normal) !important;
-  border: 1px solid var(--background-modifier-border) !important;
-  cursor: pointer !important;
-  transition: all 0.15s ease !important;
-  min-width: 120px !important;
-  display: block !important;
-  width: 100% !important;
-  margin: 8px 0 !important;
-  text-align: center !important;
-  box-shadow: var(--input-shadow) !important;
-}
-
-.yaml-window__single-file .yaml-button:hover {
-  background-color: var(--interactive-hover) !important;
-  box-shadow: var(--input-shadow-hover) !important;
-}
-
-.yaml-window__single-file .yaml-button--add-property {
-  width: 100%;
-}
-
-.yaml-window__single-file .yaml-button--move-up, 
-.yaml-window__single-file .yaml-button--move-down {
-  padding: 2px !important;
-  min-width: auto !important;
-  height: auto !important;
-}
-
-.yaml-window__single-file .yaml-button--delete-item {
-  padding: 2px 5px !important;
-  min-width: auto !important;
-  height: auto !important;
-}
-
-.yaml-window__single-file .yaml-button--save {
-  background-color: var(--interactive-accent) !important;
-  color: var(--text-on-accent) !important;
-}
-
-.yaml-window__single-file .yaml-button-container {
-  margin-top: 20px !important;
-  padding: 8px 0 !important;
-  display: flex !important;
-  justify-content: center !important;
-  gap: 8px !important;
-  width: 100% !important;
-}
-
-.yaml-window__single-file .yaml-button-container--sticky {
-  position: sticky !important;
-  bottom: 0 !important;
-  background: var(--background-primary) !important;
-  padding: 12px 0 !important;
-  border-top: 1px solid var(--background-modifier-border) !important;
-  z-index: 10 !important;
-  box-shadow: 0 -5px 10px rgba(0, 0, 0, 0.1);
-  margin-bottom: 0;
-}
-
-.yaml-window__single-file .yaml-button-container button {
-  width: auto !important;
-  min-width: 120px !important;
-}
-
-.yaml-window__single-file .yaml-new-property__buttons {
-  display: flex;
-  gap: 4px;
-}
-
-.yaml-window__single-file .yaml-new-property__name {
-  flex: 1;
-  min-width: 100px;
-}
-
-.yaml-window__single-file .yaml-new-property__type {
-  width: 120px;
-  flex-shrink: 0;
-}
-
-.yaml-window__single-file .yaml-new-property__value {
-  flex: 2;
-  min-width: 150px;
-}
-
-.yaml-window__single-file .yaml-button--add {
-  background-color: var(--interactive-accent) !important;
-  color: var(--text-on-accent) !important;
-}
+  /* -----------------------------------------
+     2.2 Typography
+     ----------------------------------------- */
+  .yaml-window__property-manager h2 {
+    font-size: var(--h2-size) !important;
+    color: var(--h2-color, var(--text-normal)) !important;
+    font-weight: var(--h2-weight) !important;
+    line-height: var(--h2-line-height) !important;
+    margin-bottom: var(--h2-margin-bottom, 20px) !important;
+    border-bottom: var(--h2-border-bottom, none) !important;
+    text-align: center !important;
+  }
+  
+  .yaml-window__property-manager h3 {
+    font-size: var(--h3-size) !important;
+    color: var(--h3-color, var(--text-normal)) !important;
+    font-weight: var(--h3-weight) !important;
+    line-height: var(--h3-line-height) !important;
+    margin-bottom: var(--h3-margin-bottom, 16px) !important;
+  }
+  
+  .yaml-window__property-manager p, 
+  .yaml-window__property-manager span, 
+  .yaml-window__property-manager div {
+    color: var(--text-normal);
+    font-size: var(--font-text-size, 16px);
+    line-height: var(--line-height-normal, 1.5);
+  }
+  
+  /* -----------------------------------------
+     2.3 Buttons
+     ----------------------------------------- */
+  .yaml-window__property-manager .yaml-button {
+    border-radius: var(--button-radius) !important;
+    font-size: var(--font-ui-small) !important;
+    font-weight: var(--font-normal) !important;
+    padding: var(--size-4-1) var(--size-4-3) !important;
+    height: var(--input-height) !important;
+    background-color: var(--interactive-normal) !important;
+    color: var(--text-normal) !important;
+    border: none !important;
+    cursor: pointer !important;
+    transition: all 0.15s ease !important;
+    display: block !important;
+    width: 100% !important;
+    margin: 8px 0 !important;
+    text-align: center !important;
+    box-shadow: var(--input-shadow) !important;
+    box-sizing: border-box !important;
+  }
+  
+  .yaml-window__property-manager .yaml-button:hover {
+    background-color: var(--interactive-hover) !important;
+    box-shadow: var(--input-shadow-hover) !important;
+  }
+  
+  .yaml-window__property-manager .yaml-button--disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+    background-color: var(--interactive-normal) !important;
+    color: var(--text-muted) !important;
+  }
+  
+  .yaml-window__property-manager .yaml-button--primary {
+    background-color: var(--interactive-normal) !important;
+    color: var(--text-normal) !important;
+  }
+  
+  .yaml-window__property-manager .yaml-button--bulk-edit {
+    background-color: var(--interactive-normal) !important;
+  }
+  
+  /* Apply consistent spacing to buttons in the batch container */
+  .yaml-window__property-manager .yaml-action-section button {
+    margin-bottom: 10px !important;
+    width: 100% !important;
+  }
+  
+  /* -----------------------------------------
+     2.4 File Counter
+     ----------------------------------------- */
+  /* Style the counter to match yaml-direct-path-container */
+  .yaml-window__property-manager .yaml-file-selection__count {
+    text-align: center !important;
+  }
+  
+  .yaml-window__property-manager .yaml-file-selection__count.yaml-direct-path-container {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: 8px 10px;
+    background-color: var(--background-primary);
+    border-radius: 4px;
+    box-shadow: var(--input-shadow);
+  }
+  
+  .yaml-window__property-manager .yaml-file-selection__count .yaml-direct-path-text {
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller);
+  }
+  
+  /* -----------------------------------------
+     2.5 Responsive Styles
+     ----------------------------------------- */
+  @media screen and (max-width: 650px) {
+    .yaml-window__property-manager {
+      min-width: auto;
+      width: 95%;
+      padding: 12px;
+    }
+  }
 
 /* ===========================================
    4. TEMPLATE SELECTION WINDOW

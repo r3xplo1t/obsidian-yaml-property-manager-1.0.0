@@ -1,6 +1,5 @@
 import { App, Modal, Notice, MarkdownView, TFile } from 'obsidian';
 import YAMLPropertyManagerPlugin from '../../main';
-import { SingleFilePropertyModal } from './SingleFilePropertyModal';
 import { TemplateSelectionModal } from './TemplateSelectionModal';
 import { BatchFileSelectorModal } from './BatchFileSelectorModal';
 import { BulkPropertyEditorModal } from './BulkPropertyEditorModal';
@@ -35,9 +34,8 @@ export class PropertyManagerModal extends Modal {
         // File selection
         batchContainer.createEl('p', { text: 'Select files to process:' });
         
-        const fileSelectionContainer = batchContainer.createDiv({ cls: 'yaml-file-selection' });
-        
-        const currentFolderButton = fileSelectionContainer.createEl('button', { 
+        // Add buttons directly to batch container
+        const currentFolderButton = batchContainer.createEl('button', { 
             text: 'Select All in Current Folder',
             cls: 'yaml-button yaml-button--file-selection'
         });
@@ -52,14 +50,14 @@ export class PropertyManagerModal extends Modal {
                         .filter(file => file.parent === currentFolder);
                     
                     this.plugin.debug(`Selected ${this.plugin.selectedFiles.length} files from current folder`);
-                    this.updateSelectedFilesCount(fileSelectionContainer);
+                    this.updateSelectedFilesCount();
                 }
             } else {
                 new Notice('No file is currently active');
             }
         });
         
-        const browseButton = fileSelectionContainer.createEl('button', { 
+        const browseButton = batchContainer.createEl('button', { 
             text: 'Browse and Select Files',
             cls: 'yaml-button yaml-button--file-selection'
         });
@@ -68,19 +66,8 @@ export class PropertyManagerModal extends Modal {
             this.browseFiles();
         });
         
-        // Selected files count
-        const selectedFilesCountEl = fileSelectionContainer.createEl('div', {
-            cls: 'yaml-file-selection__count',
-            text: this.plugin.selectedFiles.length > 0 
-                ? `${this.plugin.selectedFiles.length} files selected` 
-                : 'No files selected'
-        });
-        
-        // Create a container for the main action buttons with separation
-        const mainActionButtons = batchContainer.createDiv({ cls: 'yaml-action-buttons' });
-        
         // Apply template button
-        const applyTemplateButton = mainActionButtons.createEl('button', {
+        const applyTemplateButton = batchContainer.createEl('button', {
             text: 'Apply Template to Selected Files',
             cls: 'yaml-button yaml-button--primary'
         });
@@ -99,7 +86,7 @@ export class PropertyManagerModal extends Modal {
         });
 
         // Bulk edit button
-        const bulkEditButton = mainActionButtons.createEl('button', {
+        const bulkEditButton = batchContainer.createEl('button', {
             text: 'Bulk Edit Properties',
             cls: 'yaml-button yaml-button--bulk-edit'
         });
@@ -118,34 +105,32 @@ export class PropertyManagerModal extends Modal {
                 new Notice('Please select files first');
             }
         });
-        
-        // Add divider line
+
+        // Add divider before counter
         const divider = batchContainer.createEl('hr', { cls: 'yaml-action-section__divider' });
         
-        // Add Single File Operations header and button
-        batchContainer.createEl('h3', { text: 'Single File Operations' });
-        
-        const currentFileButton = batchContainer.createEl('button', { 
-            text: 'Manage Current File Properties',
-            cls: 'yaml-button yaml-button--file-action'
+        // Files counter at the bottom with special styling
+        const selectedFilesCountEl = batchContainer.createDiv({
+            cls: 'yaml-file-selection__count yaml-direct-path-container'
         });
         
-        currentFileButton.addEventListener('click', () => {
-            const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-            if (activeView && activeView.file) {
-                this.plugin.navigateToModal(this, 'singleFile', activeView.file);
-            } else {
-                new Notice('No file is currently active');
-            }
+        selectedFilesCountEl.createSpan({
+            text: this.plugin.selectedFiles.length > 0 
+                ? `${this.plugin.selectedFiles.length} files selected` 
+                : 'No files selected',
+            cls: 'yaml-direct-path-text'
         });
     }
     
-    updateSelectedFilesCount(container: HTMLElement) {
-        const countEl = container.querySelector('.yaml-file-selection__count');
+    updateSelectedFilesCount() {
+        const countEl = this.contentEl.querySelector('.yaml-file-selection__count');
         if (countEl) {
-            countEl.textContent = this.plugin.selectedFiles.length === 0 
-                ? 'No files selected' 
-                : `${this.plugin.selectedFiles.length} files selected`;
+            const textSpan = countEl.querySelector('.yaml-direct-path-text');
+            if (textSpan) {
+                textSpan.textContent = this.plugin.selectedFiles.length === 0 
+                    ? 'No files selected' 
+                    : `${this.plugin.selectedFiles.length} files selected`;
+            }
         }
         
         // Enable/disable buttons
