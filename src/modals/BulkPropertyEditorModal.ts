@@ -13,17 +13,37 @@ export class BulkPropertyEditorModal extends Modal {
 
     async onOpen() {
         const { contentEl } = this;
-        contentEl.empty();
-        
+        contentEl.addClass('yaml-window');
+        contentEl.addClass('yaml-window__bulk-editor');
+                
         // Empty modal with no content
-        
-        // Simple close button
-        const closeButton = contentEl.createEl('button', { 
-            text: 'Close'
+
+        // Buttons container
+        const buttonContainer = contentEl.createDiv({ cls: 'buttons-container' });
+
+        // Apply button
+        const applyButton = buttonContainer.createEl('button', { 
+            text: 'Apply Changes',
+            cls: 'bulk-editor-button bulk-editor-button--apply'
         });
         
-        closeButton.addEventListener('click', () => {
+        applyButton.disabled = true;  // Initially disabled until changes are made
+        applyButton.addClass('bulk-editor-button--disabled');
+        
+        applyButton.addEventListener('click', async () => {
+            // This will be implemented in a future feature
+            // For now, just close the modal
             this.close();
+        });
+        
+        // Close button
+        const cancelButton = buttonContainer.createEl('button', { 
+            text: 'Cancel',
+            cls: 'bulk-editor-button bulk-editor-button--cancel'
+        });
+
+        cancelButton.addEventListener('click', () => {
+            this.plugin.navigateToModal(this, 'main');
         });
     }
     
