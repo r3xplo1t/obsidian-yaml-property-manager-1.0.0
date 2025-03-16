@@ -79,6 +79,8 @@ export class PropertyManagerModal extends Modal {
         
         applyTemplateButton.addEventListener('click', () => {
             if (this.plugin.selectedFiles.length > 0) {
+                // Add debug logging
+                console.log("Attempting to navigate to template modal...");
                 this.plugin.navigateToModal(this, 'template');
             } else {
                 new Notice('Please select files first');
@@ -97,7 +99,8 @@ export class PropertyManagerModal extends Modal {
         }
         
         bulkEditButton.addEventListener('click', () => {
-            this.plugin.debug(`Bulk edit clicked with ${this.plugin.selectedFiles.length} files selected`);
+            // Add debug logging
+            console.log(`Bulk edit clicked with ${this.plugin.selectedFiles.length} files selected`);
             
             if (this.plugin.selectedFiles.length > 0) {
                 this.plugin.navigateToModal(this, 'bulkEdit');
