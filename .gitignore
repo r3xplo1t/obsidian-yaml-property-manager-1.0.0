@@ -23,6 +23,9 @@ Thumbs.db
 # Obsidian workspace settings
 .obsidian/
 
+# Debug files
+debug/
+
 # Optional: you might want to ignore package-lock.json as well
 # package-lock.json
 "@ | Out-File -FilePath ".gitignore" -Encoding utf8
