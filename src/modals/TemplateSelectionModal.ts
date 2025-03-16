@@ -782,6 +782,33 @@ export class TemplateSelectionModal extends Modal {
                 } else {
                     // Remove from override values properties (preserve existing value)
                     this.overrideValueProperties = this.overrideValueProperties.filter(p => p !== key);
+                    
+                    // If any checkbox is unchecked, uncheck and update the "Override All Values" checkbox
+                    const overrideAllCheckbox = document.getElementById('override-all-values') as HTMLInputElement;
+                    const overrideAllContainer = document.getElementById('override-all-container');
+                    
+                    if (overrideAllCheckbox && overrideAllCheckbox.checked) {
+                        overrideAllCheckbox.checked = false;
+                        this.overrideAllValues = false;
+                        
+                        if (overrideAllContainer) {
+                            overrideAllContainer.removeClass('active');
+                        }
+                    }
+                }
+                
+                // Check if all enabled value checkboxes are checked
+                const allEnabled = this.contentEl.querySelectorAll('.yaml-property-preserve-checkbox:not([disabled])');
+                const allChecked = Array.from(allEnabled).every((checkbox: HTMLInputElement) => checkbox.checked);
+                
+                // Update the "override all" visual state based on whether all checkboxes are checked
+                const overrideAllContainer = document.getElementById('override-all-container');
+                if (overrideAllContainer) {
+                    if (allChecked) {
+                        overrideAllContainer.addClass('active');
+                    } else {
+                        overrideAllContainer.removeClass('active');
+                    }
                 }
             });
         }

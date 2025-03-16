@@ -1423,7 +1423,7 @@
    7. BULK PROPERTY EDITOR WINDOW
    =========================================== */
 /* Base container styles */
-.yaml-window__bulk-editor .modal {
+.yaml-window__bulk-editor {
   padding: 20px;
   width: auto;
   min-width: 600px;
@@ -1435,12 +1435,233 @@
   position: relative;
 }
 
-.modal-container .modal:has(.yaml-window__bulk-editor) {
+.modal:has(.yaml-window__bulk-editor) {
   width: fit-content !important;
   margin: 0 auto !important;
   display: flex !important;
   flex-direction: column !important;
   align-items: center !important;
+}
+
+/* ===========================================
+    Properties
+   =========================================== */
+/* Header styling */
+.yaml-window__bulk-editor h2.yaml-property-header {
+  font-size: var(--h2-size) !important;
+  color: var(--h2-color, var(--text-normal)) !important;
+  font-weight: var(--h2-weight) !important;
+  line-height: var(--h2-line-height) !important;
+  margin-bottom: var(--h2-margin-bottom, 20px) !important;
+  border-bottom: var(--h2-border-bottom, 1px solid var(--background-modifier-border)) !important;
+  text-align: left !important;
+  padding-bottom: 8px !important;
+  padding-left: 0 !important;
+  margin-left: 0 !important;
+}
+
+/* Property container */
+.yaml-window__bulk-editor .yaml-property-container {
+  width: 100%;
+  margin: 16px 0;
+  box-sizing: border-box;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Property item styling */
+.yaml-window__bulk-editor .yaml-property {
+  display: flex;
+  flex-direction: column;
+  min-width: 500px;
+  max-width: 100%;
+  margin-bottom: 16px;
+  padding: 16px;
+  background-color: var(--background-secondary-alt);
+  border-radius: 4px;
+  box-shadow: var(--input-shadow);
+}
+
+/* Property header styling */
+.yaml-window__bulk-editor .yaml-property-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 10px;
+  width: 100%;
+}
+
+/* Property name styling */
+.yaml-window__bulk-editor .yaml-property-name {
+  font-weight: var(--font-medium);
+  font-size: var(--font-ui-medium);
+}
+
+/* Property type container styling */
+.yaml-window__bulk-editor .yaml-property-type {
+  width: 100%;
+  padding: 8px 10px;
+  margin-top: 8px;
+  margin-bottom: 4px;
+  background-color: var(--background-secondary-alt);
+  border-radius: 4px;
+  box-shadow: var(--input-shadow);
+}
+
+/* Type text styling */
+.yaml-window__bulk-editor .yaml-property-type-text {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+/* No properties message */
+.yaml-window__bulk-editor .yaml-no-properties-message {
+  color: var(--text-muted);
+  font-style: italic;
+  text-align: center;
+  padding: 20px;
+}
+
+/* Loading and error messages */
+.yaml-window__bulk-editor .yaml-loading-message {
+  color: var(--text-muted);
+  text-align: center;
+  padding: 20px;
+}
+
+.yaml-window__bulk-editor .yaml-error-message {
+  color: var(--text-error);
+  text-align: center;
+  padding: 20px;
+}
+
+/* Property value container styling */
+.yaml-window__bulk-editor .yaml-property-value {
+  width: 100%;
+  padding: 10px;
+  margin-top: 0;
+  background-color: var(--background-primary);
+  border-radius: 4px;
+  box-shadow: var(--input-shadow);
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+}
+
+/* Property value text */
+.yaml-window__bulk-editor .yaml-property-value-text {
+  word-break: break-word;
+  max-width: 100%;
+  line-height: 1.4;
+}
+
+/* Empty value styling */
+.yaml-window__bulk-editor .yaml-property-empty-value {
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: var(--font-ui-smaller);
+}
+
+/* Property statistics styling */
+.yaml-window__bulk-editor .yaml-property-stats {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 20px;
+  padding: 10px 12px;
+  margin-top: 8px;
+  background-color: var(--background-primary);
+  border-radius: 4px;
+  box-shadow: var(--input-shadow);
+  position: relative;
+}
+
+.yaml-window__bulk-editor .yaml-property-stat-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.yaml-window__bulk-editor .yaml-property-stat-label {
+  font-weight: var(--font-medium);
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
+
+.yaml-window__bulk-editor .yaml-property-stat-value {
+  font-size: var(--font-ui-smaller);
+}
+
+.yaml-window__bulk-editor .yaml-property-stat-warning {
+  color: #e8a400;
+  cursor: help;
+}
+
+/* Files toggle button */
+.yaml-window__bulk-editor .yaml-property-files-toggle {
+  margin-left: auto;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  transition: background-color 0.15s ease;
+}
+
+.yaml-window__bulk-editor .yaml-property-files-toggle:hover {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-normal);
+}
+
+/* Files container */
+.yaml-window__bulk-editor .yaml-property-files {
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 4px;
+  background-color: var(--background-secondary);
+  transition: max-height 0.2s ease-in-out, opacity 0.2s ease-in-out;
+  max-height: 500px;
+  overflow-y: auto;
+}
+
+.yaml-window__bulk-editor .yaml-property-files--collapsed {
+  max-height: 0;
+  padding: 0;
+  overflow: hidden;
+  opacity: 0;
+}
+
+/* Individual file items */
+.yaml-window__bulk-editor .yaml-property-file {
+  margin-bottom: 12px;
+  padding: 10px;
+  border-radius: 4px;
+  background-color: var(--background-primary);
+  box-shadow: var(--input-shadow);
+}
+
+.yaml-window__bulk-editor .yaml-property-file-header {
+  margin-bottom: 6px;
+  font-weight: var(--font-medium);
+}
+
+.yaml-window__bulk-editor .yaml-property-file-name {
+  font-size: var(--font-ui-small);
+}
+
+.yaml-window__bulk-editor .yaml-property-file-type,
+.yaml-window__bulk-editor .yaml-property-file-value {
+  padding: 4px 8px;
+  margin-bottom: 4px;
+  border-radius: 3px;
+  background-color: var(--background-secondary-alt);
+  font-size: var(--font-ui-smaller);
+}
+
+/* Highlighted differences */
+.yaml-window__bulk-editor .yaml-property-difference {
+  background-color: rgba(var(--interactive-accent-rgb), 0.1);
+  border-left: 2px solid var(--interactive-accent);
 }
 
 /* ===========================================
