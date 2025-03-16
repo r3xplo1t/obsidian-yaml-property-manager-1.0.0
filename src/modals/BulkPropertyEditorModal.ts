@@ -365,8 +365,11 @@ export class BulkPropertyEditorModal extends Modal {
                     });
                 }
                 
-                // Add toggle button if there are inconsistencies
-                if (stats.typeConsistency.count < stats.count || stats.valueConsistency.count < stats.count) {
+                // Add toggle button if there are inconsistencies OR if property doesn't exist in all files
+                if (stats.typeConsistency.count < stats.count || 
+                    stats.valueConsistency.count < stats.count || 
+                    stats.count < this.files.length) {
+                    
                     const toggleButton = statsContainer.createEl('button', {
                         cls: 'yaml-property-files-toggle',
                         text: '▼'
@@ -377,9 +380,25 @@ export class BulkPropertyEditorModal extends Modal {
                         cls: 'yaml-property-files yaml-property-files--collapsed' 
                     });
                     
-                    // Add files with differences
-                    const inconsistentFiles = stats.files.filter(file => file.hasDifference);
-                    inconsistentFiles.forEach(file => {
+                    // Determine which files to show
+                    let filesToShow;
+                    
+                    // If there are inconsistencies, show files with differences
+                    if (stats.typeConsistency.count < stats.count || 
+                        stats.valueConsistency.count < stats.count) {
+                        filesToShow = stats.files.filter(file => file.hasDifference);
+                    } 
+                    // If property doesn't exist in all files, show all files that have the property
+                    else if (stats.count < this.files.length) {
+                        filesToShow = stats.files;
+                    }
+                    // Fallback - show all files
+                    else {
+                        filesToShow = stats.files;
+                    }
+                    
+                    // Add each file to the container
+                    filesToShow.forEach(file => {
                         const fileItem = filesContainer.createDiv({ cls: 'yaml-property-file' });
                         
                         // File header with name
@@ -388,28 +407,29 @@ export class BulkPropertyEditorModal extends Modal {
                             text: file.name,
                             cls: 'yaml-property-file-name'
                         });
-                        
+
                         // File type (highlight if different)
-                        const fileType = fileItem.createDiv({ 
-                            cls: file.type !== stats.typeConsistency.mostCommonType 
-                                ? 'yaml-property-file-type yaml-property-difference' 
-                                : 'yaml-property-file-type'
+                        const isDifferentType = file.type !== stats.typeConsistency.mostCommonType;
+                        const fileTypeEl = fileItem.createDiv({
+                            cls: 'yaml-property-file-type'
                         });
-                        
-                        fileType.createEl('span', {
+                        fileTypeEl.createEl('span', {
                             text: `Type: ${getPropertyTypeDisplayName(file.type)}`,
                             cls: 'yaml-property-type-text'
                         });
                         
                         // File value (highlight if different)
                         const isDifferentValue = JSON.stringify(file.value) !== 
-                                               JSON.stringify(stats.valueConsistency.mostCommonValue);
-                        
+                        JSON.stringify(stats.valueConsistency.mostCommonValue);
+
                         const fileValue = fileItem.createDiv({
-                            cls: isDifferentValue 
-                                ? 'yaml-property-file-value yaml-property-difference' 
-                                : 'yaml-property-file-value'
+                        cls: 'yaml-property-file-value'
                         });
+
+                        // Apply a different class for highlighting differences
+                        if (isDifferentValue) {
+                        fileValue.addClass('yaml-property-file-value');
+                        }
                         
                         if (file.value === null || file.value === undefined || file.value === '' ||
                             (typeof file.value === 'object' && Object.keys(file.value).length === 0)) {

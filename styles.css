@@ -1656,10 +1656,6 @@
   border-radius: 3px;
   background-color: var(--background-secondary-alt);
   font-size: var(--font-ui-smaller);
-}
-
-/* Highlighted differences */
-.yaml-window__bulk-editor .yaml-property-difference {
   background-color: rgba(var(--interactive-accent-rgb), 0.1);
   border-left: 2px solid var(--interactive-accent);
 }

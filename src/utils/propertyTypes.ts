@@ -24,10 +24,22 @@ export function detectPropertyType(propertyValue: any): string {
     
     // String values require more specific checking
     if (typeof propertyValue === "string") {
-        // Check for number strings
-        if (/^-?\d+(\.\d+)?$/.test(propertyValue)) {
-            return "number";
+        // Keep all string values as text, even if they contain only digits
+        // This ensures numbers specified as text remain text
+        
+        // Full ISO date with time (Date & Time)
+        // Date & Time format (YYYY-MM-DD HH:MM)
+        if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(propertyValue)) {
+            return "datetime";
         }
+        
+        // YYYY-MM-DD format (Date)
+        if (/^\d{4}-\d{2}-\d{2}$/.test(propertyValue)) {
+            return "date";
+        }
+        
+        // All other strings are text
+        return "text";
         
         // Full ISO date with time (Date & Time)
         if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(propertyValue)) {
