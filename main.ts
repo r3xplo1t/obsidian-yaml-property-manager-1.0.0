@@ -29,30 +29,6 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
         // Initialize the Property Type Service
         this.propertyTypeService = new PropertyTypeService(this.app);
 
-        // Register commands
-        this.addCommand({
-            id: 'test-property-types-api',
-            name: 'Test Properties API System',
-            callback: () => {
-                this.testPropertiesAPI();
-            }
-        });
-        
-        // Register API to the global window object
-        (window as any).propertiesAPI = {
-            // Core property methods
-            getProperties: this.parseFileProperties.bind(this),
-            setProperty: this.setProperty.bind(this),
-            applyProperties: this.applyProperties.bind(this),
-            findFilesByProperty: this.findFilesByProperty.bind(this),
-            
-            // Property type methods
-            getPropertyType: this.propertyTypeService.getPropertyType.bind(this.propertyTypeService),
-            getAllPropertyDefinitions: this.propertyTypeService.getAllPropertyDefinitions.bind(this.propertyTypeService),
-            setPropertyType: this.propertyTypeService.setPropertyType.bind(this.propertyTypeService),
-            getFilePropertyType: this.propertyTypeService.getFilePropertyType.bind(this.propertyTypeService)
-        };
-
         // Add command to open the property manager
         this.addCommand({
             id: 'open-property-manager',
@@ -78,147 +54,24 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             }
         });
 
-        // Add settings tab
-        this.addSettingTab(new YAMLPropertyManagerSettingTab(this.app, this));
-
-        // Add this in the onload() method of your plugin
         this.addCommand({
-            id: 'test-property-types-api',
-            name: 'Test Properties API System',
+            id: 'apply-template-to-multiple-files',
+            name: 'Apply Template to Multiple Files',
             callback: () => {
-                this.testPropertiesAPI();
+                // This likely opens a file selector and then the template modal
+                const batchSelector = new BatchFileSelectorModal(this.app, (files) => {
+                    if (files && files.length > 0) {
+                        this.selectedFiles = [...files];
+                        new TemplateSelectionModal(this.app, this, this.selectedFiles).open();
+                    }
+                });
+                batchSelector.open();
             }
         });
+
+        // Add settings tab
+        this.addSettingTab(new YAMLPropertyManagerSettingTab(this.app, this));
     }
-
-    onunload() {
-        // Remove API from global window
-        delete (window as any).propertiesAPI;
-    }
-
-// Add this method to your plugin class
-async testPropertiesAPI() {
-    const activeFile = this.app.workspace.getActiveFile();
-    if (!activeFile) {
-        new Notice('Please open a file with properties to test');
-        return;
-    }
-    
-    try {
-        // Step 1: Get properties from active file
-        const properties = await this.parseFileProperties(activeFile);
-        
-        // Create log output
-        let testResults = '=== Properties API Test Results ===\n\n';
-        testResults += `Testing file: ${activeFile.path}\n\n`;
-        
-        // Step 2: Test basic property retrieval
-        testResults += '1. Basic Property Retrieval:\n';
-        const propCount = Object.keys(properties).length;
-        testResults += `   Found ${propCount} properties\n`;
-        testResults += `   Properties: ${JSON.stringify(Object.keys(properties))}\n\n`;
-        
-        // Step 3: Test type detection
-        testResults += '2. Property Type Detection:\n';
-        for (const [key, value] of Object.entries(properties)) {
-            // Step 1: Get from Obsidian file properties (most specific)
-            const fileSpecificType = this.propertyTypeService.getFilePropertyType(activeFile, key);
-            
-            // Step 2: Get from global property definitions
-            const globalType = this.propertyTypeService.getPropertyType(key);
-            
-            // Step 3: Get from our value detection
-            const valueBasedType = this.propertyTypeService.getValuePropertyType(key, value);
-            
-            // Step 4: Get final converted type
-            const internalType = this.convertFromObsidianType(fileSpecificType || valueBasedType);
-            
-            testResults += `   Property "${key}" = ${JSON.stringify(value)}\n`;
-            testResults += `     - File specific type: ${fileSpecificType || 'none'}\n`;
-            testResults += `     - Global property type: ${globalType || 'none'}\n`;
-            testResults += `     - Value-based type: ${valueBasedType}\n`;
-            testResults += `     - Final internal type: ${internalType}\n\n`;
-        }
-        
-        // Step 4: Test global property definitions
-        testResults += '3. Global Property Definitions:\n';
-        const allDefinitions = this.propertyTypeService.getAllPropertyDefinitions();
-        testResults += `   Found ${allDefinitions.length} global property definitions\n`;
-        
-        if (allDefinitions.length > 0) {
-            testResults += '   Definitions:\n';
-            for (const def of allDefinitions) {
-                testResults += `     - ${def.name}: ${def.type}${def.options ? ' (with options)' : ''}\n`;
-            }
-        }
-        
-        // Step 5: Test property modification
-        testResults += '\n4. Property Modification Test:\n';
-        const testPropName = 'test_property_api';
-        const testPropValue = `Test value ${new Date().toISOString()}`;
-        testResults += `   Setting "${testPropName}" to "${testPropValue}"... `;
-        
-        const setSuccess = await this.setProperty(activeFile.path, testPropName, testPropValue);
-        testResults += setSuccess ? 'SUCCESS' : 'FAILED';
-        
-        if (setSuccess) {
-            // Verify the property was set
-            const updatedProperties = await this.parseFileProperties(activeFile);
-            const verifyValue = updatedProperties[testPropName];
-            testResults += `\n   Verification: Property value is now "${verifyValue}"`;
-            
-            // Get the type of the new property
-            const newPropType = this.propertyTypeService.getFilePropertyType(activeFile, testPropName);
-            testResults += `\n   Detected type: ${newPropType || 'none'}`;
-        }
-        
-        // Display results in a modal
-const modal = new Modal(this.app);
-modal.titleEl.setText('Properties API Test Results');
-modal.contentEl.createEl('pre', { 
-    text: testResults,
-    cls: 'property-test-results'
-});
-
-// Add some basic styling for the test results
-const style = modal.contentEl.createEl('style');
-style.textContent = `
-.property-test-results {
-    white-space: pre-wrap;
-    overflow-x: auto;
-    font-family: monospace;
-    font-size: 12px;
-    line-height: 1.5;
-}
-`;
-
-// Create button container
-const buttonContainer = modal.contentEl.createEl('div', { 
-    cls: 'modal-button-container'
-});
-
-// Create close button
-const closeButton = buttonContainer.createEl('button', {
-    text: 'Close',
-    cls: 'mod-cta',
-    attr: { type: 'button' }
-});
-
-// Add event listener
-closeButton.addEventListener('click', () => {
-    modal.close();
-});
-
-        modal.open();
-        
-        // Also log to console for developers
-        console.log(testResults);
-        
-    } catch (error) {
-        console.error('Error testing Properties API:', error);
-        new Notice(`Error testing API: ${error.message}`);
-    }
-}
 
     async loadSettings() {
         const loadedData = await this.loadData();

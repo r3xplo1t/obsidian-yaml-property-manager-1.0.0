@@ -76,10 +76,18 @@ export class PropertyTypeService {
                 return null;
             }
             
-            // Get the property definition
-            const propertyType = metadataTypeManager.getPropertyType(propertyName);
+            // Your Obsidian version doesn't have getPropertyType, but it DOES have getPropertyInfo
+            if (typeof metadataTypeManager.getPropertyInfo === 'function') {
+                const propertyInfo = metadataTypeManager.getPropertyInfo(propertyName);
+                return propertyInfo?.type || null;
+            }
             
-            return propertyType || null; // Default to null if not defined
+            // Try direct access to properties object as last resort
+            if (metadataTypeManager.properties && propertyName in metadataTypeManager.properties) {
+                return metadataTypeManager.properties[propertyName]?.type || null;
+            }
+            
+            return null; // Nothing worked
         } catch (error) {
             console.error("Error accessing property type:", error);
             return null;
