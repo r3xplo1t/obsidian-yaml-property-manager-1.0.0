@@ -1,4 +1,5 @@
 import { App, TFile } from 'obsidian';
+import { detectPropertyType } from '../utils/propertyTypes';
 
 export type ObsidianPropertyType = 
     'text' | 'number' | 'checkbox' | 
@@ -23,8 +24,47 @@ export class PropertyTypeService {
     constructor(private app: App) {}
     
     /**
-     * Get the Obsidian-defined type for a property
+     * Get the property type for a value using combined detection
+     * Tries Obsidian APIs first, then falls back to our detection
      */
+    getValuePropertyType(propertyName: string, propertyValue: any): ObsidianPropertyType {
+        try {
+            // First try Obsidian's property type (if globally defined)
+            const globalType = this.getPropertyType(propertyName);
+            if (globalType && globalType !== 'text') {
+                return globalType;
+            }
+            
+            // If no specific type defined, detect from value
+            const detectedType = detectPropertyType(propertyValue);
+            return this.convertToObsidianType(detectedType);
+        } catch (error) {
+            console.error("Error detecting property type:", error);
+            return 'text'; // Safe default
+        }
+    }
+
+    /**
+     * Convert our internal types to Obsidian types
+     */
+    private convertToObsidianType(internalType: string): ObsidianPropertyType {
+        switch (internalType) {
+            case "text": return "text";
+            case "number": return "number";
+            case "checkbox": return "checkbox";
+            case "date": return "date";
+            case "datetime": return "datetime";
+            case "list": return "list";
+            default: return "text";
+        }
+    }
+
+    /**
+     * Get the property type using a combined approach:
+     * 1. Try Obsidian's type system first
+     * 2. Fall back to our own detection if needed
+     */
+    // In PropertyTypeService.ts, fix the getPropertyType method:
     getPropertyType(propertyName: string): ObsidianPropertyType | null {
         try {
             // Access Obsidian's internal property type manager
@@ -39,7 +79,7 @@ export class PropertyTypeService {
             // Get the property definition
             const propertyType = metadataTypeManager.getPropertyType(propertyName);
             
-            return propertyType || 'text'; // Default to text if not defined
+            return propertyType || null; // Default to null if not defined
         } catch (error) {
             console.error("Error accessing property type:", error);
             return null;

@@ -17,6 +17,12 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
     propertyCache: Map<string, Record<string, PropertyWithType>> = new Map();
     propertyTypeService: PropertyTypeService;
 
+    // Helper method to get internal type from a property value
+    public getInternalPropertyType(propertyName: string, propertyValue: any): string {
+        const obsidianType = this.propertyTypeService.getValuePropertyType(propertyName, propertyValue);
+        return this.convertFromObsidianType(obsidianType);
+    }
+
     async onload() {
         await this.loadSettings();
         
@@ -115,17 +121,23 @@ async testPropertiesAPI() {
         // Step 3: Test type detection
         testResults += '2. Property Type Detection:\n';
         for (const [key, value] of Object.entries(properties)) {
-            const obsidianType = this.propertyTypeService.getFilePropertyType(activeFile, key);
-            const internalType = this.convertFromObsidianType(obsidianType || 'text');
+            // Step 1: Get from Obsidian file properties (most specific)
+            const fileSpecificType = this.propertyTypeService.getFilePropertyType(activeFile, key);
             
-            // Also get the old type detection for comparison
-            // @ts-ignore - Access the old system for testing
-            const oldType = detectPropertyType ? detectPropertyType(value) : 'N/A';
+            // Step 2: Get from global property definitions
+            const globalType = this.propertyTypeService.getPropertyType(key);
+            
+            // Step 3: Get from our value detection
+            const valueBasedType = this.propertyTypeService.getValuePropertyType(key, value);
+            
+            // Step 4: Get final converted type
+            const internalType = this.convertFromObsidianType(fileSpecificType || valueBasedType);
             
             testResults += `   Property "${key}" = ${JSON.stringify(value)}\n`;
-            testResults += `     - Obsidian type: ${obsidianType || 'none'}\n`;
-            testResults += `     - Converted type: ${internalType}\n`;
-            testResults += `     - Old system type: ${oldType}\n\n`;
+            testResults += `     - File specific type: ${fileSpecificType || 'none'}\n`;
+            testResults += `     - Global property type: ${globalType || 'none'}\n`;
+            testResults += `     - Value-based type: ${valueBasedType}\n`;
+            testResults += `     - Final internal type: ${internalType}\n\n`;
         }
         
         // Step 4: Test global property definitions
@@ -161,25 +173,41 @@ async testPropertiesAPI() {
         }
         
         // Display results in a modal
-        const modal = new Modal(this.app);
-        modal.titleEl.setText('Properties API Test Results');
-        modal.contentEl.createEl('pre', { text: testResults });
-        // Create button container
-        const buttonContainer = modal.contentEl.createEl('div', { 
-            cls: 'modal-button-container'
-        });
+const modal = new Modal(this.app);
+modal.titleEl.setText('Properties API Test Results');
+modal.contentEl.createEl('pre', { 
+    text: testResults,
+    cls: 'property-test-results'
+});
 
-        // Create close button
-        const closeButton = buttonContainer.createEl('button', {
-            text: 'Close',
-            cls: 'mod-cta',
-            attr: { type: 'button',}
-        });
+// Add some basic styling for the test results
+const style = modal.contentEl.createEl('style');
+style.textContent = `
+.property-test-results {
+    white-space: pre-wrap;
+    overflow-x: auto;
+    font-family: monospace;
+    font-size: 12px;
+    line-height: 1.5;
+}
+`;
 
-        // Add event listener
-        closeButton.addEventListener('click', () => {
-            modal.close();
-        });
+// Create button container
+const buttonContainer = modal.contentEl.createEl('div', { 
+    cls: 'modal-button-container'
+});
+
+// Create close button
+const closeButton = buttonContainer.createEl('button', {
+    text: 'Close',
+    cls: 'mod-cta',
+    attr: { type: 'button' }
+});
+
+// Add event listener
+closeButton.addEventListener('click', () => {
+    modal.close();
+});
 
         modal.open();
         
@@ -297,16 +325,20 @@ async testPropertiesAPI() {
         try {
             const properties = this.app.metadataCache.getFileCache(file)?.frontmatter || {};
             
-            // Create properties with types using ONLY Obsidian's types where available
+            // Create properties with types using BOTH Obsidian's types and our detection
             const propertiesWithTypes: Record<string, PropertyWithType> = {};
             
             for (const [key, value] of Object.entries(properties)) {
-                // Get type from Obsidian's internal system
-                const obsidianType = this.propertyTypeService.getFilePropertyType(file, key);
+                // First try file-specific type from Obsidian
+                let obsidianType = this.propertyTypeService.getFilePropertyType(file, key);
                 
-                // Convert to our internal type format - no more detectPropertyType!
-                const type = obsidianType ? 
-                    this.convertFromObsidianType(obsidianType) : 'text'; // Default to text
+                // If not available, use our combined detection approach
+                if (!obsidianType) {
+                    obsidianType = this.propertyTypeService.getValuePropertyType(key, value);
+                }
+                
+                // Convert to our internal type format
+                const type = this.convertFromObsidianType(obsidianType);
                     
                 propertiesWithTypes[key] = {
                     value, 
@@ -509,7 +541,7 @@ async testPropertiesAPI() {
     }
 
     // Helper to convert Obsidian types to your internal types
-    private convertFromObsidianType(type: ObsidianPropertyType): string {
+    public convertFromObsidianType(type: ObsidianPropertyType): string {
         switch (type) {
             case "text": return "text";
             case "number": return "number";

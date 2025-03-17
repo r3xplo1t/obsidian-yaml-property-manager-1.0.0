@@ -153,16 +153,16 @@ export class BulkPropertyEditorModal extends Modal {
                     stats.count++;
                     
                     // Get the property type
-                    const type = detectPropertyType(propValue);
-                    const propertyWithType = propertiesWithType[propName];
-                    
+                    const obsidianType = this.plugin.propertyTypeService.getValuePropertyType(propName, propValue);
+                    const internalType = this.plugin.getInternalPropertyType(propName, propValue);
+
                     // Add file info
                     stats.files.push({
                         path: file.path,
                         name: file.name,
-                        type: type,
+                        type: internalType,  // Use the internal type we just calculated
                         value: propValue,
-                        propertyWithType: propertyWithType,
+                        propertyWithType: propertiesWithType[propName],
                         hasDifference: false // Will be determined later
                     });
                 });
@@ -271,9 +271,9 @@ export class BulkPropertyEditorModal extends Modal {
             // Add property type container
             const propertyType = propertyItem.createDiv({ cls: 'yaml-property-type' });
             
-            // Detect and display type
-            const type = detectPropertyType(sampleValue);
-            const typeDisplayName = getPropertyTypeDisplayName(type);
+            // Get type using the new helper method
+            const internalType = this.plugin.getInternalPropertyType(propName, sampleValue);
+            const typeDisplayName = getPropertyTypeDisplayName(internalType);
             
             propertyType.createEl('span', { 
                 text: `Type: ${typeDisplayName}`, 

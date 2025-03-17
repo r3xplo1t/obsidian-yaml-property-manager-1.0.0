@@ -608,8 +608,10 @@ export class TemplateSelectionModal extends Modal {
             });
 
             // Detect property type based on value
-            const propertyType = detectPropertyType(value);
-            const typeDisplayName = getPropertyTypeDisplayName(propertyType);
+            // Detect property type using unified system
+            const obsidianType = this.plugin.propertyTypeService.getValuePropertyType(key, value);
+            const internalType = this.plugin.getInternalPropertyType(key, value);
+            const typeDisplayName = getPropertyTypeDisplayName(internalType);
 
             // Property type box FIRST
             const typeBox = propertyItem.createDiv({ cls: 'yaml-property-type-box' });
@@ -624,8 +626,7 @@ export class TemplateSelectionModal extends Modal {
             });
 
             // Special handling for list type - show count and add toggle button if needed
-            if (propertyType === "list" && Array.isArray(value)) {
-                // Add count next to type
+            if (internalType === "list" && Array.isArray(value)) {
                 typeInfoContainer.createSpan({
                     text: ` (${value.length} ${value.length === 1 ? 'item' : 'items'})`, 
                     cls: 'yaml-property-array-count'
