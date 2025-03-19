@@ -9,7 +9,8 @@ export class TemplateFileSelectorModal extends Modal {
     selectedFiles: TFile[] = [];
     selectedFolders: TFolder[] = [];
     folderSubdirectoryOptions: Map<string, boolean> = new Map();
-    existingTemplatePaths: {type: string, path: string}[] = [];  
+    existingTemplatePaths: {type: string, path: string}[] = [];
+    singleFileSelectionMode: boolean = false;
 
     constructor(app: App, 
         onSelect: (result: { 
@@ -17,11 +18,13 @@ export class TemplateFileSelectorModal extends Modal {
             folders: TFolder[], 
             folderSettings: Map<string, boolean> 
         }) => void,
-        existingTemplatePaths: {type: string, path: string}[] = []
+        existingTemplatePaths: {type: string, path: string}[] = [],
+        singleFileSelectionMode: boolean = false 
     ) {
         super(app);
         this.onSelect = onSelect;
         this.existingTemplatePaths = existingTemplatePaths;
+        this.singleFileSelectionMode = singleFileSelectionMode;
     }
 
     isAlreadyInTemplatePaths(path: string, type: 'file' | 'directory'): boolean {
@@ -36,15 +39,15 @@ export class TemplateFileSelectorModal extends Modal {
         const totalCount = fileCount + folderCount;
         
         if (totalCount === 0) {
-            countEl.textContent = 'Nothing selected';
+            countEl.textContent = this.singleFileSelectionMode ? 'No file selected' : 'Nothing selected';
         } else {
             let text = '';
             if (fileCount > 0) {
                 text += `${fileCount} ${fileCount === 1 ? 'file' : 'files'}`;
             }
-            if (folderCount > 0) {
+            if (!this.singleFileSelectionMode && folderCount > 0) {
                 if (fileCount > 0) text += ' and ';
-                text += `${folderCount} ${folderCount === 1 ? 'file' : 'files'}`;
+                text += `${folderCount} ${folderCount === 1 ? 'folder' : 'folders'}`;
             }
             text += ' selected';
             countEl.textContent = text;
@@ -53,8 +56,9 @@ export class TemplateFileSelectorModal extends Modal {
         // Enable/disable confirm button
         const confirmButton = this.contentEl.querySelector('.mod-cta') as HTMLButtonElement;
         if (confirmButton) {
-            confirmButton.disabled = totalCount === 0;
-            if (totalCount === 0) {
+            const isValid = this.singleFileSelectionMode ? fileCount === 1 : totalCount > 0;
+            confirmButton.disabled = !isValid;
+            if (!isValid) {
                 confirmButton.addClass('yaml-button--disabled');
             } else {
                 confirmButton.removeClass('yaml-button--disabled');
@@ -222,16 +226,28 @@ export class TemplateFileSelectorModal extends Modal {
         // Add class for template file selector
         contentEl.addClass('yaml-template-file-selector');
         
-        // Use only minimal styling to avoid nesting containers
-        contentEl.createEl('h2', { 
-            text: 'Select Template Files and Directories'
-        });
-        
-        // Instructions
-        contentEl.createEl('p', { 
-            text: 'Select files to use as templates, or select entire directories. Check the box to include a file or folder.',
-            cls: 'setting-item-description' 
-        });
+        // Use different title and instructions for single file selection mode
+        if (this.singleFileSelectionMode) {
+            contentEl.createEl('h2', { 
+                text: 'Select a Template File'
+            });
+            
+            contentEl.createEl('p', { 
+                text: 'Choose any file to use as a one-time template (will not be added to your templates list).',
+                cls: 'setting-item-description' 
+            });
+        } else {
+            // Original title and instructions
+            contentEl.createEl('h2', { 
+                text: 'Select Template Files and Directories'
+            });
+            
+            // Instructions
+            contentEl.createEl('p', { 
+                text: 'Select files to use as templates, or select entire directories. Check the box to include a file or folder.',
+                cls: 'setting-item-description' 
+            });
+        }
         
         // File tree container - single container without nesting
         const fileTreeContainer = contentEl.createDiv({ 
@@ -254,7 +270,7 @@ export class TemplateFileSelectorModal extends Modal {
 
         // Use Obsidian's standard button classes
         const confirmButton = buttonContainer.createEl('button', {
-            text: 'Add Selected Files & Folders',
+            text: this.singleFileSelectionMode ? 'Use Selected File' : 'Add Selected Files & Folders',
             cls: 'mod-cta', // This is Obsidian's standard call-to-action button class
             attr: {
                 type: 'button' // Ensure it's recognized as a button
@@ -342,106 +358,109 @@ export class TemplateFileSelectorModal extends Modal {
             cls: 'yaml-folder-item',
             attr: { 'data-path': folder.path }
         });
-        
+
         // Check if this folder is already in template paths
         const isAlreadySelected = this.isAlreadyInTemplatePaths(folder.path, 'directory');
         if (isAlreadySelected) {
             folderItem.addClass('already-selected');
         }
-        
+
         // Header row
         const headerRow = folderItem.createDiv({ cls: 'yaml-file-tree-header' });
         if (isAlreadySelected) {
             headerRow.addClass('already-in-templates');
         }
-        
+
         // Use inline style for indentation
         headerRow.style.paddingLeft = `${level * 16}px`;
-        
-        // Checkbox
-        const isSelected = this.isFolderSelected(folder);
-        const checkboxContainer = this.createCustomCheckbox(isSelected, 'yaml-folder-checkbox');
-        headerRow.appendChild(checkboxContainer);
-        const checkbox = checkboxContainer.querySelector('.yaml-custom-checkbox') as HTMLElement;
 
-        const isAlreadyInPaths = this.isAlreadyInTemplatePaths(folder.path, 'directory');
-        if (isAlreadyInPaths && !isSelected) {
-            // Add 'checked' styling to checkbox
-            checkbox.addClass('is-checked');
-            const checkmark = document.createElement('span');
-            checkmark.addClass('yaml-checkbox-checkmark');
-            checkmark.innerHTML = '✓';
-            checkbox.appendChild(checkmark);
+        // Only show checkboxes for folders if not in single file selection mode
+        if (!this.singleFileSelectionMode) {
+            // Checkbox
+            const isSelected = this.isFolderSelected(folder);
+            const checkboxContainer = this.createCustomCheckbox(isSelected, 'yaml-folder-checkbox');
+            headerRow.appendChild(checkboxContainer);
+            const checkbox = checkboxContainer.querySelector('.yaml-custom-checkbox') as HTMLElement;
             
-            // Add to selected folders list if not already there
-            if (!this.selectedFolders.some(f => f.path === folder.path)) {
-                this.selectedFolders.push(folder);
-                this.folderSubdirectoryOptions.set(folder.path, true);
-            }
-        }
-        
-        // Add to selected folders if checked
-        if (isSelected && !this.selectedFolders.some(f => f.path === folder.path)) {
-            this.selectedFolders.push(folder);
-            this.folderSubdirectoryOptions.set(folder.path, true);
-        }
-        
-        // Folder icon - using emoji
-        const folderIcon = headerRow.createSpan({ 
-            text: '📁 ', 
-            cls: 'yaml-folder-icon' 
-        });
-        
-        // Folder name
-        headerRow.createSpan({ text: folder.name, cls: 'yaml-folder-name' });
-        
-        // Children container
-        const childrenContainer = folderItem.createDiv({ 
-            cls: 'yaml-folder-children yaml-folder-children--collapsed'
-        });
-        
-        // Checkbox event handler with improved child handling
-        checkbox.addEventListener('click', (e) => {
-            e.stopPropagation();
-            
-            // Toggle checked state
-            const isCurrentlyChecked = checkbox.hasClass('is-checked');
-            const newState = !isCurrentlyChecked;
-            
-            if (newState) {
-                // Add checked styling
+            const isAlreadyInPaths = this.isAlreadyInTemplatePaths(folder.path, 'directory');
+            if (isAlreadyInPaths && !isSelected) {
+                // Add 'checked' styling to checkbox
                 checkbox.addClass('is-checked');
                 const checkmark = document.createElement('span');
                 checkmark.addClass('yaml-checkbox-checkmark');
                 checkmark.innerHTML = '✓';
                 checkbox.appendChild(checkmark);
                 
-                // Add folder to selection
+                // Add to selected folders list if not already there
                 if (!this.selectedFolders.some(f => f.path === folder.path)) {
                     this.selectedFolders.push(folder);
-                    console.log(`Added folder to selection: ${folder.path}`);
+                    this.folderSubdirectoryOptions.set(folder.path, true);
                 }
-                
-                // Set folder to include subdirectories
-                this.folderSubdirectoryOptions.set(folder.path, true);
-                
-                // Mark all child folders and files as selected
-                this.selectAllChildrenRecursively(folder);
-            } else {
-                // Remove checked styling
-                checkbox.removeClass('is-checked');
-                const checkmark = checkbox.querySelector('.yaml-checkbox-checkmark');
-                if (checkmark) checkbox.removeChild(checkmark);
-                
-                // Remove folder and all children from selection
-                this.deselectFolderAndChildren(folder);
             }
             
-            // Update UI for any visible children
-            this.updateCustomChildCheckboxes(childrenContainer, newState);
+            // Add to selected folders if checked
+            if (isSelected && !this.selectedFolders.some(f => f.path === folder.path)) {
+                this.selectedFolders.push(folder);
+                this.folderSubdirectoryOptions.set(folder.path, true);
+            }
             
-            // Update the count display
-            this.updateSelectionCount(selectionCountEl);
+            // Checkbox event handler with improved child handling
+            checkbox.addEventListener('click', (e) => {
+                e.stopPropagation();
+                
+                // Toggle checked state
+                const isCurrentlyChecked = checkbox.hasClass('is-checked');
+                const newState = !isCurrentlyChecked;
+                
+                if (newState) {
+                    // Add checked styling
+                    checkbox.addClass('is-checked');
+                    const checkmark = document.createElement('span');
+                    checkmark.addClass('yaml-checkbox-checkmark');
+                    checkmark.innerHTML = '✓';
+                    checkbox.appendChild(checkmark);
+                    
+                    // Add folder to selection
+                    if (!this.selectedFolders.some(f => f.path === folder.path)) {
+                        this.selectedFolders.push(folder);
+                        console.log(`Added folder to selection: ${folder.path}`);
+                    }
+                    
+                    // Set folder to include subdirectories
+                    this.folderSubdirectoryOptions.set(folder.path, true);
+                    
+                    // Mark all child folders and files as selected
+                    this.selectAllChildrenRecursively(folder);
+                } else {
+                    // Remove checked styling
+                    checkbox.removeClass('is-checked');
+                    const checkmark = checkbox.querySelector('.yaml-checkbox-checkmark');
+                    if (checkmark) checkbox.removeChild(checkmark);
+                    
+                    // Remove folder and all children from selection
+                    this.deselectFolderAndChildren(folder);
+                }
+                
+                // Update UI for any visible children
+                this.updateCustomChildCheckboxes(childrenContainer, newState);
+                
+                // Update the count display
+                this.updateSelectionCount(selectionCountEl);
+            });
+        }
+
+        // Folder icon - always show icon regardless of mode
+        const folderIcon = headerRow.createSpan({ 
+            text: '📁 ', 
+            cls: 'yaml-folder-icon' 
+        });
+
+        // Folder name - always show name regardless of mode
+        headerRow.createSpan({ text: folder.name, cls: 'yaml-folder-name' });
+        
+        // Children container
+        const childrenContainer = folderItem.createDiv({ 
+            cls: 'yaml-folder-children yaml-folder-children--collapsed'
         });
         
         // Toggle expand/collapse
@@ -510,12 +529,12 @@ export class TemplateFileSelectorModal extends Modal {
         // Use inline style for indentation - smaller increment for better nesting
         headerRow.style.paddingLeft = `${level * 16}px`;
         
-        // Use the SAME custom checkbox implementation as folders
+        // Create checkbox or radio-like behavior based on mode
         const isSelected = this.isFileSelected(file);
         const checkboxContainer = this.createCustomCheckbox(isSelected, 'yaml-file-checkbox');
         headerRow.appendChild(checkboxContainer);
         const checkbox = checkboxContainer.querySelector('.yaml-custom-checkbox') as HTMLElement;
-
+        
         const isAlreadyInPaths = this.isAlreadyInTemplatePaths(file.path, 'file');
         if (isAlreadyInPaths && !isSelected) {
             // Add 'checked' styling to checkbox
@@ -545,13 +564,26 @@ export class TemplateFileSelectorModal extends Modal {
         // File name
         headerRow.createSpan({ text: file.name, cls: 'yaml-file-name' });
         
-        // Checkbox event handler - CONSISTENT with folder implementation
+        // Checkbox event handler - with single file behavior when needed
         checkbox.addEventListener('click', (e) => {
             e.stopPropagation();
             
             // Toggle checked state
             const isCurrentlyChecked = checkbox.hasClass('is-checked');
             const newState = !isCurrentlyChecked;
+            
+            if (this.singleFileSelectionMode && newState) {
+                // In single file mode, first clear any existing selections
+                this.selectedFiles = [];
+                
+                // Remove checked styling from all checkboxes
+                const allCheckboxes = document.querySelectorAll('.yaml-custom-checkbox.yaml-file-checkbox');
+                allCheckboxes.forEach((cb: HTMLElement) => {
+                    cb.removeClass('is-checked');
+                    const checkmark = cb.querySelector('.yaml-checkbox-checkmark');
+                    if (checkmark) cb.removeChild(checkmark);
+                });
+            }
             
             if (newState) {
                 // Add checked styling

@@ -9,6 +9,7 @@ import {
     preservePropertyTypes,
     restorePropertyValues 
 } from '../utils/propertyTypes';
+import { TemplateFileSelectorModal } from './TemplateFileSelectorModal';
 
 export class TemplateSelectionModal extends Modal {
     plugin: YAMLPropertyManagerPlugin;
@@ -50,25 +51,34 @@ export class TemplateSelectionModal extends Modal {
         // Remove loading indicator
         loadingEl.remove();
         
-        // Add search bar with proper Obsidian styling
+        // Add search bar with flex layout container
         const searchContainer = contentEl.createDiv({ cls: 'yaml-search-container' });
-        
-        // Create the input element directly rather than using TextComponent
-        const searchInput = searchContainer.createEl('input', {
+
+        // Create a wrapper for the search input to maintain proper spacing
+        const searchInputWrapper = searchContainer.createDiv({ cls: 'yaml-search-input-wrapper' });
+
+        // Create the input element
+        const searchInput = searchInputWrapper.createEl('input', {
             type: 'text',
             cls: 'search-input',
             attr: {
                 placeholder: 'Search templates...'
             }
         });
-        
+
+        // Add browse button to the search container (not the wrapper)
+        const browseButton = searchContainer.createEl('button', { 
+            text: 'Browse',
+            cls: 'yaml-browse-button'
+        });
+
         // Handle input changes
         searchInput.addEventListener('input', (event) => {
             const target = event.target as HTMLInputElement;
             const value = target.value;
             this.filterTemplates(value);
         });
-        
+
         // Add clear functionality with a click handler outside the input
         searchInput.addEventListener('keydown', (event) => {
             if (event.key === 'Escape') {
@@ -76,10 +86,31 @@ export class TemplateSelectionModal extends Modal {
                 this.filterTemplates('');
             }
         });
-        
-        // Add hint text below search box
-        const hintText = searchContainer.createEl('p', { 
-            text: 'Select a template file to view and choose properties. Use spaces for AND search (e.g., "dog cat" finds files containing both terms)',
+
+        // Handle browse button click
+        browseButton.addEventListener('click', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            // Open a simplified version of TemplateFileSelectorModal
+            new TemplateFileSelectorModal(
+                this.app,
+                (result) => {
+                    // We only care about single file selection for this use case
+                    if (result.files && result.files.length > 0) {
+                        // Process the first selected file as the template
+                        this.selectedTemplate = result.files[0];
+                        this.loadTemplateProperties();
+                    }
+                },
+                [], // No existing template paths to highlight
+                true // Set to true to indicate single file selection mode
+            ).open();
+        });
+
+        // Add hint text below search container (not inside it)
+        const hintText = contentEl.createEl('p', { 
+            text: 'Search to filter your saved templates. Use Browse to select any file as a template for this operation only (won\'t be added to your templates list).',
             cls: 'yaml-hint-text'
         });
         
