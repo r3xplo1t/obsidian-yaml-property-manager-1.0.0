@@ -1,34 +1,45 @@
 import { App, Modal, TFile, TFolder } from 'obsidian';
 
-export class TemplateFileSelectorModal extends Modal {
-    onSelect: (result: { 
-        files: TFile[], 
-        folders: TFolder[], 
-        folderSettings: Map<string, boolean> 
-    }) => void;
+export interface BrowserModalResult {
+    files: TFile[], 
+    folders: TFolder[], 
+    folderSettings: Map<string, boolean>
+}
+
+export class BrowserModal extends Modal {
+    onSelect: (result: BrowserModalResult) => void;
     selectedFiles: TFile[] = [];
     selectedFolders: TFolder[] = [];
     folderSubdirectoryOptions: Map<string, boolean> = new Map();
-    existingTemplatePaths: {type: string, path: string}[] = [];
+    existingPathsToHighlight: {type: string, path: string}[] = [];
     singleFileSelectionMode: boolean = false;
+    title: string = "Select Files and Folders";
+    description: string = "Select files or folders to use.";
+    confirmButtonText: string = "Confirm Selection";
 
     constructor(app: App, 
-        onSelect: (result: { 
-            files: TFile[], 
-            folders: TFolder[], 
-            folderSettings: Map<string, boolean> 
-        }) => void,
-        existingTemplatePaths: {type: string, path: string}[] = [],
-        singleFileSelectionMode: boolean = false 
+        onSelect: (result: BrowserModalResult) => void,
+        options: {
+            existingPathsToHighlight?: {type: string, path: string}[],
+            singleFileSelectionMode?: boolean,
+            title?: string,
+            description?: string,
+            confirmButtonText?: string
+        } = {}
     ) {
         super(app);
         this.onSelect = onSelect;
-        this.existingTemplatePaths = existingTemplatePaths;
-        this.singleFileSelectionMode = singleFileSelectionMode;
+        
+        // Set optional configurations
+        if (options.existingPathsToHighlight) this.existingPathsToHighlight = options.existingPathsToHighlight;
+        if (options.singleFileSelectionMode !== undefined) this.singleFileSelectionMode = options.singleFileSelectionMode;
+        if (options.title) this.title = options.title;
+        if (options.description) this.description = options.description;
+        if (options.confirmButtonText) this.confirmButtonText = options.confirmButtonText;
     }
 
-    isAlreadyInTemplatePaths(path: string, type: 'file' | 'directory'): boolean {
-        return this.existingTemplatePaths.some(
+    isAlreadyInHighlightedPaths(path: string, type: 'file' | 'directory'): boolean {
+        return this.existingPathsToHighlight.some(
             tp => tp.type === type && tp.path === path
         );
     }
@@ -38,8 +49,11 @@ export class TemplateFileSelectorModal extends Modal {
         const folderCount = this.selectedFolders.length;
         const totalCount = fileCount + folderCount;
         
+        const textSpan = countEl.querySelector('.yaml-direct-path-text');
+        if (!textSpan) return;
+        
         if (totalCount === 0) {
-            countEl.textContent = this.singleFileSelectionMode ? 'No file selected' : 'Nothing selected';
+            textSpan.textContent = this.singleFileSelectionMode ? 'No file selected' : 'Nothing selected';
         } else {
             let text = '';
             if (fileCount > 0) {
@@ -50,7 +64,7 @@ export class TemplateFileSelectorModal extends Modal {
                 text += `${folderCount} ${folderCount === 1 ? 'folder' : 'folders'}`;
             }
             text += ' selected';
-            countEl.textContent = text;
+            textSpan.textContent = text;
         }
         
         // Enable/disable confirm button
@@ -65,7 +79,7 @@ export class TemplateFileSelectorModal extends Modal {
             }
         }
     }
-
+    
     createCustomCheckbox(isChecked: boolean, className: string): HTMLElement {
         // Create container to ensure proper alignment and spacing
         const checkboxContainer = document.createElement('span');
@@ -223,42 +237,34 @@ export class TemplateFileSelectorModal extends Modal {
         const { contentEl } = this;
         contentEl.empty();
         
-        // Add class for template file selector
-        contentEl.addClass('yaml-template-file-selector');
+        // Add class for browser modal
+        contentEl.addClass('yaml-browser-modal');
         
-        // Use different title and instructions for single file selection mode
-        if (this.singleFileSelectionMode) {
-            contentEl.createEl('h2', { 
-                text: 'Select a Template File'
-            });
-            
-            contentEl.createEl('p', { 
-                text: 'Choose any file to use as a one-time template (will not be added to your templates list).',
-                cls: 'setting-item-description' 
-            });
-        } else {
-            // Original title and instructions
-            contentEl.createEl('h2', { 
-                text: 'Select Template Files and Directories'
-            });
-            
-            // Instructions
-            contentEl.createEl('p', { 
-                text: 'Select files to use as templates, or select entire directories. Check the box to include a file or folder.',
-                cls: 'setting-item-description' 
-            });
-        }
+        // Set title and instructions based on configuration
+        contentEl.createEl('h2', { 
+            text: this.title
+        });
+        
+        contentEl.createEl('p', { 
+            text: this.description,
+            cls: 'setting-item-description' 
+        });
         
         // File tree container - single container without nesting
         const fileTreeContainer = contentEl.createDiv({ 
             cls: 'yaml-file-tree' 
         });
         
-        // Selection counter
-        const selectionCountEl = contentEl.createDiv({ 
-            cls: 'yaml-selected-count' 
+        // Selection counter with styled container
+        const selectionCountEl = contentEl.createDiv({
+            cls: 'yaml-selected-count yaml-direct-path-container'
         });
-        selectionCountEl.textContent = 'Nothing selected';
+
+        // Add the text span inside
+        selectionCountEl.createSpan({
+            text: this.singleFileSelectionMode ? 'No file selected' : 'Nothing selected',
+            cls: 'yaml-direct-path-text'
+        });
         
         // Add root folder contents directly to the file tree container
         this.addFolderToTree(fileTreeContainer, this.app.vault.getRoot(), selectionCountEl);
@@ -270,7 +276,7 @@ export class TemplateFileSelectorModal extends Modal {
 
         // Use Obsidian's standard button classes
         const confirmButton = buttonContainer.createEl('button', {
-            text: this.singleFileSelectionMode ? 'Use Selected File' : 'Add Selected Files & Folders',
+            text: this.confirmButtonText,
             cls: 'mod-cta', // This is Obsidian's standard call-to-action button class
             attr: {
                 type: 'button' // Ensure it's recognized as a button
@@ -315,7 +321,7 @@ export class TemplateFileSelectorModal extends Modal {
                 button.className = button.className.replace(/yaml-button[^ ]*/g, '');
                 
                 // Re-add the mod-cta class to the confirm button if needed
-                if (button.textContent?.includes('Add Selected')) {
+                if (button.textContent?.includes('Confirm') || button.textContent?.includes('Select') || button.textContent?.includes('Apply')) {
                     button.addClass('mod-cta');
                 }
             });
@@ -359,16 +365,16 @@ export class TemplateFileSelectorModal extends Modal {
             attr: { 'data-path': folder.path }
         });
 
-        // Check if this folder is already in template paths
-        const isAlreadySelected = this.isAlreadyInTemplatePaths(folder.path, 'directory');
-        if (isAlreadySelected) {
-            folderItem.addClass('already-selected');
+        // Check if this folder is already highlighted
+        const isAlreadyHighlighted = this.isAlreadyInHighlightedPaths(folder.path, 'directory');
+        if (isAlreadyHighlighted) {
+            folderItem.addClass('already-highlighted');
         }
 
         // Header row
         const headerRow = folderItem.createDiv({ cls: 'yaml-file-tree-header' });
-        if (isAlreadySelected) {
-            headerRow.addClass('already-in-templates');
+        if (isAlreadyHighlighted) {
+            headerRow.addClass('already-in-paths');
         }
 
         // Use inline style for indentation
@@ -382,7 +388,7 @@ export class TemplateFileSelectorModal extends Modal {
             headerRow.appendChild(checkboxContainer);
             const checkbox = checkboxContainer.querySelector('.yaml-custom-checkbox') as HTMLElement;
             
-            const isAlreadyInPaths = this.isAlreadyInTemplatePaths(folder.path, 'directory');
+            const isAlreadyInPaths = this.isAlreadyInHighlightedPaths(folder.path, 'directory');
             if (isAlreadyInPaths && !isSelected) {
                 // Add 'checked' styling to checkbox
                 checkbox.addClass('is-checked');
@@ -515,15 +521,15 @@ export class TemplateFileSelectorModal extends Modal {
             attr: { 'data-path': file.path }
         });
         
-        // Check if this file is already in template paths
-        const isAlreadySelected = this.isAlreadyInTemplatePaths(file.path, 'file');
-        if (isAlreadySelected) {
-            fileItem.addClass('already-selected');
+        // Check if this file is already highlighted
+        const isAlreadyHighlighted = this.isAlreadyInHighlightedPaths(file.path, 'file');
+        if (isAlreadyHighlighted) {
+            fileItem.addClass('already-highlighted');
         }
         
         const headerRow = fileItem.createDiv({ cls: 'yaml-file-tree-header' });
-        if (isAlreadySelected) {
-            headerRow.addClass('already-in-templates');
+        if (isAlreadyHighlighted) {
+            headerRow.addClass('already-in-paths');
         }
         
         // Use inline style for indentation - smaller increment for better nesting
@@ -535,7 +541,7 @@ export class TemplateFileSelectorModal extends Modal {
         headerRow.appendChild(checkboxContainer);
         const checkbox = checkboxContainer.querySelector('.yaml-custom-checkbox') as HTMLElement;
         
-        const isAlreadyInPaths = this.isAlreadyInTemplatePaths(file.path, 'file');
+        const isAlreadyInPaths = this.isAlreadyInHighlightedPaths(file.path, 'file');
         if (isAlreadyInPaths && !isSelected) {
             // Add 'checked' styling to checkbox
             checkbox.addClass('is-checked');

@@ -3,8 +3,8 @@ import { YAMLPropertyManagerSettings, DEFAULT_SETTINGS } from './src/models';
 import { formatYamlValue } from './src/utils';
 import {
     PropertyManagerModal,
-    TemplateSelectionModal,
-    BatchFileSelectorModal,
+    TemplateApplicationModal, // Changed from TemplateSelectionModal
+    BrowserModal,             // New import
     BulkPropertyEditorModal,
     YAMLPropertyManagerSettingTab
 } from './src/modals';
@@ -46,7 +46,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                 const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
                 if (activeView) {
                     if (!checking) {
-                        new TemplateSelectionModal(this.app, this, [activeView.file]).open();
+                        new TemplateApplicationModal(this.app, this, [activeView.file]).open();
                     }
                     return true;
                 }
@@ -58,14 +58,21 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             id: 'apply-template-to-multiple-files',
             name: 'Apply Template to Multiple Files',
             callback: () => {
-                // This likely opens a file selector and then the template modal
-                const batchSelector = new BatchFileSelectorModal(this.app, (files) => {
-                    if (files && files.length > 0) {
-                        this.selectedFiles = [...files];
-                        new TemplateSelectionModal(this.app, this, this.selectedFiles).open();
+                const browser = new BrowserModal(
+                    this.app, 
+                    (result) => {
+                        if (result.files && result.files.length > 0) {
+                            this.selectedFiles = [...result.files];
+                            new TemplateApplicationModal(this.app, this, this.selectedFiles).open();
+                        }
+                    },
+                    {
+                        title: "Select Files for Template Application",
+                        description: "Choose files to apply a template to.",
+                        confirmButtonText: "Select Files"
                     }
-                });
-                batchSelector.open();
+                );
+                browser.open();
             }
         });
 
@@ -371,7 +378,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                 
                 if (this.selectedFiles.length > 0) {
                     console.log(`Opening template modal with ${this.selectedFiles.length} files`);
-                    new TemplateSelectionModal(this.app, this, [...this.selectedFiles]).open();
+                    new TemplateApplicationModal(this.app, this, [...this.selectedFiles]).open();
                 } else {
                     new Notice('Please select files first');
                     new PropertyManagerModal(this.app, this).open();
@@ -379,13 +386,23 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                 break;
             case 'batchSelect':
                 if (typeof args[0] === 'function') {
-                    new BatchFileSelectorModal(this.app, (files: TFile[]) => {
-                        if (files && files.length > 0) {
-                            this.debug(`Batch selection returned ${files.length} files`);
-                            this.selectedFiles = [...files];
-                            args[0](files);
+                    const callback = args[0];
+                    const browser = new BrowserModal(
+                        this.app, 
+                        (result) => {
+                            if (result.files && result.files.length > 0) {
+                                this.debug(`Batch selection returned ${result.files.length} files`);
+                                this.selectedFiles = [...result.files];
+                                callback(result.files);
+                            }
+                        },
+                        {
+                            title: "Select Files",
+                            description: "Choose files to process.",
+                            confirmButtonText: "Select Files"
                         }
-                    }).open();
+                    );
+                    browser.open();
                 }
                 break;
             default:

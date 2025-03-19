@@ -1,7 +1,7 @@
 import { App, Modal, Notice, MarkdownView, TFile } from 'obsidian';
 import YAMLPropertyManagerPlugin from '../../main';
-import { TemplateSelectionModal } from './TemplateSelectionModal';
-import { BatchFileSelectorModal } from './BatchFileSelectorModal';
+import { TemplateApplicationModal } from './TemplateApplicationModal'; // Changed from TemplateSelectionModal
+import { BrowserModal } from './BrowserModal'; // New import
 import { BulkPropertyEditorModal } from './BulkPropertyEditorModal';
 
 export class PropertyManagerModal extends Modal {
@@ -155,17 +155,25 @@ export class PropertyManagerModal extends Modal {
     }
 
     browseFiles() {
-        const batchSelector = new BatchFileSelectorModal(this.app, (files: TFile[]) => {
-            if (files && files.length > 0) {
-                this.plugin.debug(`Received ${files.length} files from batch selection`);
-                
-                // Store files in the plugin's storage
-                this.plugin.selectedFiles = [...files];
-                
-                // Reopen main modal to show updated selection
-                this.plugin.navigateToModal(this, 'main');
+        const browser = new BrowserModal(
+            this.app,
+            (result) => {
+                if (result.files && result.files.length > 0) {
+                    this.plugin.debug(`Received ${result.files.length} files from batch selection`);
+                    
+                    // Store files in the plugin's storage
+                    this.plugin.selectedFiles = [...result.files];
+                    
+                    // Reopen main modal to show updated selection
+                    this.plugin.navigateToModal(this, 'main');
+                }
+            },
+            {
+                title: "Select Files",
+                description: "Select files to process. Use checkboxes to select individual files or entire folders.",
+                confirmButtonText: "Apply to Selected Files"
             }
-        });
-        batchSelector.open();
+        );
+        browser.open();
     }
 }

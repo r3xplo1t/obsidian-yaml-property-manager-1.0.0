@@ -9,9 +9,9 @@ import {
     preservePropertyTypes,
     restorePropertyValues 
 } from '../utils/propertyTypes';
-import { TemplateFileSelectorModal } from './TemplateFileSelectorModal';
+import { BrowserModal } from './BrowserModal';
 
-export class TemplateSelectionModal extends Modal {
+export class TemplateApplicationModal extends Modal {
     plugin: YAMLPropertyManagerPlugin;
     targetFiles: TFile[];
     selectedTemplate: TFile | null = null;
@@ -35,7 +35,7 @@ export class TemplateSelectionModal extends Modal {
         
         // Apply window-specific class
         contentEl.addClass('yaml-window');
-        contentEl.addClass('yaml-window__template-selection');
+        contentEl.addClass('yaml-window__template-application');
         
         // Main header (left-aligned per requirements)
         contentEl.createEl('h2', { text: 'Select Template File' });
@@ -93,7 +93,7 @@ export class TemplateSelectionModal extends Modal {
             e.stopPropagation();
             
             // Open a simplified version of TemplateFileSelectorModal
-            new TemplateFileSelectorModal(
+            new BrowserModal(
                 this.app,
                 (result) => {
                     // We only care about single file selection for this use case
@@ -103,8 +103,13 @@ export class TemplateSelectionModal extends Modal {
                         this.loadTemplateProperties();
                     }
                 },
-                [], // No existing template paths to highlight
-                true // Set to true to indicate single file selection mode
+                {
+                    existingPathsToHighlight: [], // No existing template paths to highlight
+                    singleFileSelectionMode: true, // Set to true to indicate single file selection mode
+                    title: "Select a Template File",
+                    description: "Choose any file to use as a one-time template.",
+                    confirmButtonText: "Use Selected File"
+                }
             ).open();
         });
 

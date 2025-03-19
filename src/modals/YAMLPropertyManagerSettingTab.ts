@@ -1,6 +1,6 @@
 import { App, PluginSettingTab, Setting, TFile, TFolder, Notice, ButtonComponent } from 'obsidian';
 import YAMLPropertyManagerPlugin from '../../main';
-import { TemplateFileSelectorModal } from './TemplateFileSelectorModal';
+import { BrowserModal } from './BrowserModal'; // Changed from TemplateFileSelectorModal
 import { TreeNode } from '../models/interfaces';
 
 export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
@@ -91,7 +91,7 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
                 .setButtonText('Browse and Select Templates')
                 .setCta() // This applies Obsidian's call-to-action styling
                 .onClick(() => {
-                    new TemplateFileSelectorModal(
+                    new BrowserModal(
                         this.app, 
                         async (result) => {
                             // Process selected files and folders
@@ -157,7 +157,12 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
                     console.log(`${index}: ${path.type} - ${path.path}`);
                 });
             },
-            this.plugin.settings.templatePaths // Pass existing template paths
+            {
+                title: "Select Template Files and Directories",
+                description: "Select files to use as templates, or select entire directories. Check the box to include a file or folder.",
+                confirmButtonText: "Add Selected Files & Folders",
+                existingPathsToHighlight: this.plugin.settings.templatePaths
+            }
         ).open();
     })
 );
