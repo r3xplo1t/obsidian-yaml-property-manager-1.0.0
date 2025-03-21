@@ -321,12 +321,13 @@
   /* -----------------------------------------
      2.3 Buttons
      ----------------------------------------- */
-  .yaml-window__property-manager .yaml-button {
+    .yaml-window__property-manager .yaml-button {
     border-radius: var(--button-radius) !important;
     font-size: var(--font-ui-small) !important;
     font-weight: var(--font-normal) !important;
     padding: var(--size-4-1) var(--size-4-3) !important;
-    height: var(--input-height) !important;
+    height: auto !important; /* Change from fixed height to auto */
+    min-height: var(--input-height) !important; /* Add min-height instead of fixed height */
     background-color: var(--interactive-normal) !important;
     color: var(--text-normal) !important;
     border: none !important;
@@ -338,6 +339,9 @@
     text-align: center !important;
     box-shadow: var(--input-shadow) !important;
     box-sizing: border-box !important;
+    white-space: normal !important; /* Allow text to wrap */
+    word-wrap: break-word !important; /* Ensure long words break */
+    line-height: 1.3 !important; /* Improve line spacing for wrapped text */
   }
   
   .yaml-window__property-manager .yaml-button:hover {

@@ -29,10 +29,9 @@ export class PropertyManagerModal extends Modal {
         
         // Only create the batch container
         const batchContainer = actionsContainer.createDiv({ cls: 'yaml-action-section' });
-        batchContainer.createEl('h3', { text: 'Batch Operations' });
         
         // File selection
-        batchContainer.createEl('p', { text: 'Select files to process:' });
+        batchContainer.createEl('h3', { text: 'File(s) Selection Options' });
         
         // Add buttons directly to batch container
         const currentFolderButton = batchContainer.createEl('button', { 
@@ -56,6 +55,34 @@ export class PropertyManagerModal extends Modal {
                 new Notice('No file is currently active');
             }
         });
+
+        const currentFolderAndSubfoldersButton = batchContainer.createEl('button', { 
+            text: 'Select All in Current Folder and Subfolders',
+            cls: 'yaml-button yaml-button--file-selection'
+        });
+        
+        currentFolderAndSubfoldersButton.addEventListener('click', () => {
+            const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+            if (activeView && activeView.file) {
+                const currentFolder = activeView.file.parent;
+                if (currentFolder) {
+                    const currentFolderPath = currentFolder.path + '/';
+                    // Get all markdown files in current folder and all subfolders
+                    this.plugin.selectedFiles = this.app.vault.getMarkdownFiles()
+                        .filter(file => 
+                            // Include files directly in current folder
+                            file.parent === currentFolder || 
+                            // Or files in subfolders (path starts with current folder path)
+                            file.path.startsWith(currentFolderPath)
+                        );
+                    
+                    this.plugin.debug(`Selected ${this.plugin.selectedFiles.length} files from current folder and subfolders`);
+                    this.updateSelectedFilesCount();
+                }
+            } else {
+                new Notice('No file is currently active');
+            }
+        });
         
         const browseButton = batchContainer.createEl('button', { 
             text: 'Browse and Select Files',
@@ -66,6 +93,8 @@ export class PropertyManagerModal extends Modal {
             this.browseFiles();
         });
         
+        batchContainer.createEl('h3', { text: 'Batch Operations' });
+
         // Apply template button
         const applyTemplateButton = batchContainer.createEl('button', {
             text: 'Apply Template to Selected Files',
