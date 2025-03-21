@@ -155,6 +155,12 @@ export class PropertyManagerModal extends Modal {
     }
 
     browseFiles() {
+        // Create an array of existing paths to highlight based on currently selected files
+        const existingPaths = this.plugin.selectedFiles.map(file => ({
+            type: 'file',
+            path: file.path
+        }));
+        
         const browser = new BrowserModal(
             this.app,
             (result) => {
@@ -171,7 +177,8 @@ export class PropertyManagerModal extends Modal {
             {
                 title: "Select Files",
                 description: "Select files to process. Use checkboxes to select individual files or entire folders.",
-                confirmButtonText: "Apply to Selected Files"
+                confirmButtonText: "Apply to Selected Files",
+                existingPathsToHighlight: existingPaths // Pass the existing files to highlight
             }
         );
         browser.open();

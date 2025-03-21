@@ -96,71 +96,101 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
                         async (result) => {
                             // Process selected files and folders
                             let countAdded = 0;
+                            let countRemoved = 0;
                             
                             // Debug logging
-                console.log('Processing selection result:');
-                console.log('- Files:', result.files.map(f => f.path));
-                console.log('- Folders:', result.folders.map(f => f.path));
-                
-                // Add individual files
-                for (const file of result.files) {
-                    // Check if already exists
-                    const alreadyExists = this.plugin.settings.templatePaths.some(
-                        tp => tp.type === 'file' && tp.path === file.path
-                    );
-                    
-                    if (!alreadyExists) {
-                        this.plugin.settings.templatePaths.push({
-                            type: 'file',
-                            path: file.path,
-                            includeSubdirectories: true // Always include subdirectories
-                        });
-                        countAdded++;
-                        console.log(`Added file to template paths: ${file.path}`);
-                    } else {
-                        console.log(`File already exists in template paths: ${file.path}`);
-                    }
-                }
-                
-                // Add folders
-                for (const folder of result.folders) {
-                    // Check if already exists
-                    const alreadyExists = this.plugin.settings.templatePaths.some(
-                        tp => tp.type === 'directory' && tp.path === folder.path
-                    );
-                    
-                    if (!alreadyExists) {
-                        this.plugin.settings.templatePaths.push({
-                            type: 'directory',
-                            path: folder.path,
-                            includeSubdirectories: true // Always include subdirectories
-                        });
-                        countAdded++;
-                        console.log(`Added folder to template paths: ${folder.path}`);
-                    } else {
-                        console.log(`Folder already exists in template paths: ${folder.path}`);
-                    }
-                }
-                
-                // Save settings and refresh
-                if (countAdded > 0) {
-                    await this.plugin.saveSettings();
-                    new Notice(`Added ${countAdded} template source${countAdded !== 1 ? 's' : ''}`);
-                    this.display(); // Refresh view
-                } else if (result.files.length > 0 || result.folders.length > 0) {
-                    new Notice('All selected templates were already in your list');
-                }
-                
-                // Debug current template paths after update
-                console.log('Current template paths:');
-                this.plugin.settings.templatePaths.forEach((path, index) => {
-                    console.log(`${index}: ${path.type} - ${path.path}`);
-                });
-            },
+                            console.log('Processing selection result:');
+                            console.log('- Files:', result.files.map(f => f.path));
+                            console.log('- Folders:', result.folders.map(f => f.path));
+                            
+                            // Create sets for easier lookup
+                            const resultFilePaths = new Set(result.files.map(f => f.path));
+                            const resultFolderPaths = new Set(result.folders.map(f => f.path));
+                            
+                            // Check which existing templates should be removed
+                            const pathsToKeep = [];
+                            
+                            for (const templatePath of this.plugin.settings.templatePaths) {
+                                const isFile = templatePath.type === 'file';
+                                const isFolder = templatePath.type === 'directory';
+                                
+                                if ((isFile && resultFilePaths.has(templatePath.path)) || 
+                                    (isFolder && resultFolderPaths.has(templatePath.path))) {
+                                    // This path is still selected, keep it
+                                    pathsToKeep.push(templatePath);
+                                } else {
+                                    // This path is no longer selected, remove it
+                                    countRemoved++;
+                                    console.log(`Removed ${templatePath.type} from template paths: ${templatePath.path}`);
+                                }
+                            }
+                            
+                            // Update settings with paths to keep
+                            this.plugin.settings.templatePaths = pathsToKeep;
+                            
+                            // Now add new files and folders that aren't already in the settings
+                            for (const file of result.files) {
+                                const alreadyExists = this.plugin.settings.templatePaths.some(
+                                    tp => tp.type === 'file' && tp.path === file.path
+                                );
+                                
+                                if (!alreadyExists) {
+                                    this.plugin.settings.templatePaths.push({
+                                        type: 'file',
+                                        path: file.path,
+                                        includeSubdirectories: true
+                                    });
+                                    countAdded++;
+                                    console.log(`Added file to template paths: ${file.path}`);
+                                }
+                            }
+                            
+                            for (const folder of result.folders) {
+                                const alreadyExists = this.plugin.settings.templatePaths.some(
+                                    tp => tp.type === 'directory' && tp.path === folder.path
+                                );
+                                
+                                if (!alreadyExists) {
+                                    this.plugin.settings.templatePaths.push({
+                                        type: 'directory',
+                                        path: folder.path,
+                                        includeSubdirectories: true
+                                    });
+                                    countAdded++;
+                                    console.log(`Added folder to template paths: ${folder.path}`);
+                                }
+                            }
+                            
+                            // Save settings and refresh if any changes were made
+                            if (countAdded > 0 || countRemoved > 0) {
+                                await this.plugin.saveSettings();
+                                
+                                // Build notification message
+                                let noticeMsg = '';
+                                if (countAdded > 0) {
+                                    noticeMsg += `Added ${countAdded} template source${countAdded !== 1 ? 's' : ''}`;
+                                }
+                                if (countRemoved > 0) {
+                                    if (noticeMsg) noticeMsg += ' and ';
+                                    noticeMsg += `Removed ${countRemoved} template source${countRemoved !== 1 ? 's' : ''}`;
+                                }
+                                
+                                new Notice(noticeMsg);
+                                this.display(); // Refresh view
+                            } else if (result.files.length > 0 || result.folders.length > 0) {
+                                new Notice('No changes made to your template list');
+                            }
+                            
+                            // Debug current template paths after update
+                            console.log('Current template paths:');
+                            this.plugin.settings.templatePaths.forEach((path, index) => {
+                                console.log(`${index}: ${path.type} - ${path.path}`);
+                            });
+                        },
             {
                 title: "Select Template Files and Directories",
                 description: "Select files to use as templates, or select entire directories. Check the box to include a file or folder.",
-                confirmButtonText: "Add Selected Files & Folders",
+                confirmButtonText: "Apply Selected Files & Folders",
                 existingPathsToHighlight: this.plugin.settings.templatePaths
             }
         ).open();

@@ -26,63 +26,26 @@
 }
 
 /* ===========================================
-   BROWSER MODAL
+   BROWSER MODAL - SIMPLIFIED WITH CUSTOM CHECKBOXES
    =========================================== */
 
-/* Ensure consistent modal padding across all contexts */
-.modal:has(.yaml-browser-modal) {
-  padding: 0 !important;
-  border-radius: 6px !important;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.2) !important;
-}
-
-.modal-container .modal:has(.yaml-browser-modal) {
-  width: fit-content !important;
-  max-width: 650px !important;
-  min-width: 500px !important;
-  margin: 0 auto !important;
-  display: flex !important;
-  flex-direction: column !important;
-  align-items: center !important;
-  overflow: hidden !important;
-}
-
-/* Ensure consistent internal padding */
+/* Basic modal styling */
 .yaml-browser-modal {
-  padding: 20px !important;
-  width: 100% !important;
-  box-sizing: border-box !important;
+  padding: 20px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 /* Typography */
 .yaml-browser-modal h2 {
-  font-size: var(--h2-size) !important;
-  color: var(--h2-color, var(--text-normal)) !important;
-  font-weight: var(--h2-weight, var(--font-medium)) !important;
-  line-height: var(--h2-line-height, 1.3) !important;
-  margin-top: 0 !important;
-  margin-bottom: var(--h2-margin-bottom, 20px) !important;
-  padding-bottom: var(--size-4-2, 8px) !important;
-  border-bottom: var(--h2-border-bottom, 1px solid var(--background-modifier-border)) !important;
-  display: flex !important;
-  align-items: center !important;
-  letter-spacing: -0.015em !important;
-}
-
-.yaml-browser-modal h3 {
-  font-size: var(--h3-size) !important;
-  color: var(--h3-color, var(--text-normal)) !important;
-  font-weight: var(--h3-weight) !important;
-  line-height: var(--h3-line-height) !important;
-  margin-bottom: var(--h3-margin-bottom, 16px) !important;
-}
-
-.yaml-browser-modal p, 
-.yaml-browser-modal span, 
-.yaml-browser-modal div {
-  color: var(--text-normal);
-  font-size: var(--font-text-size, 16px);
-  line-height: var(--line-height-normal, 1.5);
+  font-size: var(--h2-size);
+  color: var(--h2-color, var(--text-normal));
+  font-weight: var(--h2-weight, var(--font-medium));
+  line-height: var(--h2-line-height, var(--line-height-normal));
+  margin-top: 0;
+  margin-bottom: var(--h2-margin-bottom, var(--size-4-4));
+  padding-bottom: var(--size-4-2);
+  border-bottom: var(--h2-border-bottom, 1px solid var(--background-modifier-border));
 }
 
 .yaml-browser-modal p.setting-item-description {
@@ -91,13 +54,20 @@
   margin-bottom: 16px;
 }
 
-/* Selection count styled to match the Property Manager Window */
-.yaml-browser-modal .yaml-selected-count {
-  text-align: center !important;
-  margin: 12px 0 !important;
+/* File tree container */
+.yaml-browser-modal .yaml-file-tree {
+  margin: 12px 0;
+  max-height: 400px;
+  min-height: 300px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  padding: 8px;
 }
 
-.yaml-browser-modal .yaml-selected-count.yaml-direct-path-container {
+/* Selection counter */
+.yaml-browser-modal .yaml-selected-count {
   display: flex;
   align-items: center;
   width: 100%;
@@ -105,70 +75,41 @@
   background-color: var(--background-primary);
   border-radius: 4px;
   box-shadow: var(--input-shadow);
+  margin-bottom: 10px;
 }
 
-.yaml-browser-modal .yaml-selected-count .yaml-direct-path-text {
-  color: var(--text-muted);
+.yaml-browser-modal .yaml-selection-text {
   font-size: var(--font-ui-smaller);
-  width: 100%;
-  text-align: left;
-}
-
-/* File tree container */
-.yaml-browser-modal .yaml-file-tree {
-  margin: 12px 0;
-  max-height: 400px;
-  min-height: 300px;
-  overflow-y: auto !important;
-  overflow-x: hidden;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 4px;
-  padding: 8px;
-  box-sizing: border-box;
-  width: 100%;
+  color: var(--text-muted);
 }
 
 /* File and folder items */
 .yaml-browser-modal .yaml-file-item,
 .yaml-browser-modal .yaml-folder-item {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  position: relative;
-  background-color: transparent;
-  border-left: none;
-  border: none;
-  margin: 0;
-  padding: 0;
+  margin-bottom: 2px;
 }
 
-/* Already selected items */
-.yaml-browser-modal .already-highlighted,
-.yaml-browser-modal .already-in-paths {
-  background-color: rgba(var(--interactive-accent-rgb), 0.1) !important;
-  border-radius: 4px;
-}
-
-/* Remove purple lines everywhere */
-.yaml-browser-modal *:before {
-  display: none !important;
-}
-
-/* Header rows for files and folders */
-.yaml-browser-modal .yaml-file-tree-header {
+.yaml-browser-modal .yaml-file-header,
+.yaml-browser-modal .yaml-folder-header {
   display: flex;
   align-items: center;
-  padding: 4px 6px !important;
-  border-radius: 4px !important;
-  margin: 1px 0 !important;
-  transition: background-color 100ms ease-in-out !important;
-  width: 100%;
-  border: none;
-  background: transparent;
+  padding: 4px 6px;
+  border-radius: 4px;
+  transition: background-color 0.1s ease;
 }
 
-.yaml-browser-modal .yaml-file-tree-header:hover {
-  background-color: var(--background-modifier-hover) !important;
+.yaml-browser-modal .yaml-file-header:hover,
+.yaml-browser-modal .yaml-folder-header:hover {
+  background-color: var(--background-modifier-hover);
+}
+
+/* Selection styling */
+.yaml-browser-modal .is-selected {
+  background-color: rgba(var(--interactive-accent-rgb), 0.1);
+}
+
+.yaml-browser-modal .initially-selected {
+  color: var(--text-accent);
 }
 
 /* Custom checkbox container */
@@ -180,105 +121,103 @@
 
 /* Custom checkbox element */
 .yaml-browser-modal .yaml-custom-checkbox {
-  width: 16px !important;
-  height: 16px !important;
-  border-radius: 3px !important;
-  background-color: var(--background-primary) !important;
-  border: 1px solid var(--checkbox-border-color, var(--text-muted)) !important;
+  width: 16px;
+  height: 16px;
+  border-radius: 3px;
+  background-color: var(--background-primary);
+  border: 1px solid var(--checkbox-border-color, var(--text-muted));
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: all 0.1s ease;
   position: relative;
+  transition: all 0.1s ease;
+  -webkit-border-radius: 3px;
+  -moz-border-radius: 3px;
+  -ms-border-radius: 3px;
+  -o-border-radius: 3px;
 }
 
 /* Checked state styling */
 .yaml-browser-modal .yaml-custom-checkbox.is-checked {
-  background-color: var(--interactive-accent) !important;
-  border-color: var(--interactive-accent) !important;
-}
-
-/* Disabled checkboxes */
-.yaml-browser-modal .yaml-custom-checkbox.yaml-custom-checkbox--disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+  background-color: var(--interactive-accent);
+  border-color: var(--interactive-accent);
 }
 
 /* Checkmark inside checkbox */
 .yaml-browser-modal .yaml-checkbox-checkmark {
+  color: white;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+/* Indeterminate state styling */
+.yaml-browser-modal .is-partially-selected {
+  background-color: rgba(var(--interactive-accent-rgb), 0.05);
+}
+
+.yaml-browser-modal .yaml-folder-item.is-partially-selected > .yaml-folder-header {
+  background-color: rgba(var(--interactive-accent-rgb), 0.08);
+}
+
+/* More prominent indeterminate checkbox */
+.yaml-browser-modal .yaml-custom-checkbox.is-indeterminate {
+  background-color: var(--interactive-accent) !important;
+  border-color: var(--interactive-accent) !important;
+  position: relative !important;
+}
+
+/* White dash inside the indeterminate checkbox */
+.yaml-browser-modal .yaml-checkbox-indeterminate {
   position: absolute !important;
-  content: "✓" !important;
   top: 50% !important;
   left: 50% !important;
   transform: translate(-50%, -50%) !important;
-  color: white !important;
-  font-size: 12px !important;
-  font-weight: 500 !important;
-  line-height: 1 !important;
-  width: auto !important;
-  height: auto !important;
-  border: none !important;
-  z-index: 5 !important;
-  opacity: 0;
-  transition: opacity 0.1s ease;
+  width: 8px !important;
+  height: 2px !important;
+  background-color: white !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
-.yaml-browser-modal .yaml-custom-checkbox.is-checked .yaml-checkbox-checkmark,
-.yaml-browser-modal .yaml-checkbox-checkmark.yaml-checkbox-checkmark--visible {
-  opacity: 1 !important; /* Visible when checkbox is checked */
+/* SVG inside indeterminate */
+.yaml-browser-modal .yaml-checkbox-indeterminate svg {
+  display: block !important;
+  width: 100% !important;
+  height: 100% !important;
 }
 
-.yaml-browser-modal .yaml-custom-checkbox.is-checked::after {
-  content: "✓" !important;
-  position: absolute !important;
-  top: 50% !important;
-  left: 50% !important;
-  transform: translate(-50%, -50%) !important;
-  color: white !important;
-  font-size: 12px !important;
-  font-weight: 500 !important;
-  line-height: 1 !important;
-}
-
-/* File and folder icons - UPDATED FOR EMOJIS */
-.yaml-browser-modal .yaml-file-icon, 
+/* Icons */
+.yaml-browser-modal .yaml-file-icon,
 .yaml-browser-modal .yaml-folder-icon {
   margin-right: 4px;
-  width: 16px;
-  text-align: center;
-  color: var(--text-normal);
-  font-size: 14px;
 }
 
-/* Hide SVG triangles since we're using emojis */
-.yaml-browser-modal .yaml-folder-icon-triangle {
-  display: none !important;
+/* File and folder names */
+.yaml-browser-modal .yaml-file-name,
+.yaml-browser-modal .yaml-folder-name {
+  flex: 1;
+  font-size: var(--font-ui-small);
 }
 
 /* Folder children container */
 .yaml-browser-modal .yaml-folder-children {
-  margin-left: 16px !important;
-  border-left: 1px solid var(--background-modifier-border-hover) !important;
-  padding-left: 4px !important;
-  margin-top: 2px !important;
-  margin-bottom: 2px !important;
+  margin-left: 16px;
+  border-left: 1px solid var(--background-modifier-border);
+  padding-left: 4px;
 }
 
-/* Collapsed state for folder children */
 .yaml-browser-modal .yaml-folder-children--collapsed {
   display: none;
 }
 
-/* Names of files and folders */
-.yaml-browser-modal .yaml-file-name, 
-.yaml-browser-modal .yaml-folder-name {
-  flex: 1;
-  font-size: var(--font-ui-small);
-  color: var(--text-normal);
-}
-
-/* Container styling */
+/* Button container */
 .yaml-browser-modal .modal-button-container {
   display: flex;
   justify-content: flex-end;
@@ -288,42 +227,11 @@
   border-top: 1px solid var(--background-modifier-border);
 }
 
-/* Reset and apply exact Obsidian button styling */
-.yaml-browser-modal button {
-  /* Basic button styles */
-  cursor: pointer;
-  border-radius: var(--button-radius);
-  font-size: var(--font-ui-small);
-  padding: var(--size-4-1) var(--size-4-3);
-  height: var(--input-height);
-  font-weight: var(--font-normal);
-  
-  /* Backgrounds and borders */
-  background-color: var(--interactive-normal);
-  color: var(--text-normal);
-  box-shadow: var(--input-shadow);
-  
-  /* Fix any overrides */
-  min-width: 0;
-  transition: background-color 0.1s ease-in, box-shadow 0.1s ease-in;
-}
-
-/* Primary button style */
-.yaml-browser-modal button.mod-cta {
-  background-color: var(--interactive-accent);
-  color: var(--text-on-accent);
-  border-color: var(--interactive-accent);
-}
-
-/* Hover states */
-.yaml-browser-modal button:hover {
-  background-color: var(--interactive-hover);
-  box-shadow: var(--input-shadow-hover);
-}
-
-.yaml-browser-modal button.mod-cta:hover {
-  background-color: var(--interactive-accent-hover);
-  border-color: var(--interactive-accent-hover);
+/* Responsive adjustments */
+@media screen and (max-width: 650px) {
+  .yaml-browser-modal {
+    padding: 12px;
+  }
 }
 
 /* ===========================================
@@ -384,13 +292,13 @@
   /* -----------------------------------------
      2.2 Typography
      ----------------------------------------- */
-  .yaml-window__property-manager h2 {
+    .yaml-window__property-manager h2 {
     font-size: var(--h2-size) !important;
     color: var(--h2-color, var(--text-normal)) !important;
-    font-weight: var(--h2-weight) !important;
-    line-height: var(--h2-line-height) !important;
-    margin-bottom: var(--h2-margin-bottom, 20px) !important;
-    border-bottom: var(--h2-border-bottom, none) !important;
+    font-weight: var(--h2-weight, var(--font-medium)) !important;
+    line-height: var(--h2-line-height, var(--line-height-normal)) !important;
+    margin-bottom: var(--h2-margin-bottom, var(--size-4-4)) !important;
+    border-bottom: var(--h2-border-bottom, 1px solid var(--background-modifier-border)) !important;
     text-align: center !important;
   }
   
@@ -525,12 +433,12 @@
 .yaml-window__template-application h2 {
   font-size: var(--h2-size) !important;
   color: var(--h2-color, var(--text-normal)) !important;
-  font-weight: var(--h2-weight) !important;
-  line-height: var(--h2-line-height) !important;
-  margin-bottom: var(--h2-margin-bottom, 20px) !important;
+  font-weight: var(--h2-weight, var(--font-medium)) !important;
+  line-height: var(--h2-line-height, var(--line-height-normal)) !important;
+  margin-bottom: var(--h2-margin-bottom, var(--size-4-4)) !important;
   border-bottom: var(--h2-border-bottom, 1px solid var(--background-modifier-border)) !important;
   text-align: left !important;
-  padding-bottom: 8px !important;
+  padding-bottom: var(--size-4-2) !important;
   padding-left: 0 !important;
   margin-left: 0 !important;
 }
@@ -589,7 +497,7 @@
   color: var(--text-faint);
   font-size: var(--font-ui-smaller);
   margin: 4px 0 12px 2px;
-  font-style: italic;
+  font-style: var(--font-interface-theme);
   line-height: 1.4;
 }
 
@@ -768,7 +676,7 @@
 /* No templates message */
 .yaml-window__template-application .yaml-message--no-templates {
   color: var(--text-muted);
-  font-style: italic;
+  font-style: var(--font-interface-theme);
   text-align: center;
   padding: 20px;
 }
@@ -1347,12 +1255,12 @@
 .yaml-window__bulk-editor h2.yaml-property-header {
   font-size: var(--h2-size) !important;
   color: var(--h2-color, var(--text-normal)) !important;
-  font-weight: var(--h2-weight) !important;
-  line-height: var(--h2-line-height) !important;
-  margin-bottom: var(--h2-margin-bottom, 20px) !important;
+  font-weight: var(--h2-weight, var(--font-medium)) !important;
+  line-height: var(--h2-line-height, var(--line-height-normal)) !important;
+  margin-bottom: var(--h2-margin-bottom, var(--size-4-4)) !important;
   border-bottom: var(--h2-border-bottom, 1px solid var(--background-modifier-border)) !important;
   text-align: left !important;
-  padding-bottom: 8px !important;
+  padding-bottom: var(--size-4-2) !important;
   padding-left: 0 !important;
   margin-left: 0 !important;
 }
@@ -1413,7 +1321,7 @@
 /* No properties message */
 .yaml-window__bulk-editor .yaml-no-properties-message {
   color: var(--text-muted);
-  font-style: italic;
+  font-style: var(--font-interface-theme);
   text-align: center;
   padding: 20px;
 }
@@ -1453,7 +1361,7 @@
 /* Empty value styling */
 .yaml-window__bulk-editor .yaml-property-empty-value {
   color: var(--text-muted);
-  font-style: italic;
+  font-style: var(--font-interface-theme);
   font-size: var(--font-ui-smaller);
 }
 
@@ -1630,11 +1538,12 @@
 .yaml-settings-tab h2 {
   font-size: var(--h2-size) !important;
   color: var(--h2-color, var(--text-normal)) !important;
-  font-weight: var(--h2-weight) !important;
-  margin-top: var(--h2-margin-top, 40px) !important;
-  margin-bottom: var(--h2-margin-bottom, 20px) !important;
+  font-weight: var(--h2-weight, var(--font-medium)) !important;
+  line-height: var(--h2-line-height, var(--line-height-normal)) !important;
+  margin-top: var(--h2-margin-top, var(--size-4-6)) !important; 
+  margin-bottom: var(--h2-margin-bottom, var(--size-4-4)) !important;
   border-bottom: var(--h2-border-bottom, 1px solid var(--background-modifier-border)) !important;
-  padding-bottom: var(--size-4-2, 8px) !important;
+  padding-bottom: var(--size-4-2) !important;
 }
 
 .yaml-settings-tab h3 {
@@ -1656,7 +1565,7 @@
 
 .yaml-settings-description {
   color: var(--text-muted);
-  font-style: italic;
+  font-size: var(--font-ui-smaller);
 }
 
 .yaml-template-node {
