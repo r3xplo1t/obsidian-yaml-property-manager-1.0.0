@@ -25,6 +25,17 @@
   z-index: 100;
 }
 
+/* SVG Icons - Additional support while keeping emoji compatibility */
+.yaml-template-node__icon svg {
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+}
+
+.yaml-template-node__header:hover .yaml-template-node__icon svg {
+  color: var(--text-normal);
+}
+
 /* ===========================================
    BROWSER MODAL - SIMPLIFIED WITH CUSTOM CHECKBOXES
    =========================================== */
@@ -112,14 +123,13 @@
   color: var(--text-accent);
 }
 
-/* Custom checkbox container */
+/* Custom checkbox container and styling */
 .yaml-browser-modal .yaml-custom-checkbox-container {
   display: inline-flex;
   align-items: center;
   margin-right: 6px;
 }
 
-/* Custom checkbox element */
 .yaml-browser-modal .yaml-custom-checkbox {
   width: 16px;
   height: 16px;
@@ -132,10 +142,6 @@
   justify-content: center;
   position: relative;
   transition: all 0.1s ease;
-  -webkit-border-radius: 3px;
-  -moz-border-radius: 3px;
-  -ms-border-radius: 3px;
-  -o-border-radius: 3px;
 }
 
 /* Checked state styling */
@@ -167,36 +173,54 @@
 
 /* More prominent indeterminate checkbox */
 .yaml-browser-modal .yaml-custom-checkbox.is-indeterminate {
-  background-color: var(--interactive-accent) !important;
-  border-color: var(--interactive-accent) !important;
-  position: relative !important;
+  background-color: var(--interactive-accent);
+  border-color: var(--interactive-accent);
+  position: relative;
 }
 
 /* White dash inside the indeterminate checkbox */
 .yaml-browser-modal .yaml-checkbox-indeterminate {
-  position: absolute !important;
-  top: 50% !important;
-  left: 50% !important;
-  transform: translate(-50%, -50%) !important;
-  width: 8px !important;
-  height: 2px !important;
-  background-color: white !important;
-  display: flex !important;
-  align-items: center !important;
-  justify-content: center !important;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 2px;
+  background-color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* SVG inside indeterminate */
 .yaml-browser-modal .yaml-checkbox-indeterminate svg {
-  display: block !important;
-  width: 100% !important;
-  height: 100% !important;
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 /* Icons */
-.yaml-browser-modal .yaml-file-icon,
-.yaml-browser-modal .yaml-folder-icon {
+.yaml-browser-modal .yaml-folder-icon,
+.yaml-browser-modal .yaml-file-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
   margin-right: 4px;
+  flex-shrink: 0;
+}
+
+.yaml-browser-modal .yaml-folder-icon svg,
+.yaml-browser-modal .yaml-file-icon svg {
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+}
+
+.yaml-browser-modal .yaml-folder-header:hover .yaml-folder-icon svg,
+.yaml-browser-modal .yaml-file-header:hover .yaml-file-icon svg {
+  color: var(--text-normal);
 }
 
 /* File and folder names */
@@ -227,13 +251,6 @@
   border-top: 1px solid var(--background-modifier-border);
 }
 
-/* Responsive adjustments */
-@media screen and (max-width: 650px) {
-  .yaml-browser-modal {
-    padding: 12px;
-  }
-}
-
 /* ===========================================
    2. PROPERTY MANAGER WINDOW
    =========================================== */
@@ -241,169 +258,146 @@
 /* -----------------------------------------
    2.1 Basic Container & Layout
    ----------------------------------------- */
-   .yaml-window__property-manager .modal {
-    padding: 20px;
-    width: 300px;
-    height: auto;
-    max-width: 450px;
-    max-height: none;
-    overflow: visible;
-    margin: 0 auto;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-  }
-  
-  .modal-container .modal:has(.yaml-window__property-manager) {
-    width: fit-content !important;
-    max-width: 500px !important;
-    min-width: 280px !important;
-    margin: 0 auto !important;
-    display: flex !important;
-    flex-direction: column !important;
-    align-items: center !important;
-  }
-  
-  .yaml-window__property-manager .yaml-actions {
-    display: flex;
-    flex-direction: column;
-    gap: 20px;
-    width: 100%;
-    box-sizing: border-box;
-  }
-  
-  .yaml-window__property-manager .yaml-action-section {
-    border-radius: 4px;
-    box-sizing: border-box;
-    width: 100%;
-    max-width: 100%;
-    align-self: center;
-    margin-left: auto;
-    margin-right: auto;
-  }
-  
-  .yaml-window__property-manager .yaml-action-section__divider {
-    margin: 15px 0 !important;
-    border: none;
-    border-top: 1px solid var(--background-modifier-border);
-    width: 100%;
-  }
+.yaml-window__property-manager .modal {
+  padding: 20px;
+  width: 300px;
+  height: auto;
+  max-width: 450px;
+  max-height: none;
+  overflow: visible;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
 
-  /* -----------------------------------------
-     2.2 Typography
-     ----------------------------------------- */
-    .yaml-window__property-manager h2 {
-    font-size: var(--h2-size) !important;
-    color: var(--h2-color, var(--text-normal)) !important;
-    font-weight: var(--h2-weight, var(--font-medium)) !important;
-    line-height: var(--h2-line-height, var(--line-height-normal)) !important;
-    margin-bottom: var(--h2-margin-bottom, var(--size-4-4)) !important;
-    border-bottom: var(--h2-border-bottom, 1px solid var(--background-modifier-border)) !important;
-    text-align: center !important;
-  }
-  
-  .yaml-window__property-manager h3 {
-    font-size: var(--h3-size) !important;
-    color: var(--h3-color, var(--text-normal)) !important;
-    font-weight: var(--h3-weight) !important;
-    line-height: var(--h3-line-height) !important;
-    margin-bottom: var(--h3-margin-bottom, 16px) !important;
-  }
-  
-  .yaml-window__property-manager p, 
-  .yaml-window__property-manager span, 
-  .yaml-window__property-manager div {
-    color: var(--text-normal);
-    font-size: var(--font-text-size, 16px);
-    line-height: var(--line-height-normal, 1.5);
-  }
-  
-  /* -----------------------------------------
-     2.3 Buttons
-     ----------------------------------------- */
-    .yaml-window__property-manager .yaml-button {
-    border-radius: var(--button-radius) !important;
-    font-size: var(--font-ui-small) !important;
-    font-weight: var(--font-normal) !important;
-    padding: var(--size-4-1) var(--size-4-3) !important;
-    height: auto !important; /* Change from fixed height to auto */
-    min-height: var(--input-height) !important; /* Add min-height instead of fixed height */
-    background-color: var(--interactive-normal) !important;
-    color: var(--text-normal) !important;
-    border: none !important;
-    cursor: pointer !important;
-    transition: all 0.15s ease !important;
-    display: block !important;
-    width: 100% !important;
-    margin: 8px 0 !important;
-    text-align: center !important;
-    box-shadow: var(--input-shadow) !important;
-    box-sizing: border-box !important;
-    white-space: normal !important; /* Allow text to wrap */
-    word-wrap: break-word !important; /* Ensure long words break */
-    line-height: 1.3 !important; /* Improve line spacing for wrapped text */
-  }
-  
-  .yaml-window__property-manager .yaml-button:hover {
-    background-color: var(--interactive-hover) !important;
-    box-shadow: var(--input-shadow-hover) !important;
-  }
-  
-  .yaml-window__property-manager .yaml-button--disabled {
-    opacity: 0.5 !important;
-    cursor: not-allowed !important;
-    background-color: var(--interactive-normal) !important;
-    color: var(--text-muted) !important;
-  }
-  
-  .yaml-window__property-manager .yaml-button--primary {
-    background-color: var(--interactive-normal) !important;
-    color: var(--text-normal) !important;
-  }
-  
-  .yaml-window__property-manager .yaml-button--bulk-edit {
-    background-color: var(--interactive-normal) !important;
-  }
-  
-  /* Apply consistent spacing to buttons in the batch container */
-  .yaml-window__property-manager .yaml-action-section button {
-    margin-bottom: 10px !important;
-    width: 100% !important;
-  }
-  
-  /* -----------------------------------------
-     2.4 File Counter
-     ----------------------------------------- */
-  /* Style the counter to match yaml-direct-path-container */
-  .yaml-window__property-manager .yaml-file-selection__count {
-    text-align: center !important;
-  }
-  
-  .yaml-window__property-manager .yaml-file-selection__count.yaml-direct-path-container {
-    display: flex;
-    align-items: center;
-    width: 100%;
-    padding: 8px 10px;
-    background-color: var(--background-primary);
-    border-radius: 4px;
-    box-shadow: var(--input-shadow);
-  }
-  
-  .yaml-window__property-manager .yaml-file-selection__count .yaml-direct-path-text {
-    color: var(--text-muted);
-    font-size: var(--font-ui-smaller);
-  }
-  
-  /* -----------------------------------------
-     2.5 Responsive Styles
-     ----------------------------------------- */
-  @media screen and (max-width: 650px) {
-    .yaml-window__property-manager {
-      min-width: auto;
-      width: 95%;
-      padding: 12px;
-    }
-  }
+.modal-container .modal:has(.yaml-window__property-manager) {
+  width: fit-content !important;
+  max-width: 500px !important;
+  min-width: 280px !important;
+  margin: 0 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+}
+
+.yaml-window__property-manager .yaml-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.yaml-window__property-manager .yaml-action-section {
+  border-radius: 4px;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: 100%;
+  align-self: center;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.yaml-window__property-manager .yaml-action-section__divider {
+  margin: 15px 0 !important;
+  border: none;
+  border-top: 1px solid var(--background-modifier-border);
+  width: 100%;
+}
+
+/* -----------------------------------------
+   2.2 Typography
+   ----------------------------------------- */
+.yaml-window__property-manager h2 {
+  font-size: var(--h2-size) !important;
+  color: var(--h2-color, var(--text-normal)) !important;
+  font-weight: var(--h2-weight, var(--font-medium)) !important;
+  line-height: var(--h2-line-height, var(--line-height-normal)) !important;
+  margin-bottom: var(--h2-margin-bottom, var(--size-4-4)) !important;
+  border-bottom: var(--h2-border-bottom, 1px solid var(--background-modifier-border)) !important;
+  text-align: center !important;
+}
+
+.yaml-window__property-manager h3 {
+  font-size: var(--h3-size) !important;
+  color: var(--h3-color, var(--text-normal)) !important;
+  font-weight: var(--h3-weight) !important;
+  line-height: var(--h3-line-height) !important;
+  margin-bottom: var(--h3-margin-bottom, 16px) !important;
+}
+
+.yaml-window__property-manager p, 
+.yaml-window__property-manager span, 
+.yaml-window__property-manager div {
+  color: var(--text-normal);
+  font-size: var(--font-text-size, 16px);
+  line-height: var(--line-height-normal, 1.5);
+}
+
+/* -----------------------------------------
+   2.3 Buttons
+   ----------------------------------------- */
+.yaml-window__property-manager .yaml-button {
+  border-radius: var(--button-radius) !important;
+  font-size: var(--font-ui-small) !important;
+  font-weight: var(--font-normal) !important;
+  padding: var(--size-4-1) var(--size-4-3) !important;
+  height: auto !important;
+  min-height: var(--input-height) !important;
+  background-color: var(--interactive-normal) !important;
+  color: var(--text-normal) !important;
+  border: none !important;
+  cursor: pointer !important;
+  transition: all 0.15s ease !important;
+  display: block !important;
+  width: 100% !important;
+  margin: 8px 0 !important;
+  text-align: center !important;
+  box-shadow: var(--input-shadow) !important;
+  box-sizing: border-box !important;
+  white-space: normal !important;
+  word-wrap: break-word !important;
+  line-height: 1.3 !important;
+}
+
+.yaml-window__property-manager .yaml-button:hover {
+  background-color: var(--interactive-hover) !important;
+  box-shadow: var(--input-shadow-hover) !important;
+}
+
+.yaml-window__property-manager .yaml-button--disabled {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+  color: var(--text-muted) !important;
+}
+
+.yaml-window__property-manager .yaml-action-section button {
+  margin-bottom: 10px !important;
+  width: 100% !important;
+}
+
+/* -----------------------------------------
+   2.4 File Counter
+   ----------------------------------------- */
+.yaml-window__property-manager .yaml-file-selection__count {
+  text-align: center !important;
+}
+
+.yaml-window__property-manager .yaml-file-selection__count.yaml-direct-path-container {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  background-color: var(--background-primary);
+  border-radius: 4px;
+  box-shadow: var(--input-shadow);
+}
+
+.yaml-window__property-manager .yaml-file-selection__count .yaml-direct-path-text {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+}
 
 /* ===========================================
    4. TEMPLATE APPLICATION WINDOW
@@ -610,7 +604,6 @@
   border-radius: 4px;
   margin-bottom: 20px;
   background-color: var(--background-primary);
-  width: fit-content;
   min-width: 300px;
   max-width: 100%;
 }
@@ -1093,15 +1086,6 @@
   width: auto !important;
   height: auto !important;
   border: none !important;
-  background-color: var(--checkbox-marker-color);
-  mask-position: 52% 52%;
-  mask-size: 65%;
-  mask-repeat: no-repeat;
-  mask-image: url('data:image/svg+xml; utf8, <svg width="12px" height="10px" viewBox="0 0 12 8" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd"><g transform="translate(-4.000000, -6.000000)" fill="%23000000"><path d="M8.1043257,14.0367999 L4.52468714,10.5420499 C4.32525014,10.3497722 4.32525014,10.0368095 4.52468714,9.8424863 L5.24777413,9.1439454 C5.44721114,8.95166768 5.77142411,8.95166768 5.97086112,9.1439454 L8.46638057,11.5903727 L14.0291389,6.1442083 C14.2285759,5.95193057 14.5527889,5.95193057 14.7522259,6.1442083 L15.4753129,6.84377194 C15.6747499,7.03604967 15.6747499,7.35003511 15.4753129,7.54129009 L8.82741268,14.0367999 C8.62797568,14.2290777 8.3037627,14.2290777 8.1043257,14.0367999"></path></g></g></svg>');
-  -webkit-mask-position: 52% 52%;
-  -webkit-mask-size: 65%;
-  -webkit-mask-repeat: no-repeat;
-  -webkit-mask-image: url('data:image/svg+xml; utf8, <svg width="12px" height="10px" viewBox="0 0 12 8" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd"><g transform="translate(-4.000000, -6.000000)" fill="%23000000"><path d="M8.1043257,14.0367999 L4.52468714,10.5420499 C4.32525014,10.3497722 4.32525014,10.0368095 4.52468714,9.8424863 L5.24777413,9.1439454 C5.44721114,8.95166768 5.77142411,8.95166768 5.97086112,9.1439454 L8.46638057,11.5903727 L14.0291389,6.1442083 C14.2285759,5.95193057 14.5527889,5.95193057 14.7522259,6.1442083 L15.4753129,6.84377194 C15.6747499,7.03604967 15.6747499,7.35003511 15.4753129,7.54129009 L8.82741268,14.0367999 C8.62797568,14.2290777 8.3037627,14.2290777 8.1043257,14.0367999"></path></g></g></svg>');
 }
 
 /* Position option label styling */
@@ -1469,6 +1453,97 @@
   border-left: 2px solid var(--interactive-accent);
 }
 
+/* Missing file styles */
+.yaml-window__bulk-editor .yaml-property-file--missing {
+  margin-bottom: 12px;
+  padding: 10px;
+  border-radius: 4px;
+  background-color: var(--background-primary);
+  box-shadow: var(--input-shadow);
+}
+
+.yaml-window__bulk-editor .yaml-property-missing-message {
+  padding: 4px 8px;
+  margin-bottom: 4px;
+  border-radius: 3px;
+  background-color: var(--background-secondary-alt);
+  font-size: var(--font-ui-smaller);
+  background-color: rgba(var(--text-error-rgb, 255, 75, 75), 0.05);
+  border-left: 2px solid var(--text-error);
+}
+
+.yaml-window__bulk-editor .yaml-property-missing-text {
+  color: var(--text-error);
+  font-size: var(--font-ui-smaller);
+  font-style: var(--font-interface-theme);
+}
+
+/* ===========================================
+   File Filtering
+   =========================================== */
+/* Filter bar container */
+.yaml-window__bulk-editor .yaml-property-files-filter-bar {
+  display: flex;
+  align-items: center;
+  padding: 8px 0;
+  margin-bottom: 10px;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+/* Filter label */
+.yaml-window__bulk-editor .yaml-property-files-filter-label {
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  margin-right: 8px;
+}
+
+/* Filter buttons container */
+.yaml-window__bulk-editor .yaml-property-files-filter-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+/* Filter toggle buttons */
+.yaml-window__bulk-editor .yaml-property-files-filter-button {
+  background-color: var(--background-primary);
+  color: var(--text-muted);
+  border-radius: var(--button-radius);
+  padding: 3px 8px;
+  font-size: var(--font-ui-smaller);
+  cursor: pointer;
+  transition: all 0.15s ease;
+  box-shadow: var(--input-shadow);
+}
+
+.yaml-window__bulk-editor .yaml-property-files-filter-button:hover {
+  background-color: var(--background-modifier-hover);
+  color: var(--text-normal);
+  box-shadow: var(--input-shadow-hover);
+}
+
+/* Active filter button */
+.yaml-window__bulk-editor .yaml-property-files-filter-button--active {
+  background-color: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.yaml-window__bulk-editor .yaml-property-files-filter-button--active:hover {
+  background-color: var(--interactive-accent-hover);
+}
+
+/* Highlight for different types */
+.yaml-window__bulk-editor .yaml-property-file--different-type .yaml-property-file-type {
+  background-color: rgba(var(--interactive-accent-rgb), 0.1);
+  border-left: 2px solid var(--interactive-accent);
+}
+
+/* Highlight for different values */
+.yaml-window__bulk-editor .yaml-property-file--different-value .yaml-property-file-value {
+  background-color: rgba(var(--interactive-accent-rgb), 0.1);
+  border-left: 2px solid var(--interactive-accent);
+}
+
 /* ===========================================
     Cancel and Apply Buttons
    =========================================== */
@@ -1535,10 +1610,12 @@
    8. SETTINGS TAB
    =========================================== */
 
+/* ----- 8.1 Basic Container & Layout ----- */
 .yaml-settings-tab {
   padding: 0 20px;
 }
 
+/* ----- 8.2 Typography ----- */
 .yaml-settings-tab h2 {
   font-size: var(--h2-size) !important;
   color: var(--h2-color, var(--text-normal)) !important;
@@ -1558,30 +1635,179 @@
   margin-bottom: var(--h3-margin-bottom, 16px) !important;
 }
 
-.yaml-template-paths {
-  margin-bottom: 20px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 4px;
-  padding: 8px;
-  max-height: 300px;
-  overflow-y: auto;
-}
-
 .yaml-settings-description {
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
+  padding: 0 5px;
+  margin-bottom: 8px;
 }
 
+/* ----- 8.2.1 Slider Controls ----- */
+/* Fix for slider showing values in settings */
+.yaml-settings-tab .setting-item-control .slider {
+  height: 6px;
+  background-color: var(--background-modifier-border);
+  border-radius: 3px;
+}
+
+.yaml-settings-tab .setting-item-control .slider-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: var(--interactive-accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+/* Styling for both WebKit and Mozilla browsers */
+.yaml-settings-tab .setting-item-control input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background-color: var(--background-modifier-border);
+}
+
+.yaml-settings-tab .setting-item-control input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: var(--interactive-accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+}
+
+.yaml-settings-tab .setting-item-control input[type="range"]::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background-color: var(--interactive-accent);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  cursor: pointer;
+  border: none;
+}
+
+/* Ensure the slider value is always visible */
+.yaml-settings-tab .slider-value {
+  display: inline-block !important;
+  margin-left: 8px !important;
+  min-width: 24px !important;
+  text-align: center !important;
+  background-color: var(--background-secondary) !important;
+  color: var(--text-normal) !important;
+  padding: 2px 6px !important;
+  border-radius: 4px !important;
+  font-size: var(--font-ui-smaller) !important;
+}
+
+.tooltip-extension {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+body:not(.plugin-settings) .tooltip:not(.slider-tooltip) {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Override tooltip hiding in settings */
+.yaml-settings-tab .tooltip {
+  display: block !important;
+  opacity: 1 !important;
+  pointer-events: none !important;
+  z-index: 1000 !important;
+  background-color: var(--background-primary) !important;
+  border: 1px solid var(--background-modifier-border) !important;
+  color: var(--text-normal) !important;
+  padding: 4px 8px !important;
+  border-radius: 4px !important;
+  box-shadow: var(--shadow-s) !important;
+}
+
+/* ----- 8.3 Template Paths Container ----- */
+.yaml-template-paths {
+  background-color: var(--background-primary);
+  border-radius: 6px;
+  border: 1px solid var(--background-modifier-border);
+  padding: 10px;
+  max-height: 40vh; /* Updated to 40vh as requested */
+  overflow-y: auto;
+  box-shadow: var(--input-shadow);
+  margin-bottom: 20px;
+  
+  /* Scrollbar styling */
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb-bg) var(--scrollbar-bg);
+}
+
+/* Scrollbar styling */
+.yaml-template-paths::-webkit-scrollbar {
+  width: 8px;
+}
+
+.yaml-template-paths::-webkit-scrollbar-track {
+  background: var(--scrollbar-bg, var(--background-secondary-alt));
+  border-radius: 4px;
+}
+
+.yaml-template-paths::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb-bg, var(--background-modifier-border));
+  border-radius: 4px;
+  border: 2px solid var(--scrollbar-bg, var(--background-secondary-alt));
+}
+
+.yaml-template-paths::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 20px;
+  background: linear-gradient(to bottom, transparent, var(--background-primary));
+  pointer-events: none;
+  opacity: 0.7;
+  border-bottom-left-radius: 6px;
+  border-bottom-right-radius: 6px;
+  display: none; /* Only show when scrollable */
+}
+
+.yaml-template-paths.is-scrollable::after {
+  display: block;
+}
+
+/* ----- 8.4 Tree Structure Components ----- */
+/* Basic node styling */
 .yaml-template-node {
+  position: relative;
   margin-bottom: 2px;
+  transition: all 0.3s ease;
+  max-height: 500px;
+  opacity: 1;
+  overflow: hidden;
 }
 
+.yaml-template-node--removing {
+  max-height: 0;
+  opacity: 0;
+  margin-top: 0;
+  margin-bottom: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+/* Node headers - containers for icon, name, and actions */
 .yaml-template-node__header {
+  position: relative;
   display: flex;
   align-items: center;
-  padding: 4px 0;
+  padding: 4px 0px !important;
   border-radius: 4px;
-  transition: all 0.1s ease;
+  transition: background-color 0.1s ease;
+  width: 100%;
 }
 
 .yaml-template-node__header:hover {
@@ -1592,19 +1818,47 @@
   cursor: pointer;
 }
 
+/* Icon container */
 .yaml-template-node__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
   margin-right: 4px;
+  flex-shrink: 0;
 }
 
+/* Node name */
 .yaml-template-node__name {
   flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0;
+  margin: 0;
+  margin-right: 40px; /* Reserve space for trash icon */
 }
 
+/* ----- 8.5 Actions Container & Buttons ----- */
 .yaml-template-node__actions {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
   display: flex;
-  justify-content: flex-end;
   align-items: center;
-  margin-left: 8px;
+  justify-content: center;
+  width: 36px;
+  height: 24px;
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity 0.1s ease;
+}
+
+.yaml-template-node__header:hover .yaml-template-node__actions {
+  opacity: 1;
 }
 
 .yaml-template-node__actions button {
@@ -1614,56 +1868,154 @@
   height: auto !important;
 }
 
-.yaml-template-node__children {
-  margin-left: 12px;
+.yaml-template-remove-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  height: 24px;
 }
 
+/* ----- 8.6 Hierarchy Structure & Children ----- */
+/* Children container - holds nested items */
+.yaml-template-node__children {
+  position: relative;
+  padding-left: 24px;
+  border-left: 1px solid var(--background-modifier-border);
+  margin-left: 0;
+  opacity: 1;
+  transition: opacity 0.2s ease;
+  
+  /* Allow content to display with scrolling when needed */
+  max-height: 400px;
+  overflow-y: auto;
+  
+  /* Scrollbar styling for Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb-bg) var(--scrollbar-bg);
+}
+
+/* Scrollbar styling for Webkit browsers */
+.yaml-template-node__children::-webkit-scrollbar {
+  width: 6px;
+}
+
+.yaml-template-node__children::-webkit-scrollbar-track {
+  background: var(--scrollbar-bg, var(--background-secondary-alt));
+  border-radius: 3px;
+}
+
+.yaml-template-node__children::-webkit-scrollbar-thumb {
+  background-color: var(--scrollbar-thumb-bg, var(--background-modifier-border));
+  border-radius: 3px;
+}
+
+/* Collapsed state */
 .yaml-template-node__children--collapsed {
+  display: none;
+  opacity: 0;
+  max-height: 0;
+  overflow: hidden;
+}
+
+/* Nested levels maintain proper hierarchy */
+.yaml-template-node__children .yaml-template-node__children {
+  padding-left: 24px;
+  margin-left: 0;
+}
+
+/* Spacing for nested nodes */
+.yaml-template-node__children .yaml-template-node {
+  position: relative;
+}
+
+.yaml-template-node__children .yaml-template-node:first-child {
+  margin-top: 2px;
+}
+
+.yaml-template-node__children .yaml-template-node:last-child {
+  margin-bottom: 2px;
+}
+
+/* Loading indicator for chunked rendering */
+.yaml-template-children-loading {
+  padding: 8px;
+  margin: 4px 0;
+  color: var(--text-muted);
+  font-style: italic;
+  font-size: var(--font-ui-smaller);
+}
+
+/* Hide item count badges - keeping the selector for backward compatibility */
+.yaml-template-item-count {
   display: none;
 }
 
-/* ===========================================
-   9. RESPONSIVE STYLES
-   =========================================== */
+/* Custom tooltip styling */
+.yaml-custom-tooltip {
+  position: fixed;
+  z-index: 99999;
+  background-color: var(--background-primary);
+  color: var(--text-normal);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: var(--font-ui-small);
+  box-shadow: var(--shadow-s);
+  max-width: 90vw;
+  word-wrap: break-word;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(-5px) translateZ(0);
+  will-change: opacity, transform;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+  border: 1px solid var(--background-modifier-border);
+}
 
+.yaml-custom-tooltip--visible {
+  opacity: 1;
+  transform: translateY(0) translateZ(0);
+}
+
+/* Disable native tooltips */
+[data-tooltip-id],
+[data-has-tooltip-listeners="true"],
+.yaml-template-node__name {
+  position: relative;
+}
+
+[data-tooltip-id]::before,
+[data-tooltip-id]::after,
+[data-has-tooltip-listeners="true"]::before,
+[data-has-tooltip-listeners="true"]::after,
+.yaml-template-node__name::before,
+.yaml-template-node__name::after {
+  display: none !important;
+  content: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Override Obsidian's tooltip styles */
+.tooltip, .tooltip-extension {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Responsive styles */
 @media screen and (max-width: 768px) {
   .yaml-window {
     width: 95%;
     padding: 12px;
     min-width: auto;
   }
-
-  .yaml-property-item {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .yaml-property-item__name, 
-  .yaml-property-item__type, 
-  .yaml-property-item__value, 
-  .yaml-property-item__actions {
-    width: 100%;
-    max-width: 100%;
-  }
-
-  .yaml-actions {
-    flex-direction: column;
-  }
-
-  .yaml-new-property {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .yaml-new-property__name, 
-  .yaml-new-property__type, 
-  .yaml-new-property__value {
-    width: 100%;
-    margin-bottom: 4px;
-  }
 }
 
 @media screen and (max-width: 650px) {
+  .yaml-browser-modal {
+    padding: 12px;
+  }
+  
   .yaml-window__property-manager {
     min-width: auto;
     width: 95%;

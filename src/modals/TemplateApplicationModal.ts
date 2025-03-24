@@ -1,14 +1,9 @@
 import { App, Modal, Notice, TFile, TextComponent } from 'obsidian';
 import YAMLPropertyManagerPlugin from '../../main';
-import { TemplateNode } from '../models/interfaces';
-import { formatValuePreview } from '../utils/helpers';
-import { 
-    detectPropertyType, 
-    getPropertyTypeDisplayName,
-    PropertyWithType,
-    preservePropertyTypes,
-    restorePropertyValues 
-} from '../utils/propertyTypes';
+// Import directly from source files - NOT from src/index.ts
+import type { TemplateNode } from '../interfaces';
+import { formatValuePreview } from '../propertyFormatters';
+import type { PropertyWithType } from '../PropertyTypeService';
 import { BrowserModal } from './BrowserModal';
 
 export class TemplateApplicationModal extends Modal {
@@ -647,7 +642,7 @@ export class TemplateApplicationModal extends Modal {
             // Detect property type using unified system
             const obsidianType = this.plugin.propertyTypeService.getValuePropertyType(key, value);
             const internalType = this.plugin.getInternalPropertyType(key, value);
-            const typeDisplayName = getPropertyTypeDisplayName(internalType);
+            const typeDisplayName = this.plugin.propertyTypeService.getPropertyTypeDisplayName(internalType);
 
             // Property type box FIRST
             const typeBox = propertyItem.createDiv({ cls: 'yaml-property-type-box' });
@@ -935,7 +930,7 @@ export class TemplateApplicationModal extends Modal {
     try {
         // Get template properties
         const templateProperties = await this.plugin.parseFileProperties(templateFile);
-        const templatePropertiesWithType = this.plugin.propertyCache.get(templateFile.path) || preservePropertyTypes(templateProperties);
+        const templatePropertiesWithType = this.plugin.propertyCache.get(templateFile.path) || this.plugin.propertyTypeService.preservePropertyTypes(templateProperties);
         
         // Filter to only include specified properties
         const filteredProperties: Record<string, any> = {};
@@ -956,7 +951,7 @@ export class TemplateApplicationModal extends Modal {
             
             // Get existing properties with type information
             const existingProperties = await this.plugin.parseFileProperties(file);
-            const existingPropertiesWithType = this.plugin.propertyCache.get(file.path) || preservePropertyTypes(existingProperties);
+            const existingPropertiesWithType = this.plugin.propertyCache.get(file.path) || this.plugin.propertyTypeService.preservePropertyTypes(existingProperties);
             
             // Create properties to apply based on positioning option
             let propertiesToApplyToFile: Record<string, PropertyWithType> = {};
@@ -1021,7 +1016,7 @@ export class TemplateApplicationModal extends Modal {
             }
             
             // Convert back to regular properties with preserved types
-            const finalProperties = restorePropertyValues(propertiesToApplyToFile);
+            const finalProperties = this.plugin.propertyTypeService.restorePropertyValues(propertiesToApplyToFile);
             
             // Apply the properties
             const success = await this.plugin.applyProperties(file, finalProperties, false);

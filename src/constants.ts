@@ -12,5 +12,6 @@ export const PROPERTY_TYPES = [
 export const DEFAULT_SETTINGS: YAMLPropertyManagerSettings = {
     templatePaths: [],
     recentTemplates: [],
-    maxRecentTemplates: 5
+    maxRecentTemplates: 5,
+    expandedTemplatePaths: [] // Initialize with empty array
 };

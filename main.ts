@@ -1,15 +1,28 @@
 import { App, Editor, MarkdownView, Modal, Notice, Plugin, TFile, TFolder } from 'obsidian';
-import { YAMLPropertyManagerSettings, DEFAULT_SETTINGS } from './src/models';
-import { formatYamlValue } from './src/utils';
-import {
+import { 
+    // Models
+    DEFAULT_SETTINGS,
+    
+    // Utils
+    formatYamlValue,
+    
+    // Services
+    PropertyTypeService,
+    
+    // Modals
     PropertyManagerModal,
-    TemplateApplicationModal, // Changed from TemplateSelectionModal
-    BrowserModal,             // New import
+    TemplateApplicationModal,
+    BrowserModal,
     BulkPropertyEditorModal,
     YAMLPropertyManagerSettingTab
-} from './src/modals';
-import { PropertyWithType, preservePropertyTypes, restorePropertyValues, detectPropertyType } from './src/utils/propertyTypes';
-import { PropertyTypeService, ObsidianPropertyType } from './src/services/PropertyTypeService';
+} from './src';
+
+// Import types with explicit type imports
+import type {
+    YAMLPropertyManagerSettings,
+    PropertyWithType, 
+    ObsidianPropertyType
+} from './src';
 
 export default class YAMLPropertyManagerPlugin extends Plugin {
     settings: YAMLPropertyManagerSettings;
@@ -109,8 +122,25 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
 
     // Add template to recent templates list
     addToRecentTemplates(templatePath: string) {
-        // Implementation remains the same...
-        // Your existing method here
+        if (!templatePath) return;
+        
+        // Get recent templates or initialize if doesn't exist
+        const recentTemplates = this.settings.recentTemplates || [];
+        
+        // Remove if already in the list (to move to the top)
+        const existingIndex = recentTemplates.indexOf(templatePath);
+        if (existingIndex > -1) {
+            recentTemplates.splice(existingIndex, 1);
+        }
+        
+        // Add to the beginning of the list
+        recentTemplates.unshift(templatePath);
+        
+        // Limit to 10 recent templates
+        this.settings.recentTemplates = recentTemplates.slice(0, 10);
+        
+        // Save settings
+        this.saveSettings();
     }
 
     // Get all template files based on configuration
@@ -145,7 +175,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             // Don't rethrow, just return what we have so far
         }
         
-        return templates; // Ensure this return exists
+        return templates;
     }
 
     // Recursively get template files from a folder
@@ -175,11 +205,9 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             // Don't rethrow, just return what we have so far
         }
         
-        return templates; // Ensure this return exists
+        return templates;
     }
 
-    // Property utility functions
-    
     // Parse YAML frontmatter from a file
     async parseFileProperties(file: TFile): Promise<Record<string, any>> {
         try {
@@ -221,10 +249,6 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
     // Apply properties to a file
     async applyProperties(file: TFile, properties: Record<string, any>, preserveExisting: boolean = false) {
         try {
-            // Implementation remains the same...
-            // Your existing method here
-
-            // For example:
             // Read the file content
             const content = await this.app.vault.read(file);
             
@@ -318,14 +342,65 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             }
         }
         
-        return matchingFiles; // Make sure this return statement exists
+        return matchingFiles;
     }
 
     // Apply template properties to multiple files
-    async applyTemplateToFiles(templateFile: TFile, targetFiles: TFile[], 
-        propertiesToApply: string[], consistentProperties: string[]) {
-        // Implementation remains the same...
-        // Your existing method here
+    async applyTemplateToFiles(
+        templateFile: TFile, 
+        targetFiles: TFile[], 
+        propertiesToApply: string[], 
+        consistentProperties: string[]
+    ) {
+        try {
+            // Get template properties
+            const templateProperties = await this.parseFileProperties(templateFile);
+            
+            // Filter to only specified properties
+            const filteredProperties: Record<string, any> = {};
+            for (const key of propertiesToApply) {
+                if (key in templateProperties) {
+                    filteredProperties[key] = templateProperties[key];
+                }
+            }
+            
+            // Process each target file
+            let successCount = 0;
+            for (const file of targetFiles) {
+                // Skip the template file itself
+                if (file.path === templateFile.path) continue;
+                
+                // For consistent properties, check if all files have the same value
+                if (consistentProperties.length > 0) {
+                    const fileProperties = await this.parseFileProperties(file);
+                    
+                    // Remove any consistent properties that don't match
+                    for (const key of consistentProperties) {
+                        // Only check if the property is in the template and target file
+                        if (key in filteredProperties && key in fileProperties) {
+                            const templateValue = filteredProperties[key];
+                            const fileValue = fileProperties[key];
+                            
+                            // If values don't match, remove from properties to apply
+                            if (JSON.stringify(templateValue) !== JSON.stringify(fileValue)) {
+                                delete filteredProperties[key];
+                            }
+                        }
+                    }
+                }
+                
+                // Apply the filtered properties, preserving existing ones
+                const success = await this.applyProperties(file, filteredProperties, true);
+                if (success) successCount++;
+            }
+            
+            new Notice(`Applied template to ${successCount} of ${targetFiles.length} ${targetFiles.length === 1 ? 'file' : 'files'}`);
+            return successCount;
+        } catch (error) {
+            console.error('Error applying template:', error);
+            new Notice(`Error applying template: ${error.message}`);
+            return 0;
+        }
     }
     
     // Debug logging helper
@@ -428,5 +503,16 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             case "select": return "text";
             default: return "text";
         }
+    }
+
+    onunload() {
+        // Log unloading message
+        console.log('Unloading YAML Property Manager plugin');
+        
+        // Clear data structures to prevent memory leaks
+        this.propertyCache.clear();
+        this.selectedFiles = [];
+        
+        // No need to try to access methods that don't exist
     }
 }

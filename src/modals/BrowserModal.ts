@@ -299,10 +299,8 @@ export class BrowserModal extends Modal {
         }
         
         // Folder icon
-        const folderIcon = headerRow.createSpan({ 
-            text: this.expandedFolders.has(folder.path) ? '📂 ' : '📁 ', 
-            cls: 'yaml-folder-icon' 
-        });
+        const folderIcon = headerRow.createSpan({ cls: 'yaml-folder-icon' });
+        folderIcon.innerHTML = this.getSvgIcon(this.expandedFolders.has(folder.path) ? 'folder-open' : 'folder-closed');
         
         // Folder name
         headerRow.createSpan({ 
@@ -334,7 +332,8 @@ export class BrowserModal extends Modal {
                 });
                 
                 // Update folder icon
-                folderIcon.textContent = isCollapsed ? '📂 ' : '📁 ';
+                folderIcon.empty();
+                folderIcon.innerHTML = this.getSvgIcon(isCollapsed ? 'folder-open' : 'folder-closed');
                 
                 // Track expanded state
                 if (isCollapsed) {
@@ -394,10 +393,8 @@ export class BrowserModal extends Modal {
         const checkbox = checkboxContainer.querySelector('.yaml-custom-checkbox') as HTMLElement;
         
         // File icon
-        headerRow.createSpan({ 
-            text: '📄 ', 
-            cls: 'yaml-file-icon' 
-        });
+        const fileIcon = headerRow.createSpan({ cls: 'yaml-file-icon' });
+        fileIcon.innerHTML = this.getSvgIcon('file');
         
         // File name
         headerRow.createSpan({ 
@@ -801,6 +798,17 @@ export class BrowserModal extends Modal {
                 // Continue up the tree
                 this.updateParentFoldersOnSelection(parentPath);
             }
+        }
+    }
+
+    // Helper method to get SVG icon HTML
+    private getSvgIcon(type: 'folder-closed' | 'folder-open' | 'file'): string {
+        if (type === 'folder-closed') {
+            return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-folder-closed"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path><path d="M2 10h20"></path></svg>';
+        } else if (type === 'folder-open') {
+            return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-folder-open"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"></path></svg>';
+        } else {
+            return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-file"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg>';
         }
     }
 

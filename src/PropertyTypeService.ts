@@ -1,25 +1,48 @@
 import { App, TFile } from 'obsidian';
-import { detectPropertyType } from '../utils/propertyTypes';
 
+// Re-export types and interfaces so they can be used by other files
+// that previously imported from propertyTypes.ts
+
+/**
+ * Types supported by Obsidian's property system
+ */
 export type ObsidianPropertyType = 
     'text' | 'number' | 'checkbox' | 
     'date' | 'datetime' | 'select' | 
     'multi-select' | 'relation' | 'file' | 
     'list' | 'url' | 'email' | 'phone';
 
+/**
+ * Property definition from Obsidian's metadata system
+ */
 export interface ObsidianPropertyDefinition {
     name: string;
     type: ObsidianPropertyType;
     options?: string[];
 }
 
-// Interface for internal property definitions from Obsidian's API
+/**
+ * Interface for properties with preserved type information
+ */
+export interface PropertyWithType {
+    value: any;
+    type: string;
+    originalString?: string;
+}
+
+/**
+ * Interface for internal property definitions from Obsidian's API
+ */
 interface InternalPropertyDefinition {
     type?: ObsidianPropertyType;
     options?: string[];
     [key: string]: any;
 }
 
+/**
+ * Unified service class for handling property types
+ * Combines interaction with Obsidian's type system and standalone utility functions
+ */
 export class PropertyTypeService {
     constructor(private app: App) {}
     
@@ -36,7 +59,7 @@ export class PropertyTypeService {
             }
             
             // If no specific type defined, detect from value
-            const detectedType = detectPropertyType(propertyValue);
+            const detectedType = this.detectPropertyType(propertyValue);
             return this.convertToObsidianType(detectedType);
         } catch (error) {
             console.error("Error detecting property type:", error);
@@ -60,11 +83,8 @@ export class PropertyTypeService {
     }
 
     /**
-     * Get the property type using a combined approach:
-     * 1. Try Obsidian's type system first
-     * 2. Fall back to our own detection if needed
+     * Get the property type using Obsidian's internal API
      */
-    // In PropertyTypeService.ts, fix the getPropertyType method:
     getPropertyType(propertyName: string): ObsidianPropertyType | null {
         try {
             // Access Obsidian's internal property type manager
@@ -76,13 +96,13 @@ export class PropertyTypeService {
                 return null;
             }
             
-            // Your Obsidian version doesn't have getPropertyType, but it DOES have getPropertyInfo
+            // Try getPropertyInfo method first (newer Obsidian versions)
             if (typeof metadataTypeManager.getPropertyInfo === 'function') {
                 const propertyInfo = metadataTypeManager.getPropertyInfo(propertyName);
                 return propertyInfo?.type || null;
             }
             
-            // Try direct access to properties object as last resort
+            // Try direct access to properties object as fallback
             if (metadataTypeManager.properties && propertyName in metadataTypeManager.properties) {
                 return metadataTypeManager.properties[propertyName]?.type || null;
             }
@@ -107,8 +127,7 @@ export class PropertyTypeService {
                 return [];
             }
             
-            // Get all property types
-            // Different versions of Obsidian might use different methods
+            // Get all property types - try different methods for different Obsidian versions
             if (typeof metadataTypeManager.getPropertyDefinitions === 'function') {
                 return metadataTypeManager.getPropertyDefinitions();
             } else if (typeof metadataTypeManager.getAllPropertyDefinitions === 'function') {
@@ -192,34 +211,8 @@ export class PropertyTypeService {
             // Get the value for regex-based detection
             const value = fileCache.frontmatter[propertyName];
             
-            // For date/time values, use our more accurate regex detection
-            if (typeof value === 'string') {
-                // Date format (YYYY-MM-DD)
-                if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-                    return 'date';
-                }
-                
-                // Date & Time format (YYYY-MM-DD HH:MM)
-                if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(value)) {
-                    return 'datetime';
-                }
-            }
-            
-            // For other basic types, use simple JavaScript type detection
-            if (typeof value === 'boolean') {
-                return 'checkbox';
-            }
-            
-            if (typeof value === 'number') {
-                return 'number';
-            }
-            
-            if (Array.isArray(value)) {
-                return 'list';
-            }
-            
-            // Default
-            return 'text';
+            // Use our type detection function
+            return this.convertToObsidianType(this.detectPropertyType(value));
         } catch (error) {
             console.error("Error getting file property type:", error);
             return null;
@@ -253,5 +246,141 @@ export class PropertyTypeService {
         }
         
         return 'text';
+    }
+
+    /**
+     * Detect property type following Obsidian's property type detection logic
+     * Moved from propertyTypes.ts to be a method of the service
+     */
+    detectPropertyType(propertyValue: any): string {
+        // Null/undefined values are treated as text in Obsidian
+        if (propertyValue === null || propertyValue === undefined) {
+            return "text";
+        }
+        
+        // Arrays become list type properties in Obsidian
+        if (Array.isArray(propertyValue)) {
+            return "list";
+        }
+        
+        // Boolean values become checkbox properties
+        if (typeof propertyValue === "boolean") {
+            return "checkbox";
+        }
+        
+        // Numbers become number properties
+        if (typeof propertyValue === "number") {
+            return "number";
+        }
+        
+        // String values require more specific checking
+        if (typeof propertyValue === "string") {
+            // Date & Time format (YYYY-MM-DD HH:MM)
+            if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(propertyValue)) {
+                return "datetime";
+            }
+            
+            // YYYY-MM-DD format (Date)
+            if (/^\d{4}-\d{2}-\d{2}$/.test(propertyValue)) {
+                return "date";
+            }
+            
+            // All other strings are text
+            return "text";
+        }
+        
+        // Objects and other types default to text
+        return "text";
+    }
+    
+    /**
+     * Get display-friendly name for property type
+     * Moved from propertyTypes.ts to be a method of the service
+     */
+    getPropertyTypeDisplayName(type: string): string {
+        switch (type.toLowerCase()) {
+            case "text": return "Text";
+            case "list": return "List";
+            case "number": return "Number";
+            case "checkbox": return "Checkbox";
+            case "date": return "Date";
+            case "datetime": return "Date & Time";
+            default: return "Text";
+        }
+    }
+    
+    /**
+     * Preserves the type information of property values
+     * Moved from propertyTypes.ts to be a method of the service
+     */
+    preservePropertyTypes(properties: Record<string, any>): Record<string, PropertyWithType> {
+        const result: Record<string, PropertyWithType> = {};
+        
+        for (const [key, value] of Object.entries(properties)) {
+            if (value === null || value === undefined) {
+                result[key] = { value, type: 'null' };
+            } else if (typeof value === 'string') {
+                // Check if it's a number-like string
+                const isNumericString = !isNaN(Number(value)) && value.trim() !== '';
+                result[key] = { 
+                    value,
+                    type: 'string',
+                    // Save original string format if it's numeric
+                    originalString: isNumericString ? value : undefined
+                };
+            } else if (typeof value === 'number') {
+                result[key] = { value, type: 'number' };
+            } else if (typeof value === 'boolean') {
+                result[key] = { value, type: 'boolean' };
+            } else if (Array.isArray(value)) {
+                // Recursively process array items
+                const processedArray = value.map(item => {
+                    if (typeof item === 'string') {
+                        // For strings in arrays that look like numbers
+                        const isNumericString = !isNaN(Number(item)) && item.trim() !== '';
+                        return isNumericString ? { value: item, type: 'string', originalString: item } : item;
+                    }
+                    return item;
+                });
+                result[key] = { value: processedArray, type: 'array' };
+            } else if (typeof value === 'object') {
+                result[key] = { value: this.preservePropertyTypes(value), type: 'object' };
+            } else {
+                result[key] = { value, type: typeof value };
+            }
+        }
+        
+        return result;
+    }
+    
+    /**
+     * Restores the original property values with preserved types
+     * Moved from propertyTypes.ts to be a method of the service
+     */
+    restorePropertyValues(properties: Record<string, PropertyWithType>): Record<string, any> {
+        const result: Record<string, any> = {};
+        
+        for (const [key, propertyWithType] of Object.entries(properties)) {
+            if (propertyWithType.type === 'string' && propertyWithType.originalString) {
+                // Restore the original string format
+                result[key] = propertyWithType.originalString;
+            } else if (propertyWithType.type === 'array' && Array.isArray(propertyWithType.value)) {
+                // Process arrays
+                result[key] = propertyWithType.value.map(item => {
+                    if (item && typeof item === 'object' && 'type' in item && item.type === 'string' && item.originalString) {
+                        return item.originalString;
+                    }
+                    return item;
+                });
+            } else if (propertyWithType.type === 'object' && typeof propertyWithType.value === 'object') {
+                // Recursively restore nested objects
+                result[key] = this.restorePropertyValues(propertyWithType.value);
+            } else {
+                // Use the original value for other types
+                result[key] = propertyWithType.value;
+            }
+        }
+        
+        return result;
     }
 }

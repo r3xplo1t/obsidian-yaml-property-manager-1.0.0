@@ -1,12 +1,9 @@
 import { App, Modal, TFile } from 'obsidian';
 import YAMLPropertyManagerPlugin from '../../main';
-import { 
-    detectPropertyType, 
-    getPropertyTypeDisplayName,
-    PropertyWithType,
-    preservePropertyTypes
-} from '../utils/propertyTypes';
-import { formatValuePreview } from '../utils/helpers';
+// Import from specific files to avoid circular dependencies
+import type { PropertyWithType } from '../PropertyTypeService';
+import type { TemplateNode } from '../interfaces';
+import { formatValuePreview } from '../propertyFormatters';
 
 interface PropertyStats {
     count: number;
@@ -120,7 +117,7 @@ export class BulkPropertyEditorModal extends Modal {
                 
                 // Get properties with type information
                 const propertiesWithType = this.plugin.propertyCache.get(file.path) || 
-                                           preservePropertyTypes(properties);
+                this.plugin.propertyTypeService.preservePropertyTypes(properties);
                 
                 console.log(`Properties found in ${file.path}:`, properties);
                 
@@ -273,7 +270,7 @@ export class BulkPropertyEditorModal extends Modal {
             
             // Get type using the new helper method
             const internalType = this.plugin.getInternalPropertyType(propName, sampleValue);
-            const typeDisplayName = getPropertyTypeDisplayName(internalType);
+            const typeDisplayName = this.plugin.propertyTypeService.getPropertyTypeDisplayName(internalType);
             
             propertyType.createEl('span', { 
                 text: `Type: ${typeDisplayName}`, 
@@ -379,27 +376,185 @@ export class BulkPropertyEditorModal extends Modal {
                     const filesContainer = propertyItem.createDiv({ 
                         cls: 'yaml-property-files yaml-property-files--collapsed' 
                     });
+
+                    // Create filter bar container
+                    const filterBar = filesContainer.createDiv({ 
+                        cls: 'yaml-property-files-filter-bar' 
+                    });
+
+                    // Add filter explanation text
+                    filterBar.createEl('span', {
+                        text: 'Filter by:',
+                        cls: 'yaml-property-files-filter-label'
+                    });
+
+                    // Create filter button container
+                    const filterButtonContainer = filterBar.createDiv({
+                        cls: 'yaml-property-files-filter-buttons'
+                    });
+
+                    // Add filter toggle buttons with the correct order
+                    const allButton = filterButtonContainer.createEl('button', {
+                        text: 'All',
+                        cls: 'yaml-property-files-filter-button yaml-property-files-filter-button--active',
+                        attr: {
+                            'data-filter': 'all',
+                            'title': 'Show all files'
+                        }
+                    });
+
+                    const missingButton = filterButtonContainer.createEl('button', {
+                        text: 'Missing',
+                        cls: 'yaml-property-files-filter-button',
+                        attr: {
+                            'data-filter': 'missing',
+                            'title': 'Show files missing this property'
+                        }
+                    });
+
+                    const differentTypeButton = filterButtonContainer.createEl('button', {
+                        text: 'Different Types',
+                        cls: 'yaml-property-files-filter-button',
+                        attr: {
+                            'data-filter': 'different-type',
+                            'title': 'Show files with different property types'
+                        }
+                    });
+
+                    const differentValueButton = filterButtonContainer.createEl('button', {
+                        text: 'Different Values',
+                        cls: 'yaml-property-files-filter-button',
+                        attr: {
+                            'data-filter': 'different-value',
+                            'title': 'Show files with different property values'
+                        }
+                    });
+
+                    // Store active filters
+                    const activeFilters = new Set(['all']);
+
+                    // Helper function to update file visibility based on active filters
+                    const updateFileVisibility = () => {
+                        // Get all file items
+                        const fileItems = filesContainer.querySelectorAll('.yaml-property-file');
+                        
+                        // If "All" is active, show all files
+                        if (activeFilters.has('all')) {
+                            fileItems.forEach((fileItem: HTMLElement) => {
+                                fileItem.style.display = '';
+                            });
+                            return;
+                        }
+                        
+                        // Otherwise, filter files based on active filters
+                        fileItems.forEach((fileItem: HTMLElement) => {
+                            // Hide by default, then show if it matches any active filter
+                            fileItem.style.display = 'none';
+                            
+                            // Check each active filter
+                            if ((activeFilters.has('different-type') && fileItem.hasClass('yaml-property-file--different-type')) ||
+                                (activeFilters.has('different-value') && fileItem.hasClass('yaml-property-file--different-value')) ||
+                                (activeFilters.has('missing') && fileItem.hasClass('yaml-property-file--missing'))) {
+                                fileItem.style.display = '';
+                            }
+                        });
+                    };
+
+                    // "All" button click handler
+                    allButton.addEventListener('click', () => {
+                        // Clear all filters and set only "All"
+                        activeFilters.clear();
+                        activeFilters.add('all');
+                        
+                        // Update button states
+                        allButton.addClass('yaml-property-files-filter-button--active');
+                        differentTypeButton.removeClass('yaml-property-files-filter-button--active');
+                        differentValueButton.removeClass('yaml-property-files-filter-button--active');
+                        missingButton.removeClass('yaml-property-files-filter-button--active');
+                        
+                        // Update file visibility
+                        updateFileVisibility();
+                    });
+
+                    // Helper function for filter button click handling
+                    const handleFilterButtonClick = (button: HTMLElement, filter: string) => {
+                        // If "All" is active, deactivate it
+                        if (activeFilters.has('all')) {
+                            activeFilters.delete('all');
+                            allButton.removeClass('yaml-property-files-filter-button--active');
+                        }
+                        
+                        // Toggle this filter
+                        if (activeFilters.has(filter)) {
+                            activeFilters.delete(filter);
+                            button.removeClass('yaml-property-files-filter-button--active');
+                            
+                            // If no filters active, activate "All"
+                            if (activeFilters.size === 0) {
+                                activeFilters.add('all');
+                                allButton.addClass('yaml-property-files-filter-button--active');
+                            }
+                        } else {
+                            activeFilters.add(filter);
+                            button.addClass('yaml-property-files-filter-button--active');
+                        }
+                        
+                        // Update file visibility
+                        updateFileVisibility();
+                    };
+
+                    // Other filter buttons click handlers
+                    differentTypeButton.addEventListener('click', () => {
+                        handleFilterButtonClick(differentTypeButton, 'different-type');
+                    });
+
+                    differentValueButton.addEventListener('click', () => {
+                        handleFilterButtonClick(differentValueButton, 'different-value');
+                    });
+
+                    missingButton.addEventListener('click', () => {
+                        handleFilterButtonClick(missingButton, 'missing');
+                    });
                     
                     // Determine which files to show
-                    let filesToShow;
-                    
-                    // If there are inconsistencies, show files with differences
+                    let filesToShow = [];
+
+                    // Create a set of paths that have the property for quick lookup
+                    const propertyFilePaths = new Set(stats.files.map(file => file.path));
+
+                    // 1. If there are inconsistencies, add files with differences
                     if (stats.typeConsistency.count < stats.count || 
                         stats.valueConsistency.count < stats.count) {
-                        filesToShow = stats.files.filter(file => file.hasDifference);
+                        // Add files with type or value differences
+                        const filesWithDifferences = stats.files.filter(file => file.hasDifference);
+                        filesToShow = [...filesWithDifferences];
                     } 
-                    // If property doesn't exist in all files, show all files that have the property
-                    else if (stats.count < this.files.length) {
-                        filesToShow = stats.files;
+
+                    // 2. If property doesn't exist in all files, add files that are MISSING the property
+                    if (stats.count < this.files.length) {
+                        // Get files that don't have this property
+                        const missingFiles = this.files
+                            .filter(file => !propertyFilePaths.has(file.path))
+                            .map(file => ({
+                                path: file.path,
+                                name: file.name,
+                                isMissing: true
+                            }));
+                        
+                        // Add missing files to the list
+                        filesToShow = [...filesToShow, ...missingFiles];
                     }
-                    // Fallback - show all files
-                    else {
-                        filesToShow = stats.files;
+
+                    // If no files to show based on criteria above, show all files that have the property
+                    if (filesToShow.length === 0) {
+                        filesToShow = [...stats.files];
                     }
                     
                     // Add each file to the container
                     filesToShow.forEach(file => {
-                        const fileItem = filesContainer.createDiv({ cls: 'yaml-property-file' });
+                        const fileItem = filesContainer.createDiv({ 
+                            cls: file.isMissing ? 'yaml-property-file yaml-property-file--missing' : 'yaml-property-file' 
+                        });
                         
                         // File header with name
                         const fileHeader = fileItem.createDiv({ cls: 'yaml-property-file-header' });
@@ -408,45 +563,56 @@ export class BulkPropertyEditorModal extends Modal {
                             cls: 'yaml-property-file-name'
                         });
 
-                        // File type (highlight if different)
-                        const isDifferentType = file.type !== stats.typeConsistency.mostCommonType;
-                        const fileTypeEl = fileItem.createDiv({
-                            cls: 'yaml-property-file-type'
-                        });
-                        fileTypeEl.createEl('span', {
-                            text: `Type: ${getPropertyTypeDisplayName(file.type)}`,
-                            cls: 'yaml-property-type-text'
-                        });
-                        
-                        // File value (highlight if different)
-                        const isDifferentValue = JSON.stringify(file.value) !== 
-                        JSON.stringify(stats.valueConsistency.mostCommonValue);
-
-                        const fileValue = fileItem.createDiv({
-                        cls: 'yaml-property-file-value'
-                        });
-
-                        // Apply a different class for highlighting differences
-                        if (isDifferentValue) {
-                        fileValue.addClass('yaml-property-file-value');
-                        }
-                        
-                        if (file.value === null || file.value === undefined || file.value === '' ||
-                            (typeof file.value === 'object' && Object.keys(file.value).length === 0)) {
-                            fileValue.createEl('span', {
-                                text: 'No value',
-                                cls: 'yaml-property-empty-value'
-                            });
-                        } else if (Array.isArray(file.value)) {
-                            fileValue.createEl('span', {
-                                text: `Array (${file.value.length} ${file.value.length === 1 ? 'item' : 'items'})`,
-                                cls: 'yaml-property-value-text'
+                        // For files missing the property, show a message instead of type and value
+                        if (file.isMissing) {
+                            const missingMessage = fileItem.createDiv({ cls: 'yaml-property-missing-message' });
+                            missingMessage.createEl('span', {
+                                text: 'Property not found in this file.',
+                                cls: 'yaml-property-missing-text'
                             });
                         } else {
-                            fileValue.createEl('span', {
-                                text: formatValuePreview(file.value),
-                                cls: 'yaml-property-value-text'
+                            // File type (highlight if different)
+                            const isDifferentType = file.type !== stats.typeConsistency.mostCommonType;
+                            if (isDifferentType) {
+                                fileItem.addClass('yaml-property-file--different-type');
+                            }
+                            const fileTypeEl = fileItem.createDiv({
+                                cls: 'yaml-property-file-type'
                             });
+                            fileTypeEl.createEl('span', {
+                                text: `Type: ${this.plugin.propertyTypeService.getPropertyTypeDisplayName(file.type)}`,
+                                cls: 'yaml-property-type-text'
+                            });
+                            
+                            // File value (highlight if different)
+                            const isDifferentValue = JSON.stringify(file.value) !== 
+                                JSON.stringify(stats.valueConsistency.mostCommonValue);
+
+                            if (isDifferentValue) {
+                                fileItem.addClass('yaml-property-file--different-value');
+                            }
+
+                            const fileValue = fileItem.createDiv({
+                                cls: 'yaml-property-file-value'
+                            });
+                            
+                            if (file.value === null || file.value === undefined || file.value === '' ||
+                                (typeof file.value === 'object' && Object.keys(file.value).length === 0)) {
+                                fileValue.createEl('span', {
+                                    text: 'No value',
+                                    cls: 'yaml-property-empty-value'
+                                });
+                            } else if (Array.isArray(file.value)) {
+                                fileValue.createEl('span', {
+                                    text: `Array (${file.value.length} ${file.value.length === 1 ? 'item' : 'items'})`,
+                                    cls: 'yaml-property-value-text'
+                                });
+                            } else {
+                                fileValue.createEl('span', {
+                                    text: formatValuePreview(file.value),
+                                    cls: 'yaml-property-value-text'
+                                });
+                            }
                         }
                     });
                     

@@ -4,6 +4,7 @@ export interface YAMLPropertyManagerSettings {
     templatePaths: TemplatePath[];
     recentTemplates: string[];
     maxRecentTemplates: number;
+    expandedTemplatePaths?: string[]; // New field for expanded path persistence
 }
 
 export interface TemplatePath {
