@@ -51,6 +51,58 @@ export class BrowserModal extends Modal {
         if (options.confirmButtonText) this.confirmButtonText = options.confirmButtonText;
     }
 
+    // Handle keyboard navigation
+    private handleKeyDown(e: KeyboardEvent) {
+        // If Escape key, close the modal
+        if (e.key === 'Escape') {
+            this.close();
+            return;
+        }
+        
+        // If Enter key on a focused element
+        if (e.key === 'Enter') {
+            const focused = document.activeElement;
+            if (focused && focused.classList.contains('yaml-file-header')) {
+                // Simulate click on focused file
+                const checkbox = focused.querySelector('.yaml-custom-checkbox') as HTMLElement;
+                if (checkbox) checkbox.click();
+            } else if (focused && focused.classList.contains('yaml-folder-header')) {
+                // Simulate click on focused folder
+                (focused as HTMLElement).click();
+            }
+        }
+        
+        // Allow tab navigation to work normally
+    }
+
+    // Helper method to get checkbox icon SVG HTML
+    private getCheckboxIconSvg(state: 'checked' | 'unchecked' | 'indeterminate'): string {
+        if (state === 'checked') {
+            return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="svg-icon yaml-checkbox-svg"><path d="M20 6L9 17l-5-5"/></svg>';
+        } else if (state === 'indeterminate') {
+            return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="svg-icon yaml-checkbox-svg"><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
+        } else {
+            return ''; // Empty for unchecked state
+        }
+    }
+
+    // Helper to update checkbox state
+    private updateCheckboxState(checkbox: HTMLElement, state: 'checked' | 'unchecked' | 'indeterminate'): void {
+        // Remove existing states
+        checkbox.removeClass('is-checked');
+        checkbox.removeClass('is-indeterminate');
+        checkbox.empty();
+        
+        if (state === 'checked') {
+            checkbox.addClass('is-checked');
+            checkbox.innerHTML = this.getCheckboxIconSvg('checked');
+        } else if (state === 'indeterminate') {
+            checkbox.addClass('is-indeterminate');
+            checkbox.innerHTML = this.getCheckboxIconSvg('indeterminate');
+        }
+        // For unchecked, just leave it empty
+    }
+
     createCustomCheckbox(isChecked: boolean, className: string): HTMLElement {
         // Container for checkbox
         const checkboxContainer = document.createElement('span');
@@ -64,12 +116,7 @@ export class BrowserModal extends Modal {
         // Set initial state
         if (isChecked) {
             checkbox.addClass('is-checked');
-            
-            // Add checkmark icon when checked
-            const checkmark = document.createElement('span');
-            checkmark.addClass('yaml-checkbox-checkmark');
-            checkmark.innerHTML = '✓';
-            checkbox.appendChild(checkmark);
+            checkbox.innerHTML = this.getCheckboxIconSvg('checked');
         }
         
         // Add to container
@@ -81,10 +128,13 @@ export class BrowserModal extends Modal {
         const { contentEl } = this;
         contentEl.empty();
         
-        // Initialize selection from existing paths
+        // Enable keyboard navigation when the modal opens
+        contentEl.addEventListener('keydown', this.handleKeyDown.bind(this));
+        
+        // Initialize selection from existing paths  
         this.selectedFiles = [];
         this.selectedFolders = [];
-        
+                
         // Load files and folders from initial paths
         for (const filePath of this.initialSelectedFilePaths) {
             const file = this.app.vault.getFileByPath(filePath);
@@ -227,8 +277,15 @@ export class BrowserModal extends Modal {
         }
         
         // Create folder header
-        const headerRow = folderItem.createDiv({ cls: 'yaml-folder-header' });
-        headerRow.style.paddingLeft = `${level * 20}px`;
+        const headerRow = folderItem.createDiv({ 
+            cls: 'yaml-folder-header',
+            attr: { 
+                tabindex: '0',
+                'aria-label': `Folder: ${folder.name}, ${isSelected ? 'Selected' : isIndeterminate ? 'Partially selected' : 'Not selected'}`,
+                'aria-expanded': 'false' // Will be toggled when clicked
+            }
+        });
+        headerRow.style.paddingLeft = `${level * 0}px`;
         
         // Only show checkboxes for folders if not in single file selection mode
         if (!this.singleFileSelectionMode) {
@@ -238,16 +295,7 @@ export class BrowserModal extends Modal {
             
             // Apply indeterminate styling if needed
             if (isIndeterminate) {
-                checkbox.removeClass('is-checked');
-                checkbox.addClass('is-indeterminate');
-                checkbox.empty();
-                
-                const indeterminateMark = document.createElement('div');
-                indeterminateMark.addClass('yaml-checkbox-indeterminate');
-                indeterminateMark.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="2" viewBox="0 0 8 2">
-                    <rect width="8" height="2" fill="white" />
-                </svg>`;
-                checkbox.appendChild(indeterminateMark);
+                this.updateCheckboxState(checkbox, 'indeterminate');
             }
             
             checkbox.addEventListener('click', (e) => {
@@ -255,19 +303,10 @@ export class BrowserModal extends Modal {
                 
                 const isCurrentlyChecked = checkbox.hasClass('is-checked');
                 const isCurrentlyIndeterminate = checkbox.hasClass('is-indeterminate');
-                
-                // Remove any existing state
-                checkbox.removeClass('is-checked');
-                checkbox.removeClass('is-indeterminate');
-                checkbox.empty();
-                
+
                 if (!isCurrentlyChecked) {
                     // Select folder
-                    checkbox.addClass('is-checked');
-                    const checkmark = document.createElement('span');
-                    checkmark.addClass('yaml-checkbox-checkmark');
-                    checkmark.innerHTML = '✓';
-                    checkbox.appendChild(checkmark);
+                    this.updateCheckboxState(checkbox, 'checked');
                     
                     if (!this.selectedFolders.some(f => f.path === folder.path)) {
                         this.selectedFolders.push(folder);
@@ -285,6 +324,7 @@ export class BrowserModal extends Modal {
                     }
                 } else {
                     // Deselect folder and all children
+                    this.updateCheckboxState(checkbox, 'unchecked');
                     this.deselectFolderAndChildren(folder);
                     folderItem.removeClass('is-selected');
                     folderItem.removeClass('is-partially-selected');
@@ -323,6 +363,9 @@ export class BrowserModal extends Modal {
                 
                 // Toggle collapsed state
                 childrenContainer.toggleClass('yaml-folder-children--collapsed', !isCollapsed);
+
+                // Update aria-expanded attribute for accessibility
+                headerRow.setAttribute('aria-expanded', isCollapsed ? 'true' : 'false');
                 
                 // Log state before and after for debugging
                 console.log('Folder toggled:', {
@@ -339,26 +382,74 @@ export class BrowserModal extends Modal {
                 if (isCollapsed) {
                     this.expandedFolders.add(folder.path);
                     
-                    // If empty, load children
+                    // If the folder was previously collapsed and now expanded
                     if (childrenContainer.childElementCount === 0) {
-                        const sortedChildren = [...folder.children].sort((a, b) => {
-                            const aIsFolder = a instanceof TFolder;
-                            const bIsFolder = b instanceof TFolder;
-                            
-                            if (aIsFolder !== bIsFolder) {
-                                return aIsFolder ? -1 : 1;
-                            }
-                            
-                            return a.name.localeCompare(b.name);
+                        // First, show a loading indicator
+                        const loadingEl = childrenContainer.createDiv({
+                            cls: 'yaml-folder-loading',
                         });
                         
-                        for (const child of sortedChildren) {
-                            if (child instanceof TFolder && !child.path.startsWith('.')) {
-                                this.renderFolderItem(childrenContainer, child, countEl, level + 1);
-                            } else if (child instanceof TFile && child.extension === 'md') {
-                                this.renderFileItem(childrenContainer, child, countEl, level + 1);
+                        // Add spinner
+                        loadingEl.createDiv({
+                            cls: 'yaml-folder-loading-spinner'
+                        });
+                        
+                        // Add loading text
+                        loadingEl.createSpan({
+                            text: 'Loading...'
+                        });
+                        
+                        // Use setTimeout to give the UI time to show the loading state
+                        setTimeout(() => {
+                            // Remove loading indicator
+                            loadingEl.remove();
+                            
+                            // Check if folder is empty after filtering hidden items
+                            const visibleChildren = folder.children.filter(child => 
+                                (child instanceof TFolder && !child.path.startsWith('.')) || 
+                                (child instanceof TFile && child.extension === 'md')
+                            );
+                            
+                            if (visibleChildren.length === 0) {
+                                // Show empty message if folder is empty
+                                const emptyMessage = childrenContainer.createDiv({
+                                    cls: 'yaml-empty-folder-message'
+                                });
+                                
+                                // Add file icon
+                                const iconSpan = emptyMessage.createSpan({
+                                    cls: 'yaml-empty-folder-message-icon'
+                                });
+                                iconSpan.innerHTML = this.getSvgIcon('file');
+                                
+                                // Add text
+                                emptyMessage.createSpan({
+                                    text: 'Empty folder'
+                                });
+                            } else {
+                                // Non-empty folder, render all visible children
+                                const sortedChildren = [...visibleChildren].sort((a, b) => {
+                                    const aIsFolder = a instanceof TFolder;
+                                    const bIsFolder = b instanceof TFolder;
+                                    
+                                    // Folders first, then files
+                                    if (aIsFolder !== bIsFolder) {
+                                        return aIsFolder ? -1 : 1;
+                                    }
+                                    
+                                    // Alphabetical within type
+                                    return a.name.localeCompare(b.name);
+                                });
+                                
+                                for (const child of sortedChildren) {
+                                    if (child instanceof TFolder && !child.path.startsWith('.')) {
+                                        this.renderFolderItem(childrenContainer, child, countEl, level + 1);
+                                    } else if (child instanceof TFile && child.extension === 'md') {
+                                        this.renderFileItem(childrenContainer, child, countEl, level + 1);
+                                    }
+                                }
                             }
-                        }
+                        }, 300); // Short delay to show loading state
                     }
                 } else {
                     this.expandedFolders.delete(folder.path);
@@ -384,8 +475,14 @@ export class BrowserModal extends Modal {
             fileItem.addClass('is-selected');
         }
         
-        const headerRow = fileItem.createDiv({ cls: 'yaml-file-header' });
-        headerRow.style.paddingLeft = `${level * 20}px`;
+        const headerRow = fileItem.createDiv({ 
+            cls: 'yaml-file-header',
+            attr: { 
+                tabindex: '0',
+                'aria-label': `File: ${file.name}, ${isSelected ? 'Selected' : 'Not selected'}`
+            }
+        });
+        headerRow.style.paddingLeft = `${level * 0}px`;
         
         // Create checkbox
         const checkboxContainer = this.createCustomCheckbox(isSelected, 'yaml-file-checkbox');
@@ -423,11 +520,7 @@ export class BrowserModal extends Modal {
             
             if (!isCurrentlyChecked) {
                 // Add to selection
-                checkbox.addClass('is-checked');
-                const checkmark = document.createElement('span');
-                checkmark.addClass('yaml-checkbox-checkmark');
-                checkmark.innerHTML = '✓';
-                checkbox.appendChild(checkmark);
+                this.updateCheckboxState(checkbox, 'checked');
                 
                 if (!this.selectedFiles.some(f => f.path === file.path)) {
                     this.selectedFiles.push(file);
@@ -441,9 +534,7 @@ export class BrowserModal extends Modal {
                 }
             } else {
                 // Remove from selection
-                checkbox.removeClass('is-checked');
-                const checkmark = checkbox.querySelector('.yaml-checkbox-checkmark');
-                if (checkmark) checkbox.removeChild(checkmark);
+                this.updateCheckboxState(checkbox, 'unchecked');
                 
                 this.selectedFiles = this.selectedFiles.filter(f => f.path !== file.path);
                 fileItem.removeClass('is-selected');
@@ -511,6 +602,13 @@ export class BrowserModal extends Modal {
         const fileCount = this.selectedFiles.length;
         const folderCount = this.selectedFolders.length;
         
+        // Add or remove the has-selection class based on selection state
+        if (fileCount > 0 || folderCount > 0) {
+            countEl.addClass('has-selection');
+        } else {
+            countEl.removeClass('has-selection');
+        }
+        
         // Update count text
         if (fileCount === 0 && folderCount === 0) {
             countEl.textContent = this.singleFileSelectionMode ? 'No file selected' : 'Nothing selected';
@@ -556,34 +654,19 @@ export class BrowserModal extends Modal {
                         isIndeterminate = this.hasIndeterminateSelection(folder);
                     }
                     
-                    // Reset the checkbox state
-                    checkbox.removeClass('is-checked');
-                    checkbox.removeClass('is-indeterminate');
-                    checkbox.empty(); // Remove any existing checkmark or dash
-                    
                     if (isSelected) {
                         // Add checked state and checkmark
-                        checkbox.addClass('is-checked');
-                        const checkmark = document.createElement('span');
-                        checkmark.addClass('yaml-checkbox-checkmark');
-                        checkmark.innerHTML = '✓';
-                        checkbox.appendChild(checkmark);
+                        this.updateCheckboxState(checkbox, 'checked');
                         item.addClass('is-selected');
                         item.removeClass('is-partially-selected');
                     } else if (isIndeterminate) {
                         // Apply indeterminate styling
-                        checkbox.addClass('is-indeterminate');
-                        
-                        const indeterminateMark = document.createElement('div');
-                        indeterminateMark.addClass('yaml-checkbox-indeterminate');
-                        indeterminateMark.innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="2" viewBox="0 0 8 2">
-                            <rect width="8" height="2" fill="white" />
-                        </svg>`;
-                        checkbox.appendChild(indeterminateMark);
+                        this.updateCheckboxState(checkbox, 'indeterminate');
                         
                         item.removeClass('is-selected');
                         item.addClass('is-partially-selected');
                     } else {
+                        this.updateCheckboxState(checkbox, 'unchecked');
                         item.removeClass('is-selected');
                         item.removeClass('is-partially-selected');
                     }
@@ -599,19 +682,12 @@ export class BrowserModal extends Modal {
                 const checkbox = item.querySelector('.yaml-custom-checkbox.yaml-file-checkbox') as HTMLElement;
                 
                 if (checkbox) {
-                    // Reset checkbox state
-                    checkbox.removeClass('is-checked');
-                    checkbox.empty(); // Remove any existing checkmark
-                    
                     if (isSelected) {
                         // Add checked state and checkmark
-                        checkbox.addClass('is-checked');
-                        const checkmark = document.createElement('span');
-                        checkmark.addClass('yaml-checkbox-checkmark');
-                        checkmark.innerHTML = '✓';
-                        checkbox.appendChild(checkmark);
+                        this.updateCheckboxState(checkbox, 'checked');
                         item.addClass('is-selected');
                     } else {
+                        this.updateCheckboxState(checkbox, 'unchecked');
                         item.removeClass('is-selected');
                     }
                 }
@@ -814,6 +890,10 @@ export class BrowserModal extends Modal {
 
     onClose() {
         const { contentEl } = this;
+        
+        // Remove keyboard event listener
+        contentEl.removeEventListener('keydown', this.handleKeyDown.bind(this));
+        
         contentEl.empty();
     }
 }

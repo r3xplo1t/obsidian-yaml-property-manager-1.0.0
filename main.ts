@@ -89,6 +89,13 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             }
         });
 
+        // Add command to reload the plugin
+        this.addCommand({
+            id: 'reload-yaml-property-manager',
+            name: 'Reload YAML Property Manager',
+            callback: () => this.reloadPlugin()
+        });
+
         // Add settings tab
         this.addSettingTab(new YAMLPropertyManagerSettingTab(this.app, this));
     }
@@ -502,6 +509,31 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             case "phone": return "text";
             case "select": return "text";
             default: return "text";
+        }
+    }
+
+    async reloadPlugin(): Promise<void> {
+        try {
+            // Create a notice to indicate reload is happening
+            new Notice('Reloading YAML Property Manager...');
+            
+            // Get plugin ID
+            const pluginId = this.manifest.id;
+            
+            // Access the plugin manager with type assertion
+            const pluginManager = (this.app as any).plugins;
+            
+            // First disable the plugin
+            await pluginManager.disablePlugin(pluginId);
+            
+            // Then enable it again after a short delay
+            setTimeout(async () => {
+                await pluginManager.enablePlugin(pluginId);
+                new Notice('YAML Property Manager has been reloaded');
+            }, 300);
+        } catch (error) {
+            console.error('Error reloading plugin:', error);
+            new Notice('Failed to reload plugin: ' + error.message);
         }
     }
 

@@ -69,28 +69,26 @@ export class BulkPropertyEditorModal extends Modal {
             loadingEl.addClass('yaml-error-message');
         }
 
-        // Buttons container
-        const buttonContainer = contentEl.createDiv({ cls: 'yaml-button-container' });
+        // Buttons container attached directly to modal
+        const buttonContainer = this.modalEl.createDiv({ cls: 'modal-button-container' });
 
         // Apply button
         const applyButton = buttonContainer.createEl('button', { 
             text: 'Apply Changes',
-            cls: 'bulk-editor-button bulk-editor-button--apply'
+            cls: 'mod-cta'
         });
         
-        applyButton.disabled = true;  // Initially disabled until changes are made
-        applyButton.addClass('bulk-editor-button--disabled');
-        
+        applyButton.disabled = true;
+
         applyButton.addEventListener('click', async () => {
             // This will be implemented in a future feature
             // For now, just close the modal
             this.close();
         });
-        
+
         // Close button
         const cancelButton = buttonContainer.createEl('button', { 
-            text: 'Cancel',
-            cls: 'bulk-editor-button bulk-editor-button--cancel'
+            text: 'Cancel'
         });
 
         cancelButton.addEventListener('click', () => {

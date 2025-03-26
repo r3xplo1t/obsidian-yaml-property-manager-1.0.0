@@ -24,6 +24,126 @@ export class TemplateApplicationModal extends Modal {
         this.targetFiles = targetFiles;
     }
 
+    // Helper method to get SVG icon HTML
+    private getSvgIcon(type: 'file' | 'search' | 'warning' | 'check' | 'x' | 'chevron-down' | 'chevron-up' | 'info' | 'folder-search'): string {
+        switch(type) {
+            case 'file':
+                return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-file"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg>';
+            case 'search':
+                return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-search"><circle cx="11" cy="11" r="8"></circle><path d="m21 21-4.3-4.3"></path></svg>';
+            case 'warning':
+                return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-alert-triangle"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"></path><path d="M12 9v4"></path><path d="M12 17h.01"></path></svg>';
+            case 'check':
+                return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-check"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+            case 'x':
+                return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-x"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg>';
+            case 'chevron-down':
+                return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-chevron-down"><path d="m6 9 6 6 6-6"></path></svg>';
+            case 'chevron-up':
+                return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-chevron-up"><path d="m18 15-6-6-6 6"></path></svg>';
+            case 'info':
+                return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-info"><circle cx="12" cy="12" r="10"></circle><path d="M12 16v-4"></path><path d="M12 8h.01"></path></svg>';
+            case 'folder-search':
+                return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-folder-search"><path d="M10.7 20H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H20a2 2 0 0 1 2 2v4.1"></path><path d="m21 21-1.9-1.9"></path><circle cx="17" cy="17" r="3"></circle></svg>';
+            default:
+                return '';
+        }
+    }
+
+    // Helper method to get checkbox icon SVG HTML
+    private getCheckboxIconSvg(state: 'checked' | 'unchecked' | 'indeterminate'): string {
+        if (state === 'checked') {
+            return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="svg-icon yaml-checkbox-svg"><path d="M20 6L9 17l-5-5"/></svg>';
+        } else if (state === 'indeterminate') {
+            return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="svg-icon yaml-checkbox-svg"><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
+        } else {
+            return ''; // Empty for unchecked state
+        }
+    }
+
+    // Helper to create a custom checkbox
+    private createCustomCheckbox(isChecked: boolean, className: string): HTMLElement {
+        // Container for checkbox
+        const checkboxContainer = document.createElement('span');
+        checkboxContainer.addClass('yaml-custom-checkbox-container');
+        
+        // Create the custom checkbox element
+        const checkbox = document.createElement('div');
+        checkbox.addClass('yaml-custom-checkbox');
+        checkbox.addClass(className);
+        
+        // Set initial state
+        if (isChecked) {
+            checkbox.addClass('is-checked');
+            checkbox.innerHTML = this.getCheckboxIconSvg('checked');
+        }
+        
+        // Add to container
+        checkboxContainer.appendChild(checkbox);
+        return checkboxContainer;
+    }
+
+    // Helper to update checkbox state
+    private updateCheckboxState(checkbox: HTMLElement, state: 'checked' | 'unchecked' | 'indeterminate'): void {
+        // Remove existing states
+        checkbox.removeClass('is-checked');
+        checkbox.removeClass('is-indeterminate');
+        checkbox.empty();
+        
+        if (state === 'checked') {
+            checkbox.addClass('is-checked');
+            checkbox.innerHTML = this.getCheckboxIconSvg('checked');
+        } else if (state === 'indeterminate') {
+            checkbox.addClass('is-indeterminate');
+            checkbox.innerHTML = this.getCheckboxIconSvg('indeterminate');
+        }
+        // For unchecked, just leave it empty
+    }
+
+    // Helper to create a custom radio button (styled like checkbox)
+    private createCustomRadio(isSelected: boolean, groupName: string, className: string): HTMLElement {
+        // Container for the radio-checkbox
+        const radioContainer = document.createElement('span');
+        radioContainer.addClass('yaml-custom-checkbox-container');
+        
+        // Create the custom element (looks like checkbox but acts like radio)
+        const radio = document.createElement('div');
+        radio.addClass('yaml-custom-checkbox');
+        radio.addClass('yaml-custom-radio');
+        radio.addClass(className);
+        
+        // Set data attribute for group name (radio behavior)
+        radio.setAttribute('data-radio-group', groupName);
+        
+        // Set initial state
+        if (isSelected) {
+            radio.addClass('is-checked');
+            radio.innerHTML = this.getCheckboxIconSvg('checked');
+        }
+        
+        // Add to container
+        radioContainer.appendChild(radio);
+        return radioContainer;
+    }
+
+    // Helper to set radio selection in a group
+    private setRadioSelection(selectedRadio: HTMLElement): void {
+        // Get the group name
+        const groupName = selectedRadio.getAttribute('data-radio-group');
+        if (!groupName) return;
+        
+        // Find all radios in the same group
+        document.querySelectorAll(`.yaml-custom-radio[data-radio-group="${groupName}"]`).forEach((radio: HTMLElement) => {
+            // Deselect all radios in this group
+            this.updateCheckboxState(radio, 'unchecked');
+            radio.setAttribute('aria-checked', 'false');
+        });
+        
+        // Select the clicked radio
+        this.updateCheckboxState(selectedRadio, 'checked');
+        selectedRadio.setAttribute('aria-checked', 'true');
+    }
+
     async onOpen() {
         const { contentEl } = this;
         contentEl.empty();
@@ -55,7 +175,7 @@ export class TemplateApplicationModal extends Modal {
         // Create the input element
         const searchInput = searchInputWrapper.createEl('input', {
             type: 'text',
-            cls: 'search-input',
+            cls: 'setting-search-input',
             attr: {
                 placeholder: 'Search templates...'
             }
@@ -63,8 +183,7 @@ export class TemplateApplicationModal extends Modal {
 
         // Add browse button to the search container (not the wrapper)
         const browseButton = searchContainer.createEl('button', { 
-            text: 'Browse',
-            cls: 'yaml-browse-button'
+            text: 'Browse'
         });
 
         // Handle input changes
@@ -119,9 +238,34 @@ export class TemplateApplicationModal extends Modal {
         
         // If no templates found
         if (this.allTemplates.length === 0) {
-            templateResultsContainer.createEl('p', { 
-                text: 'No template files found. Configure template files or directories in settings.',
-                cls: 'yaml-message--no-templates'
+            const emptyContainer = templateResultsContainer.createDiv({ cls: 'yaml-empty-state-container' });
+            
+            // Add folder icon
+            const emptyIcon = emptyContainer.createDiv({ cls: 'yaml-empty-state-icon' });
+            emptyIcon.innerHTML = this.getSvgIcon('folder-search');
+            
+            // Add title and message
+            emptyContainer.createEl('h4', { 
+                text: 'No Template Files Found',
+                cls: 'yaml-empty-state-title'
+            });
+            
+            emptyContainer.createEl('p', { 
+                text: 'Configure template files or directories in the plugin settings.',
+                cls: 'yaml-empty-state-message'
+            });
+            
+            // Add action button
+            const actionButton = emptyContainer.createEl('button', {
+                text: 'Open Settings',
+                cls: 'mod-cta yaml-empty-state-action'
+            });
+            
+            actionButton.addEventListener('click', () => {
+                // Close this modal
+                this.close();
+                // Show a notice guiding the user
+                new Notice('Please go to Settings → Plugin Options → YAML Property Manager to configure templates', 5000);
             });
         } else {
             // Initialize search results with all templates
@@ -135,7 +279,7 @@ export class TemplateApplicationModal extends Modal {
         });
         
         const validationIcon = validationMessage.createSpan({ cls: 'yaml-validation-icon' });
-        validationIcon.textContent = '⚠️'; // Warning icon
+        validationIcon.innerHTML = this.getSvgIcon('warning');
         
         validationMessage.createSpan({ 
             text: 'Select template to apply properties.',
@@ -153,11 +297,14 @@ export class TemplateApplicationModal extends Modal {
             cls: 'yaml-select-all yaml-select-all--primary yaml-element--hidden',
             attr: { id: 'select-all-container' }
         });
-        const selectAllCheckbox = selectAllContainer.createEl('input', {
-            type: 'checkbox',
-            attr: { id: 'select-all-properties' },
-            cls: 'yaml-select-all__checkbox'
-        });
+
+        const selectAllCustomCheckbox = this.createCustomCheckbox(false, 'yaml-select-all__checkbox');
+        selectAllContainer.appendChild(selectAllCustomCheckbox);
+        const selectAllCheckbox = selectAllCustomCheckbox.querySelector('.yaml-custom-checkbox') as HTMLElement;
+        selectAllCheckbox.setAttribute('id', 'select-all-properties');
+        selectAllCheckbox.setAttribute('role', 'checkbox');
+        selectAllCheckbox.setAttribute('aria-checked', 'false');
+        selectAllCheckbox.setAttribute('tabindex', '0');
 
         selectAllContainer.createEl('label', {
             text: 'Select All Properties',
@@ -169,11 +316,14 @@ export class TemplateApplicationModal extends Modal {
             cls: 'yaml-select-all yaml-select-all--secondary yaml-element--hidden yaml-select-all--disabled',
             attr: { id: 'override-all-container' }
         });
-        const overrideAllCheckbox = overrideAllContainer.createEl('input', {
-            type: 'checkbox',
-            attr: { id: 'override-all-values' },
-            cls: 'yaml-select-all__checkbox'
-        });
+
+        const overrideAllCustomCheckbox = this.createCustomCheckbox(false, 'yaml-select-all__checkbox');
+        overrideAllContainer.appendChild(overrideAllCustomCheckbox);
+        const overrideAllCheckbox = overrideAllCustomCheckbox.querySelector('.yaml-custom-checkbox') as HTMLElement;
+        overrideAllCheckbox.setAttribute('id', 'override-all-values');
+        overrideAllCheckbox.setAttribute('role', 'checkbox');
+        overrideAllCheckbox.setAttribute('aria-checked', 'false');
+        overrideAllCheckbox.setAttribute('tabindex', '0');
 
         overrideAllContainer.createEl('label', {
             text: 'Override All Values (use template values instead of existing)',
@@ -181,45 +331,66 @@ export class TemplateApplicationModal extends Modal {
         });
 
         // Add event listener to Override All checkbox
-        overrideAllCheckbox.addEventListener('change', () => {
-            // Update class state
-            this.overrideAllValues = overrideAllCheckbox.checked;
+        overrideAllCheckbox.addEventListener('click', () => {
+            // Skip if disabled
+            if (overrideAllCheckbox.hasClass('is-disabled')) {
+                return;
+            }
             
-            if (overrideAllCheckbox.checked) {
+            const isCurrentlyChecked = overrideAllCheckbox.hasClass('is-checked');
+            const newState = !isCurrentlyChecked;
+            
+            // Update checkbox state
+            this.updateCheckboxState(overrideAllCheckbox, newState ? 'checked' : 'unchecked');
+            overrideAllCheckbox.setAttribute('aria-checked', newState.toString());
+            
+            // Update class state
+            this.overrideAllValues = newState;
+            
+            if (newState) {
                 // Add visual indication that this option is active
                 overrideAllContainer.addClass('active');
                 
                 // Update all individual value checkboxes
-                const valueCheckboxes = contentEl.querySelectorAll('.yaml-property-preserve-checkbox:not([disabled])');
-                valueCheckboxes.forEach((checkbox: HTMLInputElement) => {
-                    checkbox.checked = true; // Check to use template values
-                    const changeEvent = new Event('change');
-                    checkbox.dispatchEvent(changeEvent);
+                const valueCheckboxes = this.contentEl.querySelectorAll('.yaml-custom-checkbox.yaml-property-value-checkbox:not(.is-disabled)');
+                valueCheckboxes.forEach((checkbox: HTMLElement) => {
+                    this.updateCheckboxState(checkbox, 'checked');
+                    checkbox.setAttribute('aria-checked', 'true');
+                    
+                    // Get property key from checkbox id
+                    const key = checkbox.id.replace('override-value-', '');
+                    if (key && !this.overrideValueProperties.includes(key)) {
+                        this.overrideValueProperties.push(key);
+                    }
                 });
             } else {
                 overrideAllContainer.removeClass('active');
                 
                 // Uncheck all individual value checkboxes
-                const valueCheckboxes = contentEl.querySelectorAll('.yaml-property-preserve-checkbox:not([disabled])');
-                valueCheckboxes.forEach((checkbox: HTMLInputElement) => {
-                    checkbox.checked = false; // Uncheck to preserve existing values
-                    const changeEvent = new Event('change');
-                    checkbox.dispatchEvent(changeEvent);
+                const valueCheckboxes = this.contentEl.querySelectorAll('.yaml-custom-checkbox.yaml-property-value-checkbox:not(.is-disabled)');
+                valueCheckboxes.forEach((checkbox: HTMLElement) => {
+                    this.updateCheckboxState(checkbox, 'unchecked');
+                    checkbox.setAttribute('aria-checked', 'false');
+                    
+                    // Get property key from checkbox id
+                    const key = checkbox.id.replace('override-value-', '');
+                    if (key) {
+                        this.overrideValueProperties = this.overrideValueProperties.filter(p => p !== key);
+                    }
                 });
             }
         });
         
         // Buttons container
-        const buttonContainer = contentEl.createDiv({ cls: 'yaml-button-container' });
+        const buttonContainer = this.modalEl.createDiv({ cls: 'modal-button-container' });
 
         const applyButton = buttonContainer.createEl('button', { 
             text: 'Apply Template', 
-            cls: 'yaml-button yaml-button--apply'
+            cls: 'mod-cta'
         });
-        
+
         applyButton.disabled = true;
-        applyButton.addClass('yaml-button--disabled');
-        
+
         applyButton.addEventListener('click', async () => {
             if (this.selectedTemplate && this.selectedProperties.length > 0) {
                 // Apply template with preservation information
@@ -259,12 +430,11 @@ export class TemplateApplicationModal extends Modal {
                 }
             }
         });
-        
+
         const cancelButton = buttonContainer.createEl('button', { 
-            text: 'Cancel',
-            cls: 'yaml-button yaml-button--cancel'
+            text: 'Cancel'
         });
-        
+
         cancelButton.addEventListener('click', () => {
             this.plugin.navigateToModal(this, 'main');
         });
@@ -311,10 +481,23 @@ export class TemplateApplicationModal extends Modal {
         container.empty();
         
         if (this.searchResults.length === 0) {
-            container.createEl('p', { 
-                text: 'No matching templates found', 
-                cls: 'yaml-message--no-templates' 
+            const emptyContainer = container.createDiv({ cls: 'yaml-empty-state-container' });
+            
+            // Add search icon
+            const emptyIcon = emptyContainer.createDiv({ cls: 'yaml-empty-state-icon' });
+            emptyIcon.innerHTML = this.getSvgIcon('search');
+            
+            // Add title and message
+            emptyContainer.createEl('h4', { 
+                text: 'No Matching Templates',
+                cls: 'yaml-empty-state-title'
             });
+            
+            emptyContainer.createEl('p', { 
+                text: 'Try adjusting your search term or browse for a file instead.',
+                cls: 'yaml-empty-state-message'
+            });
+            
             return;
         }
         
@@ -326,20 +509,25 @@ export class TemplateApplicationModal extends Modal {
             // Create a template item container
             const templateItem = resultsList.createDiv({ cls: 'yaml-template-item' });
             
-            // Create radio button
-            const radioBtn = templateItem.createEl('input', {
-                type: 'radio',
-                attr: {
-                    name: 'template',
-                    value: file.path,
-                    id: `template-${file.path.replace(/\//g, '-')}`
-                },
-                cls: 'yaml-template-radio'
-            });
+            // Determine if this template is currently selected
+            const isSelected = this.selectedTemplate !== null && 
+            this.selectedTemplate.path === file.path;
+
+            // Create the custom radio with proper selection state
+            const radioContainer = this.createCustomRadio(isSelected, 'template', 'yaml-template-radio');
+            templateItem.appendChild(radioContainer);
+
+            // Get the actual radio element
+            const radioBtn = radioContainer.querySelector('.yaml-custom-checkbox') as HTMLElement;
+            radioBtn.setAttribute('id', `template-${file.path.replace(/\//g, '-')}`);
+            radioBtn.setAttribute('data-path', file.path);
+            radioBtn.setAttribute('role', 'radio');
+            radioBtn.setAttribute('aria-checked', isSelected.toString());
+            radioBtn.setAttribute('tabindex', '0');
             
             // Add file icon
             const fileIcon = templateItem.createSpan({ cls: 'yaml-template-icon' });
-            fileIcon.textContent = '📄 ';
+            fileIcon.innerHTML = this.getSvgIcon('file');
             
             // Add template info container
             const templateInfo = templateItem.createDiv({ cls: 'yaml-template-info' });
@@ -358,34 +546,38 @@ export class TemplateApplicationModal extends Modal {
                 });
             }
             
-            // Handle selection
-            radioBtn.addEventListener('change', () => {
-                if (radioBtn.checked) {
-                    this.selectedTemplate = file;
-                    
-                    // Hide the validation message when a template is selected
-                    const validationMessage = document.getElementById('validation-message');
-                    if (validationMessage) {
-                        validationMessage.addClass('yaml-validation-message--hidden');
-                    }
-                    
-                    this.loadTemplateProperties();
+            // Add keyboard support
+            radioBtn.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    radioBtn.click();
                 }
+            });
+            
+            // Handle selection
+            radioBtn.addEventListener('click', () => {
+                // Update radio selection state
+                this.setRadioSelection(radioBtn);
+                
+                // Update selected template
+                this.selectedTemplate = file;
+                
+                // Hide the validation message when a template is selected
+                const validationMessage = document.getElementById('validation-message');
+                if (validationMessage) {
+                    validationMessage.addClass('yaml-validation-message--hidden');
+                }
+                
+                // Load template properties
+                this.loadTemplateProperties();
             });
             
             // Make whole item clickable
             templateItem.addEventListener('click', (e) => {
-                if (e.target !== radioBtn) {
-                    radioBtn.checked = true;
-                    this.selectedTemplate = file;
-                    
-                    // Hide the validation message when a template is selected
-                    const validationMessage = document.getElementById('validation-message');
-                    if (validationMessage) {
-                        validationMessage.addClass('yaml-validation-message--hidden');
-                    }
-                    
-                    this.loadTemplateProperties();
+                // Check if the target is an Element and not the radio button
+                if (e.target instanceof Element && e.target !== radioBtn && !e.target.closest('.yaml-custom-checkbox-container')) {
+                    // Simulate a click on the radio button
+                    radioBtn.click();
                 }
             });
         }
@@ -456,6 +648,9 @@ export class TemplateApplicationModal extends Modal {
         
         // Add advanced positioning options section
         if (overrideAllContainer) {
+            // First, remove any existing positioning options to prevent duplication
+            contentEl.querySelectorAll('.yaml-options-header, .yaml-positioning-options').forEach(el => el.remove());
+            
             // Create header for positioning options (h4)
             const positioningHeader = contentEl.createEl('h4', {
                 text: 'Property Positioning Options',
@@ -465,7 +660,7 @@ export class TemplateApplicationModal extends Modal {
             // Position after the override container
             overrideAllContainer.after(positioningHeader);
 
-            // Create options container with similar styling to select-all containers
+            // Create options container
             const positioningOptions = contentEl.createDiv({
                 cls: 'yaml-positioning-options'
             });
@@ -473,85 +668,93 @@ export class TemplateApplicationModal extends Modal {
             // Position after the header
             positioningHeader.after(positioningOptions);
 
-            // Option 1: Position below
+            // Option 1: Position below - custom radio
             const belowOption = positioningOptions.createDiv({ cls: 'yaml-select-all yaml-position-option' });
-            const belowRadio = belowOption.createEl('input', {
-                type: 'radio',
-                attr: { 
-                    name: 'positioning',
-                    id: 'position-below',
-                    checked: true
-                },
-                cls: 'yaml-select-all__checkbox'
-            });
+            const belowRadioContainer = this.createCustomRadio(true, 'positioning', 'yaml-position-radio');
+            belowOption.appendChild(belowRadioContainer);
+            const belowRadio = belowRadioContainer.querySelector('.yaml-custom-checkbox') as HTMLElement;
+            belowRadio.setAttribute('id', 'position-below');
+            belowRadio.setAttribute('role', 'radio');
+            belowRadio.setAttribute('aria-checked', 'true');
+            belowRadio.setAttribute('tabindex', '0');
+            belowRadio.setAttribute('data-value', 'below');
+
             belowOption.createEl('label', {
                 text: 'Position new properties below existing ones',
                 attr: { for: 'position-below' }
             });
 
-            // Option 2: Position above
+            // Option 2: Position above - custom radio
             const aboveOption = positioningOptions.createDiv({ cls: 'yaml-select-all yaml-position-option' });
-            const aboveRadio = aboveOption.createEl('input', {
-                type: 'radio',
-                attr: { 
-                    name: 'positioning',
-                    id: 'position-above'
-                },
-                cls: 'yaml-select-all__checkbox'
-            });
+            const aboveRadioContainer = this.createCustomRadio(false, 'positioning', 'yaml-position-radio');
+            aboveOption.appendChild(aboveRadioContainer);
+            const aboveRadio = aboveRadioContainer.querySelector('.yaml-custom-checkbox') as HTMLElement;
+            aboveRadio.setAttribute('id', 'position-above');
+            aboveRadio.setAttribute('role', 'radio');
+            aboveRadio.setAttribute('aria-checked', 'false');
+            aboveRadio.setAttribute('tabindex', '0');
+            aboveRadio.setAttribute('data-value', 'above');
+
             aboveOption.createEl('label', {
                 text: 'Position new properties above existing ones',
                 attr: { for: 'position-above' }
             });
 
-            // Option 3: Remove others
+            // Option 3: Remove others - custom radio
             const removeOption = positioningOptions.createDiv({ cls: 'yaml-select-all yaml-position-option' });
-            const removeRadio = removeOption.createEl('input', {
-                type: 'radio',
-                attr: { 
-                    name: 'positioning',
-                    id: 'remove-others'
-                },
-                cls: 'yaml-select-all__checkbox'
-            });
+            const removeRadioContainer = this.createCustomRadio(false, 'positioning', 'yaml-position-radio');
+            removeOption.appendChild(removeRadioContainer);
+            const removeRadio = removeRadioContainer.querySelector('.yaml-custom-checkbox') as HTMLElement;
+            removeRadio.setAttribute('id', 'remove-others');
+            removeRadio.setAttribute('role', 'radio');
+            removeRadio.setAttribute('aria-checked', 'false');
+            removeRadio.setAttribute('tabindex', '0');
+            removeRadio.setAttribute('data-value', 'remove');
+
             removeOption.createEl('label', {
                 text: 'Remove properties not in template',
                 attr: { for: 'remove-others' }
             });
 
-            // Store the selected positioning option in a class property
-            belowRadio.addEventListener('change', () => {
-                if (belowRadio.checked) {
-                    this.propertyPositioning = 'below';
-                    
-                    // Add a visual indication for the selected option
-                    belowOption.addClass('yaml-position-option--selected');
-                    aboveOption.removeClass('yaml-position-option--selected');
-                    removeOption.removeClass('yaml-position-option--selected');
-                }
+            // Add event listeners for the radio buttons
+            belowRadio.addEventListener('click', () => {
+                this.setRadioSelection(belowRadio);
+                this.propertyPositioning = 'below';
+                
+                // Add a visual indication for the selected option
+                belowOption.addClass('yaml-position-option--selected');
+                aboveOption.removeClass('yaml-position-option--selected');
+                removeOption.removeClass('yaml-position-option--selected');
             });
 
-            aboveRadio.addEventListener('change', () => {
-                if (aboveRadio.checked) {
-                    this.propertyPositioning = 'above';
-                    
-                    // Add a visual indication for the selected option
-                    belowOption.removeClass('yaml-position-option--selected');
-                    aboveOption.addClass('yaml-position-option--selected');
-                    removeOption.removeClass('yaml-position-option--selected');
-                }
+            aboveRadio.addEventListener('click', () => {
+                this.setRadioSelection(aboveRadio);
+                this.propertyPositioning = 'above';
+                
+                // Add a visual indication for the selected option
+                belowOption.removeClass('yaml-position-option--selected');
+                aboveOption.addClass('yaml-position-option--selected');
+                removeOption.removeClass('yaml-position-option--selected');
             });
 
-            removeRadio.addEventListener('change', () => {
-                if (removeRadio.checked) {
-                    this.propertyPositioning = 'remove';
-                    
-                    // Add a visual indication for the selected option
-                    belowOption.removeClass('yaml-position-option--selected');
-                    aboveOption.removeClass('yaml-position-option--selected');
-                    removeOption.addClass('yaml-position-option--selected');
-                }
+            removeRadio.addEventListener('click', () => {
+                this.setRadioSelection(removeRadio);
+                this.propertyPositioning = 'remove';
+                
+                // Add a visual indication for the selected option
+                belowOption.removeClass('yaml-position-option--selected');
+                aboveOption.removeClass('yaml-position-option--selected');
+                removeOption.addClass('yaml-position-option--selected');
             });
+
+            // Set initial selected state based on propertyPositioning
+            if (this.propertyPositioning === 'below') {
+                belowOption.addClass('yaml-position-option--selected');
+            } else if (this.propertyPositioning === 'above') {
+                aboveOption.addClass('yaml-position-option--selected');
+            } else if (this.propertyPositioning === 'remove') {
+                removeOption.addClass('yaml-position-option--selected');
+            }
 
             // Initialize the selected state
             belowOption.addClass('yaml-position-option--selected');
@@ -572,8 +775,8 @@ export class TemplateApplicationModal extends Modal {
         });
 
         // Check initial state of Select All checkbox to set visibility
-        const infoSelectAllCheckbox = document.getElementById('select-all-properties') as HTMLInputElement;
-        if (infoSelectAllCheckbox && infoSelectAllCheckbox.checked) {
+        const infoSelectAllCheckbox = document.getElementById('select-all-properties');
+        if (infoSelectAllCheckbox && infoSelectAllCheckbox.hasClass('is-checked')) {
             valueInfoContainer.addClass('yaml-element--hidden');
         }
         
@@ -586,10 +789,10 @@ export class TemplateApplicationModal extends Modal {
         }
         
         // Add to loadTemplateProperties method after showing the option containers
-        const mainSelectAllCheckbox = selectAllContainer?.querySelector('input[type="checkbox"]') as HTMLInputElement;
+        const mainSelectAllCheckbox = selectAllContainer?.querySelector('.yaml-custom-checkbox') as HTMLElement;
         if (mainSelectAllCheckbox) {
             // Enable/disable secondary options based on initial Select All state
-            if (!mainSelectAllCheckbox.checked) {
+            if (!mainSelectAllCheckbox.hasClass('is-checked')) {
                 if (overrideAllContainer) {
                     overrideAllContainer.addClass('yaml-select-all--disabled');
                 }
@@ -604,11 +807,23 @@ export class TemplateApplicationModal extends Modal {
         contentEl.querySelectorAll('.yaml-properties-list').forEach(el => el.remove());
         
         if (propertyKeys.length === 0) {
-            // Add message directly to content element
-            contentEl.createEl('p', { 
-                text: 'The selected template file does not have any properties.',
-                cls: 'yaml-hint-text'
+            const emptyContainer = contentEl.createDiv({ cls: 'yaml-empty-state-container' });
+            
+            // Add info icon
+            const emptyIcon = emptyContainer.createDiv({ cls: 'yaml-empty-state-icon' });
+            emptyIcon.innerHTML = this.getSvgIcon('info');
+            
+            // Add title and message
+            emptyContainer.createEl('h4', { 
+                text: 'No Properties Found',
+                cls: 'yaml-empty-state-title'
             });
+            
+            emptyContainer.createEl('p', { 
+                text: 'The selected template file does not have any YAML properties in its frontmatter.',
+                cls: 'yaml-empty-state-message'
+            });
+            
             return;
         }
         
@@ -626,11 +841,13 @@ export class TemplateApplicationModal extends Modal {
             const propertyHeader = propertyItem.createDiv({ cls: 'yaml-property-header' });
 
             // Include checkbox
-            const includeCheckboxContainer = propertyHeader.createDiv({ cls: 'yaml-property-item__include' });
-            const includeCheckbox = includeCheckboxContainer.createEl('input', {
-                type: 'checkbox',
-                attr: { id: `include-${key}` }
-            });
+            const includeCustomCheckbox = this.createCustomCheckbox(false, 'yaml-property-include-checkbox');
+            propertyHeader.appendChild(includeCustomCheckbox);
+            const includeCheckbox = includeCustomCheckbox.querySelector('.yaml-custom-checkbox') as HTMLElement;
+            includeCheckbox.setAttribute('id', `include-${key}`);
+            includeCheckbox.setAttribute('role', 'checkbox');
+            includeCheckbox.setAttribute('aria-checked', 'false');
+            includeCheckbox.setAttribute('tabindex', '0');
 
             // Property name (bold)
             propertyHeader.createEl('span', { 
@@ -658,27 +875,52 @@ export class TemplateApplicationModal extends Modal {
 
             // Special handling for list type - show count and add toggle button if needed
             if (internalType === "list" && Array.isArray(value)) {
-                typeInfoContainer.createSpan({
-                    text: ` (${value.length} ${value.length === 1 ? 'item' : 'items'})`, 
-                    cls: 'yaml-property-array-count'
-                });
-                
-                // Only add toggle for arrays with more than 3 items
-                if (value.length > 3) {
-                    const toggleButton = typeBox.createEl('button', {
+                // Only show array count for arrays with 3 or fewer items
+                if (value.length <= 3) {
+                    typeInfoContainer.createSpan({
+                        text: ` ${value.length} ${value.length === 1 ? 'item' : 'items'}`, 
+                        cls: 'yaml-property-array-count'
+                    });
+                } 
+                // Only add toggle and "more" indicator for arrays with more than 3 items
+                else if (value.length > 3) {
+                    // Create a container for the right side elements
+                    const rightSideControls = typeBox.createDiv({ cls: 'yaml-property-type-controls' });
+                    
+                    // Add the "X more" text first
+                    rightSideControls.createSpan({
+                        text: `${value.length - 3} more`,
+                        cls: 'yaml-property-array-more-count'
+                    });
+                    
+                    // Then add toggle button
+                    const toggleButton = rightSideControls.createEl('button', {
                         cls: 'yaml-property-toggle-button',
                         attr: { 
                             id: `toggle-${key}`,
-                            'aria-label': 'Toggle array items'
+                            'aria-label': 'Toggle array items',
+                            'aria-expanded': 'false'
                         }
                     });
-                    toggleButton.innerHTML = '▼'; // Down arrow icon
+                    
+                    // Use a consistent chevron-down icon that we'll rotate with CSS
+                    toggleButton.innerHTML = this.getSvgIcon('chevron-down').replace('width="18"', 'width="14"').replace('height="18"', 'height="14"');
                     
                     // Add event listener for toggle
                     toggleButton.addEventListener('click', (e) => {
                         e.stopPropagation();
+                        const isExpanding = !propertyItem.classList.contains('yaml-property-item--expanded');
                         propertyItem.classList.toggle('yaml-property-item--expanded');
-                        toggleButton.innerHTML = propertyItem.classList.contains('yaml-property-item--expanded') ? '▲' : '▼';
+                        
+                        // Set the appropriate aria-expanded state
+                        toggleButton.setAttribute('aria-expanded', isExpanding ? 'true' : 'false');
+                        
+                        // Instead of changing the icon, we'll add/remove a class to rotate it
+                        if (isExpanding) {
+                            toggleButton.addClass('yaml-property-toggle-button--expanded');
+                        } else {
+                            toggleButton.removeClass('yaml-property-toggle-button--expanded');
+                        }
                     });
                 }
             }
@@ -686,16 +928,20 @@ export class TemplateApplicationModal extends Modal {
             // Property value box SECOND
             const valueBox = propertyItem.createDiv({ cls: 'yaml-property-value-box' });
 
-            // Value override checkbox (previously called "preserve" checkbox)
-            const valueCheckbox = valueBox.createEl('input', {
-                type: 'checkbox',
-                attr: { 
-                    id: `override-value-${key}`,
-                    disabled: !includeCheckbox.checked,
-                    title: 'Check to use template value (unchecked preserves existing value)'
-                },
-                cls: 'yaml-property-preserve-checkbox' // Keep CSS class for compatibility
-            });
+            // Value checkbox - custom implementation
+            const valueCustomCheckbox = this.createCustomCheckbox(false, 'yaml-property-value-checkbox');
+            valueBox.appendChild(valueCustomCheckbox);
+            const valueCheckbox = valueCustomCheckbox.querySelector('.yaml-custom-checkbox') as HTMLElement;
+            valueCheckbox.setAttribute('id', `override-value-${key}`);
+            valueCheckbox.setAttribute('role', 'checkbox');
+            valueCheckbox.setAttribute('aria-checked', 'false');
+            valueCheckbox.setAttribute('tabindex', '0');
+            valueCheckbox.setAttribute('title', 'Check to use template value (unchecked preserves existing value)');
+
+            // Set initial disabled state
+            if (!includeCheckbox.hasClass('is-checked')) {
+                valueCheckbox.addClass('is-disabled');
+            }
 
             if (Array.isArray(value)) {
                 // Create container for array items directly in the value box
@@ -742,56 +988,86 @@ export class TemplateApplicationModal extends Modal {
                 }
             }
             
-            // Set initial checkbox state based on global settings
-            if (this.overrideAllValues) {
-                valueCheckbox.checked = true;
-            } else {
-                valueCheckbox.checked = false;
-            }
-            
-            // Event handlers for include checkbox
-            includeCheckbox.addEventListener('change', () => {
-                if (includeCheckbox.checked) {
+            includeCheckbox.addEventListener('click', () => {
+                const isCurrentlyChecked = includeCheckbox.hasClass('is-checked');
+                
+                if (!isCurrentlyChecked) {
+                    // Update to checked state
+                    this.updateCheckboxState(includeCheckbox, 'checked');
+                    includeCheckbox.setAttribute('aria-checked', 'true');
+                    
                     // Add to selected properties
                     if (!this.selectedProperties.includes(key)) {
                         this.selectedProperties.push(key);
                     }
+                    
                     // Enable value checkbox
-                    valueCheckbox.disabled = false;
+                    valueCheckbox.removeClass('is-disabled');
                     
                     // Apply global settings 
                     if (this.overrideAllValues) {
-                        valueCheckbox.checked = true;
+                        this.updateCheckboxState(valueCheckbox, 'checked');
+                        valueCheckbox.setAttribute('aria-checked', 'true');
+                        
+                        if (!this.overrideValueProperties.includes(key)) {
+                            this.overrideValueProperties.push(key);
+                        }
                     } else {
-                        valueCheckbox.checked = false;
+                        this.updateCheckboxState(valueCheckbox, 'unchecked');
+                        valueCheckbox.setAttribute('aria-checked', 'false');
                     }
                 } else {
+                    // Update to unchecked state
+                    this.updateCheckboxState(includeCheckbox, 'unchecked');
+                    includeCheckbox.setAttribute('aria-checked', 'false');
+                    
                     // Remove from selected properties
                     this.selectedProperties = this.selectedProperties.filter(p => p !== key);
+                    
                     // Remove from override values and disable checkbox
                     this.overrideValueProperties = this.overrideValueProperties.filter(p => p !== key);
-                    valueCheckbox.checked = false;
-                    valueCheckbox.disabled = true;
+                    this.updateCheckboxState(valueCheckbox, 'unchecked');
+                    valueCheckbox.setAttribute('aria-checked', 'false');
+                    valueCheckbox.addClass('is-disabled');
+                    
+                    // Auto-deselect the "Select All Properties" checkbox
+                    const selectAllCheckbox = document.getElementById('select-all-properties');
+                    if (selectAllCheckbox && selectAllCheckbox.hasClass('is-checked')) {
+                        this.updateCheckboxState(selectAllCheckbox, 'unchecked');
+                        selectAllCheckbox.setAttribute('aria-checked', 'false');
+                    }
+                }
+                
+                // Check if all property checkboxes are checked
+                const allPropertyCheckboxes = this.contentEl.querySelectorAll('.yaml-custom-checkbox.yaml-property-include-checkbox');
+                const allPropsChecked = Array.from(allPropertyCheckboxes).every((checkbox: HTMLElement) => checkbox.hasClass('is-checked'));
+
+                // Update the "Select All Properties" checkbox state
+                const selectAllCheckbox = document.getElementById('select-all-properties');
+                if (selectAllCheckbox) {
+                    if (allPropsChecked && !selectAllCheckbox.hasClass('is-checked')) {
+                        this.updateCheckboxState(selectAllCheckbox, 'checked');
+                        selectAllCheckbox.setAttribute('aria-checked', 'true');
+                    } else if (!allPropsChecked && selectAllCheckbox.hasClass('is-checked')) {
+                        this.updateCheckboxState(selectAllCheckbox, 'unchecked');
+                        selectAllCheckbox.setAttribute('aria-checked', 'false');
+                    }
                 }
                 
                 // Update apply button state
-                const applyButton = this.contentEl.querySelector('.yaml-button--apply') as HTMLButtonElement;
+                const applyButton = this.contentEl.querySelector('button.mod-cta') as HTMLButtonElement;
                 const validationMessage = document.getElementById('validation-message');
-
+            
                 if (applyButton) {
                     const hasSelectedProperties = this.selectedProperties.length > 0;
                     applyButton.disabled = !hasSelectedProperties;
                     
                     if (hasSelectedProperties) {
-                        applyButton.removeClass('yaml-button--disabled');
-                        
                         // Hide validation message if we have properties selected
                         if (validationMessage) {
                             validationMessage.addClass('yaml-validation-message--hidden');
                         }
                     } else {
-                        applyButton.addClass('yaml-button--disabled');
-                        
                         // Show validation message if we have no properties selected
                         if (validationMessage) {
                             const validationText = validationMessage.querySelector('.yaml-validation-text');
@@ -805,22 +1081,38 @@ export class TemplateApplicationModal extends Modal {
             });
             
             // Event handler for the value checkbox
-            valueCheckbox.addEventListener('change', () => {
-                if (valueCheckbox.checked) {
+            valueCheckbox.addEventListener('click', () => {
+                // Skip if disabled
+                if (valueCheckbox.hasClass('is-disabled')) {
+                    return;
+                }
+                
+                const isCurrentlyChecked = valueCheckbox.hasClass('is-checked');
+                
+                if (!isCurrentlyChecked) {
+                    // Update to checked state
+                    this.updateCheckboxState(valueCheckbox, 'checked');
+                    valueCheckbox.setAttribute('aria-checked', 'true');
+                    
                     // Add to override values properties (use template value)
                     if (!this.overrideValueProperties.includes(key)) {
                         this.overrideValueProperties.push(key);
                     }
                 } else {
+                    // Update to unchecked state
+                    this.updateCheckboxState(valueCheckbox, 'unchecked');
+                    valueCheckbox.setAttribute('aria-checked', 'false');
+                    
                     // Remove from override values properties (preserve existing value)
                     this.overrideValueProperties = this.overrideValueProperties.filter(p => p !== key);
                     
                     // If any checkbox is unchecked, uncheck and update the "Override All Values" checkbox
-                    const overrideAllCheckbox = document.getElementById('override-all-values') as HTMLInputElement;
+                    const overrideAllCheckbox = document.getElementById('override-all-values');
                     const overrideAllContainer = document.getElementById('override-all-container');
                     
-                    if (overrideAllCheckbox && overrideAllCheckbox.checked) {
-                        overrideAllCheckbox.checked = false;
+                    if (overrideAllCheckbox && overrideAllCheckbox.hasClass('is-checked')) {
+                        this.updateCheckboxState(overrideAllCheckbox, 'unchecked');
+                        overrideAllCheckbox.setAttribute('aria-checked', 'false');
                         this.overrideAllValues = false;
                         
                         if (overrideAllContainer) {
@@ -830,43 +1122,69 @@ export class TemplateApplicationModal extends Modal {
                 }
                 
                 // Check if all enabled value checkboxes are checked
-                const allEnabled = this.contentEl.querySelectorAll('.yaml-property-preserve-checkbox:not([disabled])');
-                const allChecked = Array.from(allEnabled).every((checkbox: HTMLInputElement) => checkbox.checked);
+                const allEnabled = this.contentEl.querySelectorAll('.yaml-custom-checkbox.yaml-property-value-checkbox:not(.is-disabled)');
+                const allChecked = Array.from(allEnabled).every((checkbox: HTMLElement) => checkbox.hasClass('is-checked'));
                 
-                // Update the "override all" visual state based on whether all checkboxes are checked
+                // Update the "override all" visual state and checkbox state
                 const overrideAllContainer = document.getElementById('override-all-container');
-                if (overrideAllContainer) {
+                const overrideAllCheckbox = document.getElementById('override-all-values');
+                if (overrideAllContainer && overrideAllCheckbox) {
                     if (allChecked) {
                         overrideAllContainer.addClass('active');
+                        
+                        // Also update the checkbox state if it's not already checked
+                        if (!overrideAllCheckbox.hasClass('is-checked') && !overrideAllCheckbox.hasClass('is-disabled')) {
+                            this.updateCheckboxState(overrideAllCheckbox, 'checked');
+                            overrideAllCheckbox.setAttribute('aria-checked', 'true');
+                            this.overrideAllValues = true;
+                        }
                     } else {
                         overrideAllContainer.removeClass('active');
+                        
+                        // Also update the checkbox state if it's currently checked
+                        if (overrideAllCheckbox.hasClass('is-checked')) {
+                            this.updateCheckboxState(overrideAllCheckbox, 'unchecked');
+                            overrideAllCheckbox.setAttribute('aria-checked', 'false');
+                            this.overrideAllValues = false;
+                        }
                     }
                 }
             });
         }
         
-        // Update "select all" checkbox handler to work with the new structure
+        // "select all" checkbox handler to work with the new structure
         if (mainSelectAllCheckbox) {
-            // Remove old handler (if any)
-            const newSelectAllCheckbox = mainSelectAllCheckbox.cloneNode(true) as HTMLInputElement;
-            mainSelectAllCheckbox.parentNode?.replaceChild(newSelectAllCheckbox, mainSelectAllCheckbox);
-            
-            // Add new handler
-            newSelectAllCheckbox.addEventListener('change', () => {
-                const checked = newSelectAllCheckbox.checked;
-                const checkboxes = this.contentEl.querySelectorAll('.yaml-property-item__include input');
+            mainSelectAllCheckbox.addEventListener('click', () => {
+                const isCurrentlyChecked = mainSelectAllCheckbox.hasClass('is-checked');
+                const newState = !isCurrentlyChecked;
                 
-                // Set checkbox states for property items
-                checkboxes.forEach((checkbox: HTMLInputElement) => {
-                    checkbox.checked = checked;
-                    const changeEvent = new Event('change');
-                    checkbox.dispatchEvent(changeEvent);
+                // Update this checkbox state
+                this.updateCheckboxState(mainSelectAllCheckbox, newState ? 'checked' : 'unchecked');
+                mainSelectAllCheckbox.setAttribute('aria-checked', newState.toString());
+                
+                // Find all property include checkboxes
+                const checkboxes = this.contentEl.querySelectorAll('.yaml-custom-checkbox.yaml-property-include-checkbox');
+                
+                // Only change checkboxes that need to be changed
+                checkboxes.forEach((checkbox: HTMLElement) => {
+                    const checkboxIsChecked = checkbox.hasClass('is-checked');
+                    
+                    // Only dispatch a click if we need to change state
+                    if (checkboxIsChecked !== newState) {
+                        // Let the click handler handle the state change
+                        const clickEvent = new MouseEvent('click', {
+                            bubbles: true,
+                            cancelable: true,
+                            view: window
+                        });
+                        checkbox.dispatchEvent(clickEvent);
+                    }
                 });
                 
                 // Toggle value info message visibility
                 const valueInfoContainer = this.contentEl.querySelector('.yaml-preserve-info-container');
                 if (valueInfoContainer) {
-                    if (checked) {
+                    if (newState) {
                         valueInfoContainer.addClass('yaml-element--hidden');
                     } else {
                         valueInfoContainer.removeClass('yaml-element--hidden');
@@ -875,26 +1193,30 @@ export class TemplateApplicationModal extends Modal {
                 
                 // Enable/disable secondary options based on Select All state
                 if (overrideAllContainer) {
-                    if (checked) {
+                    if (newState) {
                         overrideAllContainer.removeClass('yaml-select-all--disabled');
-                        const overrideAllCheckbox = overrideAllContainer.querySelector('input[type="checkbox"]') as HTMLInputElement;
+                        
+                        // Get override all checkbox and enable it
+                        const overrideAllCheckbox = overrideAllContainer.querySelector('.yaml-custom-checkbox') as HTMLElement;
                         if (overrideAllCheckbox) {
-                            overrideAllCheckbox.disabled = false;
+                            overrideAllCheckbox.removeClass('is-disabled');
                         }
                     } else {
                         overrideAllContainer.addClass('yaml-select-all--disabled');
                         
-                        // Uncheck and disable the checkbox when primary is unchecked
-                        const overrideAllCheckbox = overrideAllContainer.querySelector('input[type="checkbox"]') as HTMLInputElement;
+                        // Get override all checkbox, uncheck and disable it
+                        const overrideAllCheckbox = overrideAllContainer.querySelector('.yaml-custom-checkbox') as HTMLElement;
                         if (overrideAllCheckbox) {
-                            overrideAllCheckbox.checked = false;
-                            overrideAllCheckbox.disabled = true;
+                            this.updateCheckboxState(overrideAllCheckbox, 'unchecked');
+                            overrideAllCheckbox.setAttribute('aria-checked', 'false');
+                            overrideAllCheckbox.addClass('is-disabled');
                             this.overrideAllValues = false;
                             
                             // Reset all value checkboxes
-                            const valueCheckboxes = this.contentEl.querySelectorAll('.yaml-property-preserve-checkbox:not([disabled])');
-                            valueCheckboxes.forEach((checkbox: HTMLInputElement) => {
-                                checkbox.checked = false;
+                            const valueCheckboxes = this.contentEl.querySelectorAll('.yaml-custom-checkbox.yaml-property-value-checkbox:not(.is-disabled)');
+                            valueCheckboxes.forEach((checkbox: HTMLElement) => {
+                                this.updateCheckboxState(checkbox, 'unchecked');
+                                checkbox.setAttribute('aria-checked', 'false');
                             });
                         }
                     }
@@ -902,21 +1224,10 @@ export class TemplateApplicationModal extends Modal {
             });
         }
         
-        // Move the button container to the end of the content element
-        const buttonContainerEl = this.contentEl.querySelector('.yaml-button-container');
-        if (buttonContainerEl) {
-            // Remove from current position
-            buttonContainerEl.remove();
-            
-            // Append to the end of the content element
-            this.contentEl.appendChild(buttonContainerEl);
-        }
-        
         // Enable apply button
-        const applyButton = this.contentEl.querySelector('.yaml-button--apply') as HTMLButtonElement;
+        const applyButton = this.modalEl.querySelector('button.mod-cta') as HTMLButtonElement;
         if (applyButton) {
-            applyButton.disabled = false;
-            applyButton.removeClass('yaml-button--disabled');
+            applyButton.disabled = this.selectedProperties.length === 0;
         }
     }
     

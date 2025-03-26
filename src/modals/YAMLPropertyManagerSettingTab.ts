@@ -40,7 +40,7 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
             nodeElement.addClass('yaml-template-node--removing');
             
             // Wait for animation
-            await new Promise(resolve => setTimeout(resolve, 300));
+            await new Promise(resolve => setTimeout(resolve, 200));
             
             // Get all paths that should be KEPT (not matching our removal criteria)
             const pathsToKeep = this.plugin.settings.templatePaths.filter(tp => {
@@ -532,22 +532,41 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
             }
         });
         
-        // If this is a directory node, add children container
-        if (node.isDirectory && node.children.length > 0) {
+        // If this is a directory node, add children container (even if empty)
+        if (node.isDirectory) {
             // Create children container
             const childrenEl = nodeEl.createDiv({
                 cls: 'yaml-template-node__children' + 
-                     (this.expandedPaths.has(node.path) ? '' : ' yaml-template-node__children--collapsed'),
+                    (this.expandedPaths.has(node.path) ? '' : ' yaml-template-node__children--collapsed'),
                 attr: { 
                     'id': childrenId,
                     'role': 'group'
                 }
             });
             
-            // Render all children immediately if expanded
+            // If expanded, either render children or show "Empty" message
             if (this.expandedPaths.has(node.path)) {
-                for (const child of node.children) {
-                    this.renderNode(child, childrenEl, 0);
+                if (node.children.length > 0) {
+                    // Render all children immediately
+                    for (const child of node.children) {
+                        this.renderNode(child, childrenEl, 0);
+                    }
+                } else {
+                    // Show empty message if folder is empty
+                    const emptyMessage = childrenEl.createDiv({
+                        cls: 'yaml-empty-folder-message'
+                    });
+
+                    // Add file icon
+                    const iconSpan = emptyMessage.createSpan({
+                        cls: 'yaml-empty-folder-message-icon'
+                    });
+                    iconSpan.innerHTML = this.getSvgIcon('file');
+
+                    // Add text
+                    emptyMessage.createSpan({
+                        text: 'Empty folder'
+                    });
                 }
             }
             
@@ -573,23 +592,45 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
                     } else {
                         this.expandedPaths.add(node.path);
                         
-                        // If the folder was previously collapsed and now expanded, render children
-                        if (node.children.length > 0 && childrenEl.childElementCount === 0) {
-                            // Show a loading indicator briefly
-                            const loadingEl = childrenEl.createDiv({
-                                cls: 'yaml-template-children-loading',
-                                text: 'Loading items...'
-                            });
+                        // If the folder was previously collapsed and now expanded
+                        if (childrenEl.childElementCount === 0) {
+                            // Check if the folder actually has any files in the current template paths
+                            const folderPrefix = node.path + '/';
+                            const hasChildren = this.plugin.settings.templatePaths.some(tp => tp.path.startsWith(folderPrefix));
                             
-                            // Render all children after a brief delay
-                            setTimeout(() => {
-                                loadingEl.remove();
+                            if (hasChildren && node.children.length > 0) {
+                                // Show a loading indicator briefly
+                                const loadingEl = childrenEl.createDiv({
+                                    cls: 'yaml-template-children-loading',
+                                    text: 'Loading items...'
+                                });
                                 
-                                // Render ALL children directly
-                                for (const child of node.children) {
-                                    this.renderNode(child, childrenEl, 0);
-                                }
-                            }, 50);
+                                // Render all children after a brief delay
+                                setTimeout(() => {
+                                    loadingEl.remove();
+                                    
+                                    // Render ALL children directly
+                                    for (const child of node.children) {
+                                        this.renderNode(child, childrenEl, level + 1);
+                                    }
+                                }, 50);
+                            } else {
+                                // Show empty message if folder is empty
+                                const emptyMessage = childrenEl.createDiv({
+                                    cls: 'yaml-empty-folder-message'
+                                });
+
+                                // Add file icon
+                                const iconSpan = emptyMessage.createSpan({
+                                    cls: 'yaml-empty-folder-message-icon'
+                                });
+                                iconSpan.innerHTML = this.getSvgIcon('file');
+
+                                // Add text
+                                emptyMessage.createSpan({
+                                    text: 'Empty folder'
+                                });
+                            }
                         }
                     }
                     
@@ -888,6 +929,7 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
         
         resetContainer.createEl('h3', { text: 'Troubleshooting' });
         
+        // Existing Reset Template Paths button
         new Setting(resetContainer)
             .setName('Reset Template Paths')
             .setDesc('If you experience issues with template paths not being removed correctly, use this button to reset all template paths.')
@@ -931,7 +973,19 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
                     }
                 })
             );
-    }
+        
+        // Add new Reload Plugin button
+        new Setting(resetContainer)
+            .setName('Reload Plugin')
+            .setDesc('Reload the plugin if you encounter issues or changes are not being applied correctly.')
+            .addButton(button => button
+                .setButtonText('Reload Plugin')
+                .onClick(async () => {
+                    await this.plugin.reloadPlugin();
+                })
+            );
+    } 
+
 
     public cleanup() {
         this.cleanupTooltips();
