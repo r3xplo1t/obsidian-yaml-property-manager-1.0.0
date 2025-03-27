@@ -131,7 +131,9 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
         
         // Apply settings-specific classes
         containerEl.addClass('yaml-settings-tab');
-                
+        
+        containerEl.createEl('h2', { text: 'YAML Property Manager Settings' });
+        
         // Template Paths Section
         containerEl.createEl('h3', { text: 'Template Paths' });
         
