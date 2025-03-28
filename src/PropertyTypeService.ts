@@ -1,19 +1,14 @@
 import { App, TFile } from 'obsidian';
 
-// Re-export types and interfaces so they can be used by other files
-// that previously imported from propertyTypes.ts
-
 /**
- * Types supported by Obsidian's property system
+ * Types supported by the plugin, following Obsidian's property system
  */
 export type ObsidianPropertyType = 
     'text' | 'number' | 'checkbox' | 
-    'date' | 'datetime' | 'select' | 
-    'multi-select' | 'relation' | 'file' | 
-    'list' | 'url' | 'email' | 'phone';
+    'date' | 'datetime' | 'list';
 
 /**
- * Property definition from Obsidian's metadata system
+ * Property definition structure
  */
 export interface ObsidianPropertyDefinition {
     name: string;
@@ -31,36 +26,25 @@ export interface PropertyWithType {
 }
 
 /**
- * Interface for internal property definitions from Obsidian's API
- */
-interface InternalPropertyDefinition {
-    type?: ObsidianPropertyType;
-    options?: string[];
-    [key: string]: any;
-}
-
-/**
- * Unified service class for handling property types
- * Combines interaction with Obsidian's type system and standalone utility functions
+ * Service class for handling property types using Obsidian's public API
  */
 export class PropertyTypeService {
+    /**
+     * Create a new PropertyTypeService
+     * @param app - The Obsidian App instance
+     */
     constructor(private app: App) {}
     
     /**
-     * Get the property type for a value using combined detection
-     * Tries Obsidian APIs first, then falls back to our detection
+     * Get the property type for a value using detection
+     * 
+     * @param propertyName - Name of the property (unused in this implementation)
+     * @param propertyValue - Value to detect type for
+     * @returns The detected property type
      */
     getValuePropertyType(propertyName: string, propertyValue: any): ObsidianPropertyType {
         try {
-            // First try Obsidian's property type (if globally defined)
-            const globalType = this.getPropertyType(propertyName);
-            if (globalType && globalType !== 'text') {
-                return globalType;
-            }
-            
-            // If no specific type defined, detect from value
-            const detectedType = this.detectPropertyType(propertyValue);
-            return this.convertToObsidianType(detectedType);
+            return this.detectPropertyType(propertyValue);
         } catch (error) {
             console.error("Error detecting property type:", error);
             return 'text'; // Safe default
@@ -68,126 +52,12 @@ export class PropertyTypeService {
     }
 
     /**
-     * Convert our internal types to Obsidian types
-     */
-    private convertToObsidianType(internalType: string): ObsidianPropertyType {
-        switch (internalType) {
-            case "text": return "text";
-            case "number": return "number";
-            case "checkbox": return "checkbox";
-            case "date": return "date";
-            case "datetime": return "datetime";
-            case "list": return "list";
-            default: return "text";
-        }
-    }
-
-    /**
-     * Get the property type using Obsidian's internal API
-     */
-    getPropertyType(propertyName: string): ObsidianPropertyType | null {
-        try {
-            // Access Obsidian's internal property type manager
-            // @ts-ignore - Accessing Obsidian's internal API
-            const metadataTypeManager = this.app.metadataTypeManager;
-            
-            if (!metadataTypeManager) {
-                console.debug("metadataTypeManager not available");
-                return null;
-            }
-            
-            // Try getPropertyInfo method first (newer Obsidian versions)
-            if (typeof metadataTypeManager.getPropertyInfo === 'function') {
-                const propertyInfo = metadataTypeManager.getPropertyInfo(propertyName);
-                return propertyInfo?.type || null;
-            }
-            
-            // Try direct access to properties object as fallback
-            if (metadataTypeManager.properties && propertyName in metadataTypeManager.properties) {
-                return metadataTypeManager.properties[propertyName]?.type || null;
-            }
-            
-            return null; // Nothing worked
-        } catch (error) {
-            console.error("Error accessing property type:", error);
-            return null;
-        }
-    }
-    
-    /**
-     * Get all property definitions from Obsidian
-     */
-    getAllPropertyDefinitions(): ObsidianPropertyDefinition[] {
-        try {
-            // @ts-ignore - Accessing Obsidian's internal API
-            const metadataTypeManager = this.app.metadataTypeManager;
-            
-            if (!metadataTypeManager) {
-                console.debug("metadataTypeManager not available");
-                return [];
-            }
-            
-            // Get all property types - try different methods for different Obsidian versions
-            if (typeof metadataTypeManager.getPropertyDefinitions === 'function') {
-                return metadataTypeManager.getPropertyDefinitions();
-            } else if (typeof metadataTypeManager.getAllPropertyDefinitions === 'function') {
-                return metadataTypeManager.getAllPropertyDefinitions();
-            } else {
-                // Fallback approach - try to extract from the metadata cache
-                // @ts-ignore - Accessing internal properties
-                const definitions = this.app.metadataCache.propertyDefinitions;
-                if (definitions) {
-                    return Object.entries(definitions).map(([name, def]) => ({
-                        name,
-                        type: (def as InternalPropertyDefinition).type || 'text',
-                        options: (def as InternalPropertyDefinition).options
-                    }));
-                }
-            }
-            
-            return [];
-        } catch (error) {
-            console.error("Error accessing property definitions:", error);
-            return [];
-        }
-    }
-    
-    /**
-     * Set or update a property type definition
-     */
-    setPropertyType(propertyName: string, propertyType: ObsidianPropertyType, options?: string[]): boolean {
-        try {
-            // @ts-ignore - Accessing Obsidian's internal API
-            const metadataTypeManager = this.app.metadataTypeManager;
-            
-            if (!metadataTypeManager) {
-                console.debug("metadataTypeManager not available");
-                return false;
-            }
-            
-            // Different versions of Obsidian might use different methods
-            if (typeof metadataTypeManager.setPropertyType === 'function') {
-                metadataTypeManager.setPropertyType(propertyName, propertyType, options);
-                return true;
-            } else if (typeof metadataTypeManager.defineProperty === 'function') {
-                metadataTypeManager.defineProperty(propertyName, {
-                    type: propertyType,
-                    options: options
-                });
-                return true;
-            }
-            
-            return false;
-        } catch (error) {
-            console.error("Error setting property type:", error);
-            return false;
-        }
-    }
-    
-    /**
      * Get the property type for a specific property in a file
-     * This is different from the global type definition - it's the actual
-     * inferred type for this specific instance
+     * Uses only public Obsidian API
+     * 
+     * @param file - The file to check
+     * @param propertyName - Name of the property
+     * @returns The property type or null if not found
      */
     getFilePropertyType(file: TFile, propertyName: string): ObsidianPropertyType | null {
         try {
@@ -201,64 +71,28 @@ export class PropertyTypeService {
                 return null;
             }
             
-            // Try to get from frontmatter cache directly
-            // @ts-ignore - Accessing internal properties
-            const frontmatterTypes = fileCache.frontmatterTypes;
-            if (frontmatterTypes && propertyName in frontmatterTypes) {
-                return frontmatterTypes[propertyName];
-            }
-            
-            // Get the value for regex-based detection
+            // Get the value and detect its type
             const value = fileCache.frontmatter[propertyName];
-            
-            // Use our type detection function
-            return this.convertToObsidianType(this.detectPropertyType(value));
+            return this.detectPropertyType(value);
         } catch (error) {
             console.error("Error getting file property type:", error);
             return null;
         }
     }
-    
-    /**
-     * Get the most basic type of a value using only JavaScript type detection
-     * No regex patterns are used here
-     */
-    private getBasicValueType(value: any): ObsidianPropertyType {
-        if (value === null || value === undefined) {
-            return 'text';
-        }
-        
-        if (typeof value === 'boolean') {
-            return 'checkbox';
-        }
-        
-        if (typeof value === 'number') {
-            return 'number';
-        }
-        
-        if (Array.isArray(value)) {
-            return 'list';
-        }
-        
-        // For strings, we just return 'text' without any regex-based subtype detection
-        if (typeof value === 'string') {
-            return 'text';
-        }
-        
-        return 'text';
-    }
 
     /**
-     * Detect property type following Obsidian's property type detection logic
-     * Moved from propertyTypes.ts to be a method of the service
+     * Detect property type based on value analysis
+     * 
+     * @param propertyValue - The value to detect type for
+     * @returns The detected type 
      */
-    detectPropertyType(propertyValue: any): string {
-        // Null/undefined values are treated as text in Obsidian
+    detectPropertyType(propertyValue: any): ObsidianPropertyType {
+        // Null/undefined values are treated as text
         if (propertyValue === null || propertyValue === undefined) {
             return "text";
         }
         
-        // Arrays become list type properties in Obsidian
+        // Arrays become list type properties
         if (Array.isArray(propertyValue)) {
             return "list";
         }
@@ -285,6 +119,11 @@ export class PropertyTypeService {
                 return "date";
             }
             
+            // Try to interpret as number
+            if (!isNaN(Number(propertyValue)) && propertyValue.trim() !== '') {
+                return "number";
+            }
+            
             // All other strings are text
             return "text";
         }
@@ -295,7 +134,9 @@ export class PropertyTypeService {
     
     /**
      * Get display-friendly name for property type
-     * Moved from propertyTypes.ts to be a method of the service
+     * 
+     * @param type - The type string
+     * @returns User-friendly display name
      */
     getPropertyTypeDisplayName(type: string): string {
         switch (type.toLowerCase()) {
@@ -310,8 +151,30 @@ export class PropertyTypeService {
     }
     
     /**
+     * Modify the frontmatter of a file using Obsidian's public API
+     * 
+     * @param file - The file to modify
+     * @param propertyName - The property to change
+     * @param propertyValue - The new value
+     * @returns Promise resolving to true if successful
+     */
+    async setFileProperty(file: TFile, propertyName: string, propertyValue: any): Promise<boolean> {
+        try {
+            await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+                frontmatter[propertyName] = propertyValue;
+            });
+            return true;
+        } catch (error) {
+            console.error(`Error setting property ${propertyName}:`, error);
+            return false;
+        }
+    }
+    
+    /**
      * Preserves the type information of property values
-     * Moved from propertyTypes.ts to be a method of the service
+     * 
+     * @param properties - Object of property values
+     * @returns Object with preserved type information
      */
     preservePropertyTypes(properties: Record<string, any>): Record<string, PropertyWithType> {
         const result: Record<string, PropertyWithType> = {};
@@ -355,7 +218,9 @@ export class PropertyTypeService {
     
     /**
      * Restores the original property values with preserved types
-     * Moved from propertyTypes.ts to be a method of the service
+     * 
+     * @param properties - Object with preserved type information
+     * @returns Object with original values
      */
     restorePropertyValues(properties: Record<string, PropertyWithType>): Record<string, any> {
         const result: Record<string, any> = {};

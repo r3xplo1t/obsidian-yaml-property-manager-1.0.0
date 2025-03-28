@@ -1,10 +1,11 @@
 {
-    "id": "yaml-property-manager",
-    "name": "YAML Property Manager",
-    "version": "0.1.0",
-    "minAppVersion": "0.12.0",
-    "description": "Manage YAML frontmatter properties across your markdown files with consistency and ease.",
-    "author": "Your Name",
-    "authorUrl": "https://github.com/yourusername",
-    "isDesktopOnly": false
-  }
+  "id": "yaml-property-manager",
+  "name": "YAML Property Manager",
+  "version": "0.1.0",
+  "minAppVersion": "1.5.0",
+  "description": "Manage YAML frontmatter properties across your markdown files with consistency and ease.",
+  "author": "Robert Aikler-L.",
+  "authorUrl": "https://github.com/r3xplo1t",
+  "fundingUrl": "https://www.buymeacoffee.com/r3xplo1t",
+  "isDesktopOnly": false
+}

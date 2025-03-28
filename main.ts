@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, TFile, TFolder } from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, TFile, TFolder, normalizePath } from 'obsidian';
 import { 
     // Models
     DEFAULT_SETTINGS,
@@ -24,13 +24,22 @@ import type {
     ObsidianPropertyType
 } from './src';
 
+/**
+ * YAML Property Manager Plugin
+ * Provides tools for managing YAML frontmatter across multiple files
+ */
 export default class YAMLPropertyManagerPlugin extends Plugin {
     settings: YAMLPropertyManagerSettings;
-    selectedFiles: TFile[] = []; // Added central file selection storage
+    selectedFiles: TFile[] = []; // Central file selection storage
     propertyCache: Map<string, Record<string, PropertyWithType>> = new Map();
     propertyTypeService: PropertyTypeService;
 
-    // Helper method to get internal type from a property value
+    /**
+     * Get internal type from a property value
+     * @param propertyName - Name of the property
+     * @param propertyValue - Value to analyze
+     * @returns Internal type string
+     */
     public getInternalPropertyType(propertyName: string, propertyValue: any): string {
         const obsidianType = this.propertyTypeService.getValuePropertyType(propertyName, propertyValue);
         return this.convertFromObsidianType(obsidianType);
@@ -41,6 +50,11 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
         
         // Initialize the Property Type Service
         this.propertyTypeService = new PropertyTypeService(this.app);
+
+        // Defer vault event handling to onLayoutReady to ensure Obsidian is fully loaded
+        this.app.workspace.onLayoutReady(() => {
+            this.registerVaultEvents();
+        });
 
         // Add command to open the property manager
         this.addCommand({
@@ -59,7 +73,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                 const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
                 if (activeView) {
                     if (!checking) {
-                        new TemplateApplicationModal(this.app, this, [activeView.file]).open();
+                        new TemplateApplicationModal(this.app, this, activeView.file ? [activeView.file] : []).open();
                     }
                     return true;
                 }
@@ -100,6 +114,22 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
         this.addSettingTab(new YAMLPropertyManagerSettingTab(this.app, this));
     }
 
+    /**
+     * Register vault-related events
+     * Separated to allow deferring to onLayoutReady
+     */
+    private registerVaultEvents(): void {
+        // Register any vault events here
+        this.registerEvent(
+            this.app.vault.on('modify', (file) => {
+                if (file instanceof TFile && file.extension === 'md') {
+                    // Clear cache for the modified file
+                    this.propertyCache.delete(file.path);
+                }
+            })
+        );
+    }
+
     async loadSettings() {
         const loadedData = await this.loadData();
         this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
@@ -111,7 +141,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             
             this.settings.templatePaths = [{
                 type: 'file',
-                path: loadedData.defaultTemplateFilePath,
+                path: normalizePath(loadedData.defaultTemplateFilePath),
                 includeSubdirectories: false
             }];
             
@@ -131,20 +161,26 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
     addToRecentTemplates(templatePath: string) {
         if (!templatePath) return;
         
+        // Normalize the path first
+        const normalizedPath = normalizePath(templatePath);
+        
         // Get recent templates or initialize if doesn't exist
         const recentTemplates = this.settings.recentTemplates || [];
         
+        // Normalize all paths for consistent comparison
+        const normalizedRecentTemplates = recentTemplates.map(path => normalizePath(path));
+        
         // Remove if already in the list (to move to the top)
-        const existingIndex = recentTemplates.indexOf(templatePath);
+        const existingIndex = normalizedRecentTemplates.indexOf(normalizedPath);
         if (existingIndex > -1) {
             recentTemplates.splice(existingIndex, 1);
         }
         
         // Add to the beginning of the list
-        recentTemplates.unshift(templatePath);
+        recentTemplates.unshift(normalizedPath);
         
-        // Limit to 10 recent templates
-        this.settings.recentTemplates = recentTemplates.slice(0, 10);
+        // Limit to max number of recent templates
+        this.settings.recentTemplates = recentTemplates.slice(0, this.settings.maxRecentTemplates || 10);
         
         // Save settings
         this.saveSettings();
@@ -157,16 +193,19 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
         
         try {
             for (const templatePath of this.settings.templatePaths) {
+                // Normalize the path first
+                const normalizedPath = normalizePath(templatePath.path);
+                
                 if (templatePath.type === 'file') {
                     // Handle individual file
-                    const file = this.app.vault.getAbstractFileByPath(templatePath.path);
+                    const file = this.app.vault.getAbstractFileByPath(normalizedPath);
                     if (file instanceof TFile && file.extension === 'md' && !processedPaths.has(file.path)) {
                         templates.push(file);
                         processedPaths.add(file.path);
                     }
                 } else {
                     // Handle directory
-                    const folder = this.app.vault.getAbstractFileByPath(templatePath.path);
+                    const folder = this.app.vault.getAbstractFileByPath(normalizedPath);
                     if (folder && folder instanceof TFolder) {
                         const filesInFolder = await this.getTemplateFilesFromFolder(
                             folder, 
@@ -256,37 +295,23 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
     // Apply properties to a file
     async applyProperties(file: TFile, properties: Record<string, any>, preserveExisting: boolean = false) {
         try {
-            // Read the file content
-            const content = await this.app.vault.read(file);
-            
-            // Check if file already has frontmatter
-            const hasFrontMatter = content.startsWith('---\n');
-            
-            // If preserving existing properties, merge with existing ones
-            if (preserveExisting && hasFrontMatter) {
-                const existingProperties = this.app.metadataCache.getFileCache(file)?.frontmatter || {};
-                properties = { ...existingProperties, ...properties };
-            }
-            
-            // Format properties as YAML
-            const yamlProperties = Object.entries(properties)
-                .map(([key, value]) => `${key}: ${formatYamlValue(value)}`)
-                .join('\n');
-            
-            let newContent = '';
-            
-            if (hasFrontMatter) {
-                // Replace existing frontmatter
-                const endOfFrontMatter = content.indexOf('---\n', 4) + 4;
-                const fileContent = content.substring(endOfFrontMatter);
-                newContent = `---\n${yamlProperties}\n---\n${fileContent}`;
-            } else {
-                // Add new frontmatter
-                newContent = `---\n${yamlProperties}\n---\n\n${content}`;
-            }
-            
-            // Write the new content
-            await this.app.vault.modify(file, newContent);
+            // Use Obsidian's fileManager.processFrontMatter for atomic frontmatter modification
+            await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+                // If preserving existing properties, don't modify them
+                if (preserveExisting) {
+                    // Only add properties that don't already exist
+                    for (const [key, value] of Object.entries(properties)) {
+                        if (!(key in frontmatter)) {
+                            frontmatter[key] = value;
+                        }
+                    }
+                } else {
+                    // Replace all properties
+                    for (const [key, value] of Object.entries(properties)) {
+                        frontmatter[key] = value;
+                    }
+                }
+            });
             
             return true;
         } catch (error) {
@@ -298,23 +323,23 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
 
     // Set a single property on a file
     async setProperty(filePath: string, propertyName: string, propertyValue: any): Promise<boolean> {
-        const file = this.app.vault.getAbstractFileByPath(filePath);
+        const normalizedPath = normalizePath(filePath);
+        const file = this.app.vault.getAbstractFileByPath(normalizedPath);
+        
         if (!(file instanceof TFile)) {
             return false;
         }
         
         try {
-            // Get existing properties
-            const existingProperties = await this.parseFileProperties(file);
+            // Use fileManager.processFrontMatter for atomic property modification
+            await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+                frontmatter[propertyName] = propertyValue;
+            });
             
-            // Update the property
-            const updatedProperties = {
-                ...existingProperties,
-                [propertyName]: propertyValue
-            };
+            // Clear cache for the modified file
+            this.propertyCache.delete(file.path);
             
-            // Apply the updated properties
-            return await this.applyProperties(file, updatedProperties);
+            return true;
         } catch (error) {
             console.error(`Error setting property for ${filePath}:`, error);
             return false;
@@ -324,6 +349,8 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
     async findFilesByProperty(propertyName: string, propertyValue: any): Promise<TFile[]> {
         const files = this.app.vault.getMarkdownFiles();
         const matchingFiles: TFile[] = [];
+        
+        propertyName = propertyName.trim(); // Trim the property name for consistency
         
         for (const file of files) {
             try {
@@ -377,28 +404,55 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                 // Skip the template file itself
                 if (file.path === templateFile.path) continue;
                 
-                // For consistent properties, check if all files have the same value
-                if (consistentProperties.length > 0) {
-                    const fileProperties = await this.parseFileProperties(file);
-                    
-                    // Remove any consistent properties that don't match
-                    for (const key of consistentProperties) {
-                        // Only check if the property is in the template and target file
-                        if (key in filteredProperties && key in fileProperties) {
-                            const templateValue = filteredProperties[key];
-                            const fileValue = fileProperties[key];
+                try {
+                    // For consistent properties, check if all files have the same value
+                    if (consistentProperties.length > 0) {
+                        // Use processFrontMatter for atomic operations
+                        await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+                            const fileProperties = frontmatter || {};
                             
-                            // If values don't match, remove from properties to apply
-                            if (JSON.stringify(templateValue) !== JSON.stringify(fileValue)) {
-                                delete filteredProperties[key];
+                            // Create a copy of filteredProperties to modify
+                            const propertiesForThisFile = {...filteredProperties};
+                            
+                            // Remove any consistent properties that don't match
+                            for (const key of consistentProperties) {
+                                // Only check if the property is in the template and target file
+                                if (key in propertiesForThisFile && key in fileProperties) {
+                                    const templateValue = propertiesForThisFile[key];
+                                    const fileValue = fileProperties[key];
+                                    
+                                    // If values don't match, remove from properties to apply
+                                    if (JSON.stringify(templateValue) !== JSON.stringify(fileValue)) {
+                                        delete propertiesForThisFile[key];
+                                    }
+                                }
                             }
-                        }
+                            
+                            // Apply the filtered properties
+                            for (const [key, value] of Object.entries(propertiesForThisFile)) {
+                                frontmatter[key] = value;
+                            }
+                        });
+                        
+                        successCount++;
+                    } else {
+                        // No consistent properties check needed, just apply all filtered properties
+                        await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+                            for (const [key, value] of Object.entries(filteredProperties)) {
+                                frontmatter[key] = value;
+                            }
+                        });
+                        
+                        successCount++;
                     }
+                    
+                    // Clear cache for the modified file
+                    this.propertyCache.delete(file.path);
+                    
+                } catch (error) {
+                    console.error(`Error applying template to ${file.path}:`, error);
+                    // Continue with other files
                 }
-                
-                // Apply the filtered properties, preserving existing ones
-                const success = await this.applyProperties(file, filteredProperties, true);
-                if (success) successCount++;
             }
             
             new Notice(`Applied template to ${successCount} of ${targetFiles.length} ${targetFiles.length === 1 ? 'file' : 'files'}`);
@@ -411,21 +465,21 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
     }
     
     // Debug logging helper
-    public debug(message: string, ...data: any[]) {
+    public debug(message: string, ...data: any[]): void {
         console.log(`[YAML Property Manager] ${message}`, ...data);
     }
     
     // Navigation method to move between modals
     navigateToModal(currentModal: Modal, targetModalType: string, ...args: any[]) {
         // Add debug logging
-        console.log(`Navigating from current modal to ${targetModalType}`);
+        this.debug(`Navigating from current modal to ${targetModalType}`);
         
         // Close current modal
         currentModal.close();
         
         // Handle special case for file selection
         if (targetModalType === 'bulkEdit') {
-            console.log("Handling bulkEdit navigation");
+            this.debug("Handling bulkEdit navigation");
             
             // If files are explicitly provided, use them
             if (Array.isArray(args[0]) && args[0].length > 0) {
@@ -449,17 +503,17 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
         // Handle other modal types
         switch (targetModalType) {
             case 'main':
-                console.log("Opening main modal");
+                this.debug("Opening main modal");
                 new PropertyManagerModal(this.app, this).open();
                 break;
             case 'template':
-                console.log("Handling template modal navigation");
+                this.debug("Handling template modal navigation");
                 if (this.selectedFiles.length === 0 && Array.isArray(args[0]) && args[0].length > 0) {
                     this.selectedFiles = args[0];
                 }
                 
                 if (this.selectedFiles.length > 0) {
-                    console.log(`Opening template modal with ${this.selectedFiles.length} files`);
+                    this.debug(`Opening template modal with ${this.selectedFiles.length} files`);
                     new TemplateApplicationModal(this.app, this, [...this.selectedFiles]).open();
                 } else {
                     new Notice('Please select files first');
@@ -469,6 +523,8 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             case 'batchSelect':
                 if (typeof args[0] === 'function') {
                     const callback = args[0];
+                    
+                    // Create browser modal with proper icon buttons
                     const browser = new BrowserModal(
                         this.app, 
                         (result) => {
@@ -488,7 +544,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                 }
                 break;
             default:
-                console.log(`Unknown modal type: ${targetModalType}`);
+                this.debug(`Unknown modal type: ${targetModalType}`);
         }
     }
 
@@ -501,13 +557,6 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             case "date": return "date";
             case "datetime": return "datetime";
             case "list": return "list";
-            case "multi-select": return "list";
-            case "file": return "text";
-            case "relation": return "text";
-            case "url": return "text";
-            case "email": return "text";
-            case "phone": return "text";
-            case "select": return "text";
             default: return "text";
         }
     }
@@ -539,12 +588,10 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
 
     onunload() {
         // Log unloading message
-        console.log('Unloading YAML Property Manager plugin');
+        this.debug('Unloading YAML Property Manager plugin');
         
         // Clear data structures to prevent memory leaks
         this.propertyCache.clear();
         this.selectedFiles = [];
-        
-        // No need to try to access methods that don't exist
     }
 }

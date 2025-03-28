@@ -1,16 +1,22 @@
 {
   "name": "yaml-property-manager",
-  "version": "1.0.0",
-  "main": "index.js",
+  "version": "0.1.0",
+  "main": "main.js",
   "scripts": {
     "build": "rollup -c",
     "dev": "rollup -c -w"
   },
   "type": "module",
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "keywords": [
+    "obsidian",
+    "obsidian-plugin",
+    "yaml",
+    "frontmatter",
+    "properties"
+  ],
+  "author": "Robert Aikler-L.",
+  "license": "MIT",
+  "description": "Manage YAML frontmatter properties across your markdown files with consistency and ease.",
   "devDependencies": {
     "@rollup/plugin-commonjs": "^28.0.2",
     "@rollup/plugin-node-resolve": "^16.0.0",

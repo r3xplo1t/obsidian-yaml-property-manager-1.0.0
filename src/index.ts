@@ -1,7 +1,10 @@
-// Export utility functions
-export { formatYamlValue, formatInputValue, formatValuePreview } from './propertyFormatters';
+/**
+ * YAML Property Manager - Index exports
+ * Organized export structure following Obsidian plugin patterns
+ */
 
-// Export models and constants
+// -------- Models & Types --------
+// Core interfaces and types
 export type { 
     YAMLPropertyManagerSettings, 
     TemplatePath,
@@ -9,23 +12,38 @@ export type {
     TreeNode 
 } from './interfaces';
 
-export { 
-    PROPERTY_TYPES, 
-    DEFAULT_SETTINGS 
-} from './constants';
-
-// Export all from the unified PropertyTypeService
-export { PropertyTypeService } from './PropertyTypeService';
+// Property-related types
 export type { 
     PropertyWithType,
     ObsidianPropertyType,
     ObsidianPropertyDefinition
 } from './PropertyTypeService';
 
-// Export modals - now we can include them
+// Modal result types
+export type { BrowserModalResult } from './modals/BrowserModal';
+
+// -------- Constants & Configuration --------
+export { 
+    PROPERTY_TYPES, 
+    DEFAULT_SETTINGS 
+} from './constants';
+
+// -------- Services --------
+// Property type management service
+export { PropertyTypeService } from './PropertyTypeService';
+
+// -------- Utilities --------
+// YAML formatting utilities
+export { 
+    formatYamlValue, 
+    formatInputValue, 
+    formatValuePreview 
+} from './propertyFormatters';
+
+// -------- UI Components --------
+// Main plugin modals
 export { PropertyManagerModal } from './modals/PropertyManagerModal';
 export { TemplateApplicationModal } from './modals/TemplateApplicationModal';
 export { BrowserModal } from './modals/BrowserModal';
-export type { BrowserModalResult } from './modals/BrowserModal';
 export { BulkPropertyEditorModal } from './modals/BulkPropertyEditorModal';
 export { YAMLPropertyManagerSettingTab } from './modals/YAMLPropertyManagerSettingTab';

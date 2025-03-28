@@ -8,12 +8,19 @@ export default {
     dir: '.',
     sourcemap: 'inline',
     format: 'cjs',
-    exports: 'default'
+    exports: 'default',
+    sourcemapExcludeSources: true
   },
   external: ['obsidian'],
   plugins: [
-    typescript(),
-    nodeResolve({ browser: true }),
-    commonjs(),
+    typescript({
+      tsconfig: './tsconfig.json',
+      sourceMap: true,
+      inlineSources: true
+    }),
+    nodeResolve({
+      browser: true
+    }),
+    commonjs()
   ]
-};
+}
