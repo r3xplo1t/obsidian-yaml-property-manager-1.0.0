@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, Notice, ButtonComponent, Modal } from 'obsidian';
+import { App, PluginSettingTab, Setting, Notice, ButtonComponent, Modal, setTooltip } from 'obsidian';
 import YAMLPropertyManagerPlugin from '../../main';
 import { BrowserModal } from './BrowserModal';
 import { TreeNode } from '../interfaces';
@@ -6,9 +6,6 @@ import { TreeNode } from '../interfaces';
 export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
     plugin: YAMLPropertyManagerPlugin;
     private expandedPaths: Set<string> = new Set();
-    private tooltips: {element: HTMLElement, tooltip: HTMLElement}[] = [];
-    private hasScrollHandler: boolean = false;
-    private titleObservers: Map<HTMLElement, MutationObserver> | null = null;
     private rootNode: TreeNode;
 
     constructor(app: App, plugin: YAMLPropertyManagerPlugin) {
@@ -19,12 +16,6 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
         if (this.plugin.settings.expandedTemplatePaths) {
             this.expandedPaths = new Set(this.plugin.settings.expandedTemplatePaths);
         }
-    }
-
-    // Override hide method to ensure tooltips are cleaned up
-    hide() {
-        this.cleanup();
-        super.hide();
     }
 
     private async removeTemplateWithScrollPreservation(templatePathIndex: number | undefined, node: TreeNode, nodeElement: HTMLElement): Promise<void> {
@@ -112,20 +103,6 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
         const existingContainer = document.querySelector('.yaml-template-paths');
         const savedScrollPosition = existingContainer ? (existingContainer as HTMLElement).scrollTop : 0;
         
-        // Remove any ghost elements or tooltips 
-        document.querySelectorAll('.yaml-custom-tooltip--visible').forEach(el => el.remove());
-        
-        // Remove stale tooltip-related attributes
-        document.querySelectorAll('[data-has-tooltip-listeners="true"]').forEach(el => {
-            if (el instanceof HTMLElement) {
-                delete el.dataset.hasTooltipListeners;
-                delete el.dataset.tooltipId;
-            }
-        });
-        
-        // Clean up any existing tooltips first
-        this.cleanupTooltips();
-        
         const { containerEl } = this;
         containerEl.empty();
         
@@ -159,13 +136,15 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
         new Setting(containerEl)
             .setName('Template Selection')
             .setDesc('Browse and select template files or folders to use with YAML Property Manager')
-            .addButton(button => button
-                .setButtonText('Browse and Select Templates')
-                .setCta()
-                .onClick(() => {
-                    new BrowserModal(
-                        this.app, 
-                        async (result) => {
+            .addButton(button => {
+                // Get the button element after setting up the button
+                const buttonEl = button
+                    .setButtonText('Browse and Select Templates')
+                    .setCta()
+                    .onClick(() => {
+                        new BrowserModal(
+                            this.app, 
+                            async (result) => {
                             // Process selected files and folders
                             let countAdded = 0;
                             let countRemoved = 0;
@@ -245,15 +224,21 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
                                 new Notice('No changes made to your template list');
                             }
                         },
-                    {
-                        title: "Select Template Files and Directories",
-                        description: "Select files to use as templates, or select entire directories. Check the box to include a file or folder.",
-                        confirmButtonText: "Apply Selected Files & Folders",
-                        existingPathsToHighlight: this.plugin.settings.templatePaths
-                    }
-                ).open();
-            })
-        );
+                        {
+                            title: "Select Template Files and Directories",
+                            description: "Select files to use as templates, or select entire directories. Check the box to include a file or folder.",
+                            confirmButtonText: "Apply Selected Files & Folders",
+                            existingPathsToHighlight: this.plugin.settings.templatePaths
+                        }
+                    ).open();
+                })
+                .buttonEl;  // Get the button element
+                
+            // Add Obsidian tooltip to the button
+            setTooltip(buttonEl, 'Select template files and folders');
+            
+            return button;
+        });
         
         // Max recent templates
         new Setting(containerEl)
@@ -506,7 +491,12 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
             cls: 'yaml-template-node__name'
         });
 
-        this.setupCustomTooltip(nameEl, node.name);
+        setTooltip(nameEl, node.name);
+        
+        setTooltip(nameEl, node.name, {
+            placement: 'bottom',
+            delay: 300
+        });
 
         // Create a span to hold the button
         const btnContainer = headerEl.createSpan({
@@ -571,7 +561,7 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
             }
             
             // Add expand/collapse handler to the header
-            headerEl.addEventListener('click', (e) => {
+            headerEl.addEventListener('click', (e: MouseEvent) => {
                 // Only toggle if not clicking a button or inside the button container
                 if (!(e.target instanceof HTMLElement) || !e.target.closest('.yaml-template-node__actions')) {
                     const isCollapsed = childrenEl.hasClass('yaml-template-node__children--collapsed');
@@ -619,13 +609,13 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
                                 const emptyMessage = childrenEl.createDiv({
                                     cls: 'yaml-empty-folder-message'
                                 });
-
+            
                                 // Add file icon
                                 const iconSpan = emptyMessage.createSpan({
                                     cls: 'yaml-empty-folder-message-icon'
                                 });
                                 iconSpan.innerHTML = this.getSvgIcon('file');
-
+            
                                 // Add text
                                 emptyMessage.createSpan({
                                     text: 'Empty folder'
@@ -656,272 +646,6 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
         } else {
             return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-file"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg>';
         }
-    }
-
-    private setupCustomTooltip(element: HTMLElement, tooltipText: string) {
-        try {
-            // Remove titles from element
-            this.removeAllTitles(element);
-            
-            // Check for existing tooltip
-            const existingTooltipIndex = this.tooltips.findIndex(t => t.element === element);
-            if (existingTooltipIndex >= 0) {
-                const existingTooltip = this.tooltips[existingTooltipIndex].tooltip;
-                existingTooltip.remove();
-                this.tooltips.splice(existingTooltipIndex, 1);
-            }
-            
-            // Create tooltip element
-            const tooltip = document.createElement('div');
-            tooltip.addClass('yaml-custom-tooltip');
-            tooltip.textContent = tooltipText;
-            tooltip.setAttribute('role', 'tooltip');
-            tooltip.setAttribute('aria-hidden', 'true');
-            
-            // Generate unique ID
-            const uniqueId = `tooltip-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
-            element.setAttribute('aria-describedby', uniqueId);
-            tooltip.id = uniqueId;
-            
-            // Store reference for cleanup
-            this.tooltips.push({element, tooltip});
-            
-            // Helper to show tooltip
-            const showTooltip = () => {
-                // Re-remove titles
-                this.removeAllTitles(element);
-                
-                // Hide any other visible tooltips
-                this.hideAllTooltips();
-                
-                // Add to DOM when showing
-                if (!tooltip.parentNode) {
-                    document.body.appendChild(tooltip);
-                }
-                
-                // Calculate position
-                const rect = element.getBoundingClientRect();
-                const viewportHeight = window.innerHeight;
-                const viewportWidth = window.innerWidth;
-                
-                // Position horizontally
-                tooltip.style.left = `${Math.min(rect.left, viewportWidth - 250)}px`;
-                
-                // Position vertically - prefer below but go above if not enough space
-                const tooltipHeight = 40; // Approximate height before rendering
-                const spaceBelow = viewportHeight - rect.bottom;
-                
-                if (spaceBelow >= tooltipHeight) {
-                    // Position below
-                    tooltip.style.top = `${rect.bottom + 5}px`;
-                } else {
-                    // Position above
-                    tooltip.style.top = `${rect.top - tooltipHeight - 5}px`;
-                }
-                
-                // Make visible
-                tooltip.addClass('yaml-custom-tooltip--visible');
-                tooltip.setAttribute('aria-hidden', 'false');
-                
-                // Adjust position after rendering if needed
-                setTimeout(() => {
-                    const tooltipRect = tooltip.getBoundingClientRect();
-                    
-                    // Adjust horizontal position if clipped
-                    if (tooltipRect.right > viewportWidth) {
-                        tooltip.style.left = `${viewportWidth - tooltipRect.width - 10}px`;
-                    }
-                    
-                    // Adjust vertical position if clipped
-                    if (tooltipRect.bottom > viewportHeight) {
-                        tooltip.style.top = `${rect.top - tooltipRect.height - 5}px`;
-                    }
-                    
-                    if (tooltipRect.top < 0) {
-                        tooltip.style.top = `${rect.bottom + 5}px`;
-                    }
-                }, 0);
-            };
-            
-            // Helper to hide tooltip
-            const hideTooltip = () => {
-                tooltip.removeClass('yaml-custom-tooltip--visible');
-                tooltip.setAttribute('aria-hidden', 'true');
-                
-                // Remove from DOM after animation
-                setTimeout(() => {
-                    if (tooltip.parentNode && !tooltip.hasClass('yaml-custom-tooltip--visible')) {
-                        tooltip.remove();
-                    }
-                }, 200);
-            };
-            
-            // Setup observer to prevent title attributes from being added
-            this.setupTitleObserver(element);
-            
-            // Clean up existing listeners
-            const newElement = this.removeExistingListeners(element);
-            
-            // Add event listeners to the (possibly new) element
-            newElement.addEventListener('mouseenter', showTooltip);
-            newElement.addEventListener('mouseleave', hideTooltip);
-            newElement.addEventListener('touchstart', showTooltip, { passive: true });
-            
-            // Add data attributes for CSS targeting
-            newElement.dataset.hasTooltipListeners = 'true';
-            newElement.dataset.tooltipId = uniqueId;
-            
-            // Ensure the global scroll handler exists
-            if (!this.hasScrollHandler) {
-                document.addEventListener('scroll', this.hideAllTooltips.bind(this), { passive: true });
-                this.hasScrollHandler = true;
-            }
-            
-            // Return the possibly new element
-            return newElement;
-        } catch (error) {
-            console.error('Error setting up tooltip:', error);
-            return element;
-        }
-    }
-
-    private removeAllTitles(element: HTMLElement) {
-        // Remove title from element
-        element.removeAttribute('title');
-        element.removeAttribute('aria-label');
-        element.removeAttribute('data-tooltip');
-        
-        // Remove from all parent elements up to 5 levels
-        let parent = element.parentElement;
-        let depth = 0;
-        while (parent && depth < 5) {
-            parent.removeAttribute('title');
-            parent.removeAttribute('aria-label');
-            parent.removeAttribute('data-tooltip');
-            parent = parent.parentElement;
-            depth++;
-        }
-        
-        // Remove from all child elements
-        const children = element.querySelectorAll('*');
-        children.forEach(child => {
-            if (child instanceof HTMLElement) {
-                child.removeAttribute('title');
-                child.removeAttribute('aria-label');
-                child.removeAttribute('data-tooltip');
-            }
-        });
-    }
-
-    private setupTitleObserver(element: HTMLElement) {
-        // Clean up existing observer
-        if (this.titleObservers && this.titleObservers.has(element)) {
-            this.titleObservers.get(element)?.disconnect();
-            this.titleObservers.delete(element);
-        }
-        
-        // Create new observer
-        const titleObserver = new MutationObserver((mutations) => {
-            let needsCleanup = false;
-            
-            mutations.forEach(mutation => {
-                if (mutation.type === 'attributes' && 
-                   (mutation.attributeName === 'title' || 
-                    mutation.attributeName === 'aria-label' ||
-                    mutation.attributeName === 'data-tooltip')) {
-                    needsCleanup = true;
-                }
-            });
-            
-            if (needsCleanup) {
-                this.removeAllTitles(element);
-            }
-        });
-        
-        // Start observing
-        titleObserver.observe(element, {
-            attributes: true,
-            attributeFilter: ['title', 'aria-label', 'data-tooltip']
-        });
-        
-        // Store for cleanup
-        if (!this.titleObservers) this.titleObservers = new Map();
-        this.titleObservers.set(element, titleObserver);
-    }
-
-    private removeExistingListeners(element: HTMLElement) {
-        // If already has listeners, clone and replace to remove them
-        if (element.dataset.hasTooltipListeners === 'true') {
-            const parent = element.parentNode;
-            if (parent) {
-                const clone = element.cloneNode(true) as HTMLElement;
-                clone.textContent = element.textContent;
-                
-                // Copy over dataset properties
-                Object.keys(element.dataset).forEach(key => {
-                    if (key !== 'hasTooltipListeners' && key !== 'tooltipId') {
-                        clone.dataset[key] = element.dataset[key] || '';
-                    }
-                });
-                
-                // Replace the element
-                parent.replaceChild(clone, element);
-                
-                // Return the new element
-                return clone;
-            }
-        }
-        return element;
-    }
-
-    private hideAllTooltips() {
-        this.tooltips.forEach(({tooltip}) => {
-            tooltip.removeClass('yaml-custom-tooltip--visible');
-            tooltip.setAttribute('aria-hidden', 'true');
-            
-            // Remove from DOM to reduce elements
-            setTimeout(() => {
-                if (tooltip.parentNode && !tooltip.hasClass('yaml-custom-tooltip--visible')) {
-                    tooltip.remove();
-                }
-            }, 200);
-        });
-    }
-
-    private cleanupTooltips() {
-        // First hide all tooltips
-        this.hideAllTooltips();
-        
-        // Then clean up each tooltip and its associated element
-        this.tooltips.forEach(({element, tooltip}) => {
-            // Remove the tooltip element
-            if (tooltip.parentNode) {
-                tooltip.remove();
-            }
-            
-            // Remove attributes from the element
-            if (element) {
-                element.removeAttribute('aria-describedby');
-                
-                // Clear dataset properties
-                if (element.dataset) {
-                    delete element.dataset.hasTooltipListeners;
-                    delete element.dataset.tooltipId;
-                }
-            }
-            
-            // Disconnect any observers
-            if (this.titleObservers && this.titleObservers.has(element)) {
-                const observer = this.titleObservers.get(element);
-                if (observer) {
-                    observer.disconnect();
-                    this.titleObservers.delete(element);
-                }
-            }
-        });
-        
-        // Clear the tooltips array
-        this.tooltips = [];
     }
 
     private addResetButton(containerEl: HTMLElement) {
@@ -985,21 +709,4 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
                 })
             );
     } 
-
-
-    public cleanup() {
-        this.cleanupTooltips();
-        
-        // Clean up global scroll handler
-        if (this.hasScrollHandler) {
-            document.removeEventListener('scroll', this.hideAllTooltips.bind(this));
-            this.hasScrollHandler = false;
-        }
-        
-        // Disconnect all remaining observers
-        if (this.titleObservers) {
-            this.titleObservers.forEach(observer => observer.disconnect());
-            this.titleObservers.clear();
-        }
-    }
 }

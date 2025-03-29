@@ -1856,32 +1856,6 @@
   font-size: var(--font-ui-smaller) !important;
 }
 
-.tooltip-extension {
-  display: none !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-
-body:not(.plugin-settings) .tooltip:not(.slider-tooltip) {
-  display: none !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-
-/* Override tooltip hiding in settings */
-.yaml-settings-tab .tooltip {
-  display: block !important;
-  opacity: 1 !important;
-  pointer-events: none !important;
-  z-index: 1000 !important;
-  background-color: var(--background-primary) !important;
-  border: 1px solid var(--background-modifier-border) !important;
-  color: var(--text-normal) !important;
-  padding: 4px 8px !important;
-  border-radius: 4px !important;
-  box-shadow: var(--shadow-s) !important;
-}
-
 /* ----- 8.3 Template Paths Container ----- */
 .yaml-template-paths {
   background-color: var(--background-primary);
@@ -2099,57 +2073,6 @@ body:not(.plugin-settings) .tooltip:not(.slider-tooltip) {
 /* Hide item count badges - keeping the selector for backward compatibility */
 .yaml-template-item-count {
   display: none;
-}
-
-/* Custom tooltip styling */
-.yaml-custom-tooltip {
-  position: fixed;
-  z-index: 99999;
-  background-color: var(--background-primary);
-  color: var(--text-normal);
-  padding: 8px 12px;
-  border-radius: 6px;
-  font-size: var(--font-ui-small);
-  box-shadow: var(--shadow-s);
-  max-width: 90vw;
-  word-wrap: break-word;
-  pointer-events: none;
-  opacity: 0;
-  transform: translateY(-5px) translateZ(0);
-  will-change: opacity, transform;
-  transition: opacity 0.15s ease, transform 0.15s ease;
-  border: 1px solid var(--background-modifier-border);
-}
-
-.yaml-custom-tooltip--visible {
-  opacity: 1;
-  transform: translateY(0) translateZ(0);
-}
-
-/* Disable native tooltips */
-[data-tooltip-id],
-[data-has-tooltip-listeners="true"],
-.yaml-template-node__name {
-  position: relative;
-}
-
-[data-tooltip-id]::before,
-[data-tooltip-id]::after,
-[data-has-tooltip-listeners="true"]::before,
-[data-has-tooltip-listeners="true"]::after,
-.yaml-template-node__name::before,
-.yaml-template-node__name::after {
-  display: none !important;
-  content: none !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-
-/* Override Obsidian's tooltip styles */
-.tooltip, .tooltip-extension {
-  display: none !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
 }
 
 /* Responsive styles */
