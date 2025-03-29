@@ -485,7 +485,7 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
                 : 'yaml-template-node__header',
             attr: {
                 'role': node.isDirectory ? 'button' : 'none',
-                'aria-expanded': node.isDirectory ? this.expandedPaths.has(node.path).toString() : undefined
+                ...(node.isDirectory ? { 'aria-expanded': this.expandedPaths.has(node.path).toString() } : {})
             }
         });
         

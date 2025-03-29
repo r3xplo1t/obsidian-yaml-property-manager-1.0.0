@@ -515,8 +515,18 @@ export class BulkPropertyEditorModal extends Modal {
                     });
                     
                     // Determine which files to show
-                    let filesToShow = [];
-
+                    interface FileDisplayInfo {
+                        path: string;
+                        name: string;
+                        type?: string;
+                        value?: any;
+                        propertyWithType?: PropertyWithType;
+                        hasDifference?: boolean;
+                        isMissing?: boolean;
+                        file?: TFile; // Make this optional since it's not present in all objects
+                    }
+                    
+                    let filesToShow: FileDisplayInfo[] = [];
                     // Create a set of paths that have the property for quick lookup
                     const propertyFilePaths = new Set(stats.files.map(file => file.path));
 
@@ -578,7 +588,7 @@ export class BulkPropertyEditorModal extends Modal {
                                 cls: 'yaml-property-file-type'
                             });
                             fileTypeEl.createEl('span', {
-                                text: `Type: ${this.plugin.propertyTypeService.getPropertyTypeDisplayName(file.type)}`,
+                                text: `Type: ${this.plugin.propertyTypeService.getPropertyTypeDisplayName(file.type ?? 'text')}`,
                                 cls: 'yaml-property-type-text'
                             });
                             

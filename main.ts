@@ -295,21 +295,24 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
     // Apply properties to a file
     async applyProperties(file: TFile, properties: Record<string, any>, preserveExisting: boolean = false) {
         try {
-            // Use Obsidian's fileManager.processFrontMatter for atomic frontmatter modification
+            // Use Obsidian's built-in processFrontMatter method for consistent YAML formatting
             await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
-                // If preserving existing properties, don't modify them
                 if (preserveExisting) {
-                    // Only add properties that don't already exist
-                    for (const [key, value] of Object.entries(properties)) {
-                        if (!(key in frontmatter)) {
-                            frontmatter[key] = value;
-                        }
-                    }
-                } else {
-                    // Replace all properties
-                    for (const [key, value] of Object.entries(properties)) {
+                    // Merge with existing properties
+                    Object.entries(properties).forEach(([key, value]) => {
                         frontmatter[key] = value;
-                    }
+                    });
+                } else {
+                    // Replace frontmatter entirely
+                    // First, clear all existing keys
+                    Object.keys(frontmatter).forEach(key => {
+                        delete frontmatter[key];
+                    });
+                    
+                    // Then add the new properties
+                    Object.entries(properties).forEach(([key, value]) => {
+                        frontmatter[key] = value;
+                    });
                 }
             });
             
@@ -323,21 +326,16 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
 
     // Set a single property on a file
     async setProperty(filePath: string, propertyName: string, propertyValue: any): Promise<boolean> {
-        const normalizedPath = normalizePath(filePath);
-        const file = this.app.vault.getAbstractFileByPath(normalizedPath);
-        
+        const file = this.app.vault.getAbstractFileByPath(filePath);
         if (!(file instanceof TFile)) {
             return false;
         }
         
         try {
-            // Use fileManager.processFrontMatter for atomic property modification
+            // Use Obsidian's processFrontMatter for atomic and consistent updates
             await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
                 frontmatter[propertyName] = propertyValue;
             });
-            
-            // Clear cache for the modified file
-            this.propertyCache.delete(file.path);
             
             return true;
         } catch (error) {

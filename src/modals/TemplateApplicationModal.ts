@@ -947,25 +947,84 @@ export class TemplateApplicationModal extends Modal {
                 // Create container for array items directly in the value box
                 const arrayItemsContainer = valueBox.createDiv({ cls: 'yaml-property-array-items' });
                 
-                // Add all array items
+                // Add all array items horizontally without numbering
                 value.forEach((item, index) => {
                     // Format the display value
                     let displayValue = String(item);
-                    if (typeof item === 'string') {
-                        displayValue = displayValue.replace(/^["'](.*)["']$/, '$1');
-                        if (displayValue.length > 40) {
-                            displayValue = displayValue.substring(0, 37) + '...';
-                        }
-                    }
-                    
                     const itemEl = arrayItemsContainer.createEl('div', {
-                        text: `${index + 1}. ${displayValue}`,
                         cls: 'yaml-property-array-item'
                     });
                     
                     // Items beyond the third one get the expanded class
                     if (index >= 3) {
                         itemEl.addClass('yaml-property-array-item--expanded');
+                    }
+                    
+                    // Handle different types of array items
+                    if (typeof item === 'string') {
+                        // Check if it's a file link [[file]]
+                        const fileMatch = item.match(/^\[\[(.+?)\]\]$/);
+                        if (fileMatch) {
+                            // This is a file link
+                            itemEl.addClass('yaml-property-array-item--clickable');
+                            itemEl.textContent = fileMatch[1];
+                            
+                            const fileName = fileMatch[1];
+                            const file = this.app.metadataCache.getFirstLinkpathDest(fileName, '');
+                            
+                            if (file) {
+                                if (file.extension === 'md') {
+                                    itemEl.setAttribute('data-link-type', 'markdown');
+                                } else {
+                                    itemEl.setAttribute('data-link-type', 'file');
+                                }
+                            } else {
+                                // File not found but still a link
+                                itemEl.setAttribute('data-link-type', 'markdown');
+                            }
+                            
+                            // Make it clickable
+                            itemEl.addEventListener('click', (event) => {
+                                event.preventDefault();
+                                const file = this.app.metadataCache.getFirstLinkpathDest(fileName, '');
+                                
+                                if (file) {
+                                    if (file.extension === 'md') {
+                                        // It's a markdown file - open in Obsidian
+                                        const leaf = this.app.workspace.getLeaf('window');
+                                        leaf.openFile(file);
+                                    } else {
+                                        // For non-markdown files
+                                        // Get the URL for the file - this works for both desktop and mobile
+                                        const fileUrl = this.app.vault.getResourcePath(file);
+                                        
+                                        // Open the URL - this will use the appropriate system handler
+                                        window.open(fileUrl, '_blank');
+                                    }
+                                }
+                            });
+                        } else if (item.startsWith('http://') || item.startsWith('https://')) {
+                            // External URL
+                            itemEl.addClass('yaml-property-array-item--clickable');
+                            itemEl.textContent = item;
+                            itemEl.setAttribute('data-link-type', 'external');
+                            
+                            // Make it clickable to open in browser
+                            itemEl.addEventListener('click', (event) => {
+                                event.preventDefault();
+                                window.open(item, '_blank', 'noopener,noreferrer');
+                            });
+                        } else {
+                            // Regular string with quotation cleanup
+                            displayValue = displayValue.replace(/^["'](.*)["']$/, '$1');
+                            if (displayValue.length > 40) {
+                                displayValue = displayValue.substring(0, 37) + '...';
+                            }
+                            itemEl.textContent = displayValue;
+                        }
+                    } else {
+                        // For non-string items
+                        itemEl.textContent = displayValue;
                     }
                 });
             } else {

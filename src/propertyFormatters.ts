@@ -115,52 +115,36 @@ export function formatInputValue(value: any): string {
  * @param value - The value to format
  * @returns Formatted string for preview
  */
-export function formatValuePreview(value: any): string {
+export function formatValuePreview(value: any, propertyType?: string): string {
     if (value === null || value === undefined) {
         return 'null';
     }
 
     if (typeof value === 'string') {
+        // Handle special property types
+        if (propertyType) {
+            // For date/datetime types, don't add quotes
+            if (propertyType === 'date' || propertyType === 'datetime') {
+                return value;
+            }
+        }
+        
         // Truncate long strings
         if (value.length > 30) {
-            return `"${value.substring(0, 27)}..."`;
+            return `${value.substring(0, 27)}...`;
         }
-        return `"${value}"`;
+        
+        // Return string values without quotes unless they need escaping
+        return value;
     }
     
     if (Array.isArray(value)) {
         if (value.length === 0) return '[]';
-        
-        // Show array length for larger arrays
-        if (value.length > 3) {
-            return `[Array: ${value.length} items]`;
-        }
-        
-        // Show first few items for smaller arrays
-        return `[${value.slice(0, 3).map(item => {
-            if (typeof item === 'string') {
-                return item.length > 10 ? `"${item.substring(0, 8)}..."` : `"${item}"`;
-            }
-            return String(item);
-        }).join(', ')}]`;
+        return `[Array: ${value.length} items]`;
     }
     
     if (typeof value === 'object') {
-        const keys = Object.keys(value);
-        if (keys.length === 0) return '{}';
-        
-        // Show object size for larger objects
-        if (keys.length > 3) {
-            return `{Object: ${keys.length} properties}`;
-        }
-        
-        // Show first few properties for smaller objects
-        try {
-            const preview = keys.slice(0, 3).map(key => `${key}: ${formatShortValue(value[key])}`).join(', ');
-            return `{${preview}}`;
-        } catch (e) {
-            return '{Object}';
-        }
+        return '{Object}';
     }
     
     // For booleans, numbers, etc.
