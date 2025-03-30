@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, Notice, ButtonComponent, Modal, setTooltip } from 'obsidian';
+import { App, PluginSettingTab, Setting, Notice, ButtonComponent, Modal, setTooltip, setIcon } from 'obsidian';
 import YAMLPropertyManagerPlugin from '../../main';
 import { BrowserModal } from './BrowserModal';
 import { TreeNode } from '../interfaces';
@@ -109,10 +109,10 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
         // Apply settings-specific classes
         containerEl.addClass('yaml-settings-tab');
         
-        containerEl.createEl('h2', { text: 'YAML Property Manager Settings' });
-        
-        // Template Paths Section
-        containerEl.createEl('h3', { text: 'Template Paths' });
+        // Template Paths Section - Using Setting component for heading
+        new Setting(containerEl)
+            .setName('Template Paths')
+            .setHeading();
         
         const templatePathsContainer = containerEl.createDiv({ cls: 'yaml-template-paths' });
         
@@ -235,19 +235,21 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
                 .buttonEl;  // Get the button element
                 
             // Add Obsidian tooltip to the button
-            setTooltip(buttonEl, 'Select template files and folders');
+            setTooltip(buttonEl, 'Select template files and folders', {
+                placement: 'top'
+            });
             
             return button;
         });
         
-        // Max recent templates
+        // Max recent templates - With proper method chaining
         new Setting(containerEl)
-        .setName('Max Recent Templates')
-        .setDesc('Maximum number of recent templates to remember')
-        .addSlider(slider => {
-            slider
+            .setName('Max Recent Templates')
+            .setDesc('Maximum number of recent templates to remember')
+            .addSlider(slider => slider
                 .setLimits(1, 10, 1)
                 .setValue(this.plugin.settings.maxRecentTemplates)
+                .setDynamicTooltip()
                 .onChange(async (value) => {
                     this.plugin.settings.maxRecentTemplates = value;
                     // Trim the list if needed
@@ -256,30 +258,8 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
                             this.plugin.settings.recentTemplates.slice(0, value);
                     }
                     await this.plugin.saveSettings();
-                    
-                    // Add a manual value display
-                    const sliderEl = slider.sliderEl;
-                    const valueDisplay = sliderEl.parentElement?.querySelector('.slider-value');
-                    if (valueDisplay) {
-                        valueDisplay.textContent = value.toString();
-                    } else {
-                        // Create a value display if it doesn't exist
-                        const valueEl = document.createElement('div');
-                        valueEl.className = 'slider-value';
-                        valueEl.textContent = value.toString();
-                        sliderEl.parentElement?.appendChild(valueEl);
-                    }
-                });
-                
-            // Create a value display right away
-            const sliderEl = slider.sliderEl;
-            const valueEl = document.createElement('div');
-            valueEl.className = 'slider-value';
-            valueEl.textContent = this.plugin.settings.maxRecentTemplates.toString();
-            sliderEl.parentElement?.appendChild(valueEl);
-            
-            return slider;
-        });
+                })
+            );
         
         // Clear recent templates
         new Setting(containerEl)
@@ -293,9 +273,62 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
                     new Notice('Recent templates cleared');
                 }));
 
-        // Add the reset button at the bottom
-        this.addResetButton(containerEl);
-        
+        // Troubleshooting Section
+        new Setting(containerEl)
+            .setName('Troubleshooting')
+            .setHeading();
+                
+        // Reset Template Paths button
+        new Setting(containerEl)
+            .setName('Reset Template Paths')
+            .setDesc('If you experience issues with template paths not being removed correctly, use this button to reset all template paths.')
+            .addButton(button => button
+                .setButtonText('Reset All Template Paths')
+                .setWarning()
+                .onClick(async () => {
+                    // Improve the confirmation modal for resetting template paths
+                    const confirmed = await new Promise<boolean>(resolve => {
+                        const modal = new Modal(this.app);
+                        modal.titleEl.setText('Confirm Reset');
+                        
+                        // Use Obsidian's setting pattern for modal content
+                        new Setting(modal.contentEl)
+                            .setDesc('Are you sure you want to reset all template paths? This cannot be undone.');
+                        
+                        // Use Obsidian's button container styling
+                        const buttonContainer = modal.contentEl.createDiv({ 
+                            cls: 'modal-button-container' 
+                        });
+                        
+                        // Create buttons using ButtonComponent
+                        const cancelButton = new ButtonComponent(buttonContainer)
+                            .setButtonText('Cancel')
+                            .onClick(() => {
+                                modal.close();
+                                resolve(false);
+                            });
+                        
+                        const confirmButton = new ButtonComponent(buttonContainer)
+                            .setButtonText('Reset All Paths')
+                            .setWarning()
+                            .onClick(() => {
+                                modal.close();
+                                resolve(true);
+                            });
+                        
+                        modal.open();
+                    });
+                    
+                    if (confirmed) {
+                        // Reset all template paths
+                        this.plugin.settings.templatePaths = [];
+                        await this.plugin.saveSettings();
+                        new Notice('All template paths have been reset');
+                        this.display();
+                    }
+                })
+            );
+            
         // Initialize scrollable status check
         setTimeout(() => {
             this.checkScrollableStatus();
@@ -427,9 +460,12 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
         
         // Add an info message if no templates are configured
         if (this.rootNode.children.length === 0) {
-            container.createEl('p', {
-                text: 'No template paths configured. Add template files or directories below.',
-                cls: 'yaml-settings-description'
+            const emptyState = container.createDiv({
+                cls: 'setting-item-description yaml-settings-description'
+            });
+            
+            emptyState.createSpan({
+                text: 'No template paths configured. Add template files or directories below.'
             });
         }
         
@@ -474,16 +510,18 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
             }
         });
         
-        // Use inline style only for indentation level
-        headerEl.style.paddingLeft = `${level * 20}px`;
+        // Add level-based class for indentation
+        headerEl.addClass(`yaml-template-node__level-${level}`);
         
         // Add folder/file icon with class
         const iconEl = headerEl.createSpan({ cls: 'yaml-template-node__icon' });
         
-        // Use SVG icon directly
-        const svgContent = this.getSvgIcon(node.isDirectory ? 
-            (this.expandedPaths.has(node.path) ? 'folder-open' : 'folder-closed') : 'file');
-        iconEl.innerHTML = svgContent;
+        // Use Obsidian's setIcon utility
+        if (node.isDirectory) {
+            setIcon(iconEl, this.expandedPaths.has(node.path) ? 'folder-open' : 'folder-closed');
+        } else {
+            setIcon(iconEl, 'document');
+        }
 
         // Add name with class
         const nameEl = headerEl.createSpan({
@@ -491,8 +529,7 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
             cls: 'yaml-template-node__name'
         });
 
-        setTooltip(nameEl, node.name);
-        
+        // Set tooltip with proper options
         setTooltip(nameEl, node.name, {
             placement: 'bottom',
             delay: 300
@@ -505,15 +542,13 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
 
         // Create button with improved styling
         const removeButton = new ButtonComponent(btnContainer)
-            .setButtonText('')
             .setIcon('trash-2')
             .setTooltip('Remove this template')
             .setClass('clickable-icon');
 
         // Set up the click handler
-        removeButton.buttonEl.addEventListener('click', async (e) => {
+        removeButton.onClick(async (e) => {
             e.stopPropagation();
-            e.preventDefault();
             removeButton.setDisabled(true);
             try {
                 await this.removeTemplateWithScrollPreservation(node.templatePathIndex, node, nodeEl);
@@ -539,7 +574,7 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
                 if (node.children.length > 0) {
                     // Render all children immediately
                     for (const child of node.children) {
-                        this.renderNode(child, childrenEl, 0);
+                        this.renderNode(child, childrenEl, level + 1);
                     }
                 } else {
                     // Show empty message if folder is empty
@@ -551,7 +586,7 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
                     const iconSpan = emptyMessage.createSpan({
                         cls: 'yaml-empty-folder-message-icon'
                     });
-                    iconSpan.innerHTML = this.getSvgIcon('file');
+                    setIcon(iconSpan, 'file');
 
                     // Add text
                     emptyMessage.createSpan({
@@ -570,11 +605,10 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
                     // Update aria-expanded state
                     headerEl.setAttribute('aria-expanded', (!isCollapsed).toString());
                     
-                    // Update icon
+                    // Update icon using Obsidian's setIcon
                     const newIsCollapsed = childrenEl.hasClass('yaml-template-node__children--collapsed');
-                    const svgContent = this.getSvgIcon(newIsCollapsed ? 'folder-closed' : 'folder-open');
                     iconEl.empty();
-                    iconEl.innerHTML = svgContent;
+                    setIcon(iconEl, newIsCollapsed ? 'folder-closed' : 'folder-open');
                     
                     // Update expanded paths
                     if (childrenEl.hasClass('yaml-template-node__children--collapsed')) {
@@ -609,13 +643,13 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
                                 const emptyMessage = childrenEl.createDiv({
                                     cls: 'yaml-empty-folder-message'
                                 });
-            
+        
                                 // Add file icon
                                 const iconSpan = emptyMessage.createSpan({
                                     cls: 'yaml-empty-folder-message-icon'
                                 });
-                                iconSpan.innerHTML = this.getSvgIcon('file');
-            
+                                setIcon(iconSpan, 'file');
+        
                                 // Add text
                                 emptyMessage.createSpan({
                                     text: 'Empty folder'
@@ -636,77 +670,4 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
         this.plugin.settings.expandedTemplatePaths = Array.from(this.expandedPaths);
         this.plugin.saveSettings();
     }
-
-    // Helper method for SVG icons
-    private getSvgIcon(type: 'folder-closed' | 'folder-open' | 'file'): string {
-        if (type === 'folder-closed') {
-            return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-folder-closed"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path><path d="M2 10h20"></path></svg>';
-        } else if (type === 'folder-open') {
-            return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-folder-open"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"></path></svg>';
-        } else {
-            return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-file"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg>';
-        }
-    }
-
-    private addResetButton(containerEl: HTMLElement) {
-        const resetContainer = containerEl.createDiv({ cls: 'template-paths-reset-container' });
-        
-        resetContainer.createEl('h3', { text: 'Troubleshooting' });
-        
-        // Existing Reset Template Paths button
-        new Setting(resetContainer)
-            .setName('Reset Template Paths')
-            .setDesc('If you experience issues with template paths not being removed correctly, use this button to reset all template paths.')
-            .addButton(button => button
-                .setButtonText('Reset All Template Paths')
-                .setWarning()
-                .onClick(async () => {
-                    const confirmed = await new Promise<boolean>(resolve => {
-                        const modal = new Modal(this.app);
-                        modal.titleEl.setText('Confirm Reset');
-                        
-                        const content = modal.contentEl.createDiv();
-                        content.setText('Are you sure you want to reset all template paths? This cannot be undone.');
-                        
-                        const buttonContainer = modal.contentEl.createDiv({ cls: 'modal-button-container' });
-                        
-                        const cancelButton = buttonContainer.createEl('button', { text: 'Cancel' });
-                        cancelButton.addEventListener('click', () => {
-                            modal.close();
-                            resolve(false);
-                        });
-                        
-                        const confirmButton = buttonContainer.createEl('button', { 
-                            text: 'Reset All Paths',
-                            cls: 'mod-warning'
-                        });
-                        confirmButton.addEventListener('click', () => {
-                            modal.close();
-                            resolve(true);
-                        });
-                        
-                        modal.open();
-                    });
-                    
-                    if (confirmed) {
-                        // Reset all template paths
-                        this.plugin.settings.templatePaths = [];
-                        await this.plugin.saveSettings();
-                        new Notice('All template paths have been reset');
-                        this.display();
-                    }
-                })
-            );
-        
-        // Add new Reload Plugin button
-        new Setting(resetContainer)
-            .setName('Reload Plugin')
-            .setDesc('Reload the plugin if you encounter issues or changes are not being applied correctly.')
-            .addButton(button => button
-                .setButtonText('Reload Plugin')
-                .onClick(async () => {
-                    await this.plugin.reloadPlugin();
-                })
-            );
-    } 
 }
