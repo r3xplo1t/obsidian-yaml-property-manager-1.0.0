@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, Notice, ButtonComponent, Modal, setTooltip, setIcon } from 'obsidian';
+import { App, PluginSettingTab, Setting, Notice, ButtonComponent, Modal, setTooltip, setIcon, EventRef } from 'obsidian';
 import YAMLPropertyManagerPlugin from '../../main';
 import { BrowserModal } from './BrowserModal';
 import { TreeNode } from '../interfaces';
@@ -28,7 +28,7 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
             const scrollPosition = container ? container.scrollTop : 0;
             
             // Start animation
-            nodeElement.addClass('yaml-template-node--removing');
+            nodeElement.addClass('is-removing');
             
             // Wait for animation
             await new Promise(resolve => setTimeout(resolve, 200));
@@ -287,45 +287,49 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
                 .setWarning()
                 .onClick(async () => {
                     // Improve the confirmation modal for resetting template paths
-                    const confirmed = await new Promise<boolean>(resolve => {
-                        const modal = new Modal(this.app);
-                        modal.titleEl.setText('Confirm Reset');
-                        
-                        // Use Obsidian's setting pattern for modal content
-                        new Setting(modal.contentEl)
-                            .setDesc('Are you sure you want to reset all template paths? This cannot be undone.');
-                        
-                        // Use Obsidian's button container styling
-                        const buttonContainer = modal.contentEl.createDiv({ 
-                            cls: 'modal-button-container' 
-                        });
-                        
-                        // Create buttons using ButtonComponent
-                        const cancelButton = new ButtonComponent(buttonContainer)
-                            .setButtonText('Cancel')
-                            .onClick(() => {
-                                modal.close();
-                                resolve(false);
-                            });
-                        
-                        const confirmButton = new ButtonComponent(buttonContainer)
-                            .setButtonText('Reset All Paths')
-                            .setWarning()
-                            .onClick(() => {
-                                modal.close();
-                                resolve(true);
-                            });
-                        
-                        modal.open();
+                    const modal = new Modal(this.app);
+                    modal.titleEl.setText('Confirm Reset');
+
+                    // Add the mod-confirmation class to apply Dialog styling
+                    modal.containerEl.addClass('mod-confirmation');
+
+                    // Use Obsidian's setting pattern for modal content
+                    new Setting(modal.contentEl)
+                        .setDesc('Are you sure you want to reset all template paths? This cannot be undone.');
+
+                    // Use Obsidian's button container styling
+                    const buttonContainer = modal.contentEl.createDiv({ 
+                        cls: 'modal-button-container' 
                     });
-                    
-                    if (confirmed) {
-                        // Reset all template paths
-                        this.plugin.settings.templatePaths = [];
-                        await this.plugin.saveSettings();
-                        new Notice('All template paths have been reset');
-                        this.display();
-                    }
+
+                    // Create buttons using ButtonComponent
+                    const cancelButton = new ButtonComponent(buttonContainer)
+                        .setButtonText('Cancel')
+                        .onClick(() => {
+                            modal.close();
+                        });
+
+                    const confirmButton = new ButtonComponent(buttonContainer)
+                        .setButtonText('Reset All Paths')
+                        .setWarning()
+                        .onClick(async () => {
+                            // Reset all template paths
+                            this.plugin.settings.templatePaths = [];
+                            await this.plugin.saveSettings();
+                            new Notice('All template paths have been reset');
+                            this.display();
+                            modal.close();
+                        });
+
+                    // Handle keyboard navigation
+                    modal.scope.register([], 'Escape', () => {
+                        modal.close();
+                    });
+
+                    modal.open();
+
+                    // Set focus to the cancel button (safer default)
+                    setTimeout(() => cancelButton.buttonEl.focus(), 50);
                 })
             );
             
@@ -450,22 +454,26 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
             });
         };
         
-        // Apply deduplication to the root node
+        // Apply deduplication to the root node (KEEP YOUR EXISTING CODE HERE)
         deduplicateNodes(this.rootNode);
         
-        // Render all tree nodes directly
+        // Create a tree container
+        const treeRoot = container.createDiv({ cls: 'tree-item nav-folder mod-root' });
+        
+        // Render the tree starting with the root's children
         for (const child of this.rootNode.children) {
-            this.renderNode(child, container, 0);
+            this.renderTreeItem(treeRoot, child, 0);
         }
         
         // Add an info message if no templates are configured
         if (this.rootNode.children.length === 0) {
             const emptyState = container.createDiv({
-                cls: 'setting-item-description yaml-settings-description'
+                cls: 'nav-empty-state'
             });
             
             emptyState.createSpan({
-                text: 'No template paths configured. Add template files or directories below.'
+                text: 'No template paths configured. Add template files or directories below.',
+                cls: 'nav-empty-state-text'
             });
         }
         
@@ -475,199 +483,243 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
         }, 50);
     }
 
-    // Render an individual node in the tree
-    private renderNode(node: TreeNode, parentEl: HTMLElement, level: number = 0) {
-        // Skip root node - render each child directly
-        if (node === this.rootNode) {
-            for (const child of node.children) {
-                this.renderNode(child, parentEl, level);
-            }
-            return;
-        }
-        
-        // Generate a unique ID for this node
-        const nodeCounter = Math.floor(Math.random() * 10000);
-        const nodeId = `template-node-${nodeCounter}`;
-        const childrenId = `children-${nodeId}`;
-        
-        // Create node container with class
-        const nodeEl = parentEl.createDiv({ 
-            cls: 'yaml-template-node',
-            attr: { 
-                'data-node-id': nodeId,
-                'aria-label': node.isDirectory ? `Folder: ${node.name}` : `File: ${node.name}`
-            }
+    private renderTreeItem(parentEl: HTMLElement, node: TreeNode, level: number) {
+        // Create a tree item container
+        const itemEl = parentEl.createDiv({ 
+            cls: 'tree-item ' + (node.isDirectory ? 'nav-folder' : 'nav-file') 
         });
         
-        // Create the header with class
-        const headerEl = nodeEl.createDiv({
-            cls: node.isDirectory 
-                ? 'yaml-template-node__header yaml-template-node__header--folder' 
-                : 'yaml-template-node__header',
+        // Create the self (clickable title area)
+        const selfEl = itemEl.createDiv({ 
+            cls: 'tree-item-self ' + (node.isDirectory ? 'mod-collapsible' : ''),
             attr: {
-                'role': node.isDirectory ? 'button' : 'none',
-                ...(node.isDirectory ? { 'aria-expanded': this.expandedPaths.has(node.path).toString() } : {})
+                'aria-label': node.isDirectory ? `Folder: ${node.name}` : `File: ${node.name}`,
+                'data-path': node.path,
+                'tabindex': '0',
+                'role': node.isDirectory ? 'button' : 'listitem',
+                ...(node.isDirectory ? { 
+                    'aria-expanded': this.expandedPaths.has(node.path).toString(),
+                    'aria-controls': `children-${node.path.replace(/[^a-zA-Z0-9]/g, '-')}` 
+                } : {})
             }
         });
         
-        // Add level-based class for indentation
-        headerEl.addClass(`yaml-template-node__level-${level}`);
-        
-        // Add folder/file icon with class
-        const iconEl = headerEl.createSpan({ cls: 'yaml-template-node__icon' });
-        
-        // Use Obsidian's setIcon utility
+        // Add collapse indicator for directories
         if (node.isDirectory) {
-            setIcon(iconEl, this.expandedPaths.has(node.path) ? 'folder-open' : 'folder-closed');
-        } else {
-            setIcon(iconEl, 'document');
+            const collapseIconEl = selfEl.createDiv({ cls: 'tree-item-icon collapse-icon' });
+            setIcon(collapseIconEl, 'right-triangle');
+            
+            // When collapsed, add is-collapsed class to point right
+            if (!this.expandedPaths.has(node.path)) {
+                collapseIconEl.addClass('is-collapsed');
+            }
         }
-
-        // Add name with class
-        const nameEl = headerEl.createSpan({
+        
+        // Add the main content
+        const innerEl = selfEl.createDiv({ cls: 'tree-item-inner' });
+        innerEl.createSpan({ 
             text: node.name,
-            cls: 'yaml-template-node__name'
-        });
-
-        // Set tooltip with proper options
-        setTooltip(nameEl, node.name, {
-            placement: 'bottom',
-            delay: 300
-        });
-
-        // Create a span to hold the button
-        const btnContainer = headerEl.createSpan({
-            cls: 'yaml-template-node__actions'
-        });
-
-        // Create button with improved styling
-        const removeButton = new ButtonComponent(btnContainer)
-            .setIcon('trash-2')
-            .setTooltip('Remove this template')
-            .setClass('clickable-icon');
-
-        // Set up the click handler
-        removeButton.onClick(async (e) => {
-            e.stopPropagation();
-            removeButton.setDisabled(true);
-            try {
-                await this.removeTemplateWithScrollPreservation(node.templatePathIndex, node, nodeEl);
-            } catch (error) {
-                console.error("Removal failed:", error);
-            }
+            cls: 'tree-item-inner-text'
         });
         
-        // If this is a directory node, add children container (even if empty)
+        // Add delete button with improved accessibility
+        const flairContainer = selfEl.createDiv({ cls: 'tree-item-flair-outer' });
+        const deleteButton = flairContainer.createDiv({ 
+            cls: 'tree-item-flair clickable-icon',
+            attr: {
+                'role': 'button',
+                'aria-label': `Remove template ${node.name}`,
+                'tabindex': '0'
+            }
+        });
+        setIcon(deleteButton, 'trash-2');
+        setTooltip(deleteButton, `Remove template ${node.name}`);
+        
+        // For directories, handle expansion/collapse
         if (node.isDirectory) {
-            // Create children container
-            const childrenEl = nodeEl.createDiv({
-                cls: 'yaml-template-node__children' + 
-                    (this.expandedPaths.has(node.path) ? '' : ' yaml-template-node__children--collapsed'),
-                attr: { 
+            // Create children container with ID for aria-controls
+            const childrenId = `children-${node.path.replace(/[^a-zA-Z0-9]/g, '-')}`;
+            const childrenEl = itemEl.createDiv({ 
+                cls: 'tree-item-children',
+                attr: {
                     'id': childrenId,
-                    'role': 'group'
+                    'role': 'group',
+                    'aria-label': `${node.name} contents`
                 }
             });
             
-            // If expanded, either render children or show "Empty" message
+            // Set visibility based on expanded state
+            if (!this.expandedPaths.has(node.path)) {
+                childrenEl.style.display = 'none';
+            }
+            
+            // Register click handler for toggling
+            this.registerDomEventWithCleanup(selfEl, 'click', (e: MouseEvent) => {
+                // Don't handle clicks on the delete button
+                if (e.target === deleteButton || deleteButton.contains(e.target as Node)) {
+                    return;
+                }
+                
+                // Toggle expanded state
+                const isExpanded = this.expandedPaths.has(node.path);
+                
+                if (isExpanded) {
+                    // Folder going from expanded to collapsed
+                    this.expandedPaths.delete(node.path);
+                    childrenEl.style.display = 'none';
+                    selfEl.setAttribute('aria-expanded', 'false');
+                    selfEl.querySelector('.collapse-icon')?.addClass('is-collapsed');
+                } else {
+                    // Folder going from collapsed to expanded
+                    this.expandedPaths.add(node.path);
+                    childrenEl.style.display = '';
+                    selfEl.setAttribute('aria-expanded', 'true');
+                    selfEl.querySelector('.collapse-icon')?.removeClass('is-collapsed');
+                    
+                    // Lazy load children if needed
+                    if (childrenEl.childElementCount === 0 && node.children.length > 0) {
+                        // Add children
+                        for (const child of node.children) {
+                            this.renderTreeItem(childrenEl, child, level + 1);
+                        }
+                    } else if (node.children.length === 0 && childrenEl.childElementCount === 0) {
+                        // Show empty folder message
+                        const emptyEl = childrenEl.createDiv({ cls: 'nav-empty-state' });
+                        emptyEl.createSpan({ 
+                            text: 'Empty folder', 
+                            cls: 'nav-empty-state-text'
+                        });
+                    }
+                }
+                
+                // Save expanded paths to settings
+                this.saveExpandedPathsToSettings();
+            });
+            
+            // Enhanced keyboard navigation
+            this.registerDomEventWithCleanup(selfEl, 'keydown', (e: KeyboardEvent) => {
+                const isExpanded = this.expandedPaths.has(node.path);
+                
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    selfEl.click();
+                } else if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    if (!isExpanded) {
+                        // Expand the folder if it's collapsed
+                        selfEl.click();
+                    } else {
+                        // Move to the first child if folder is already expanded
+                        const firstChild = childrenEl.querySelector('[tabindex="0"]') as HTMLElement;
+                        if (firstChild) firstChild.focus();
+                    }
+                } else if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    if (isExpanded) {
+                        // Collapse the folder if it's expanded
+                        selfEl.click();
+                    } else {
+                        // Move to parent if folder is already collapsed
+                        const parentFolder = itemEl.parentElement?.closest('.tree-item-self') as HTMLElement;
+                        if (parentFolder) parentFolder.focus();
+                    }
+                } else if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    const nextFocusable = this.findNextFocusableElement(selfEl);
+                    if (nextFocusable) nextFocusable.focus();
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    const prevFocusable = this.findPrevFocusableElement(selfEl);
+                    if (prevFocusable) prevFocusable.focus();
+                }
+            });
+            
+            // Render children if expanded initially
             if (this.expandedPaths.has(node.path)) {
                 if (node.children.length > 0) {
-                    // Render all children immediately
                     for (const child of node.children) {
-                        this.renderNode(child, childrenEl, level + 1);
+                        this.renderTreeItem(childrenEl, child, level + 1);
                     }
                 } else {
-                    // Show empty message if folder is empty
-                    const emptyMessage = childrenEl.createDiv({
-                        cls: 'yaml-empty-folder-message'
-                    });
-
-                    // Add file icon
-                    const iconSpan = emptyMessage.createSpan({
-                        cls: 'yaml-empty-folder-message-icon'
-                    });
-                    setIcon(iconSpan, 'file');
-
-                    // Add text
-                    emptyMessage.createSpan({
-                        text: 'Empty folder'
+                    // Show empty folder message
+                    const emptyEl = childrenEl.createDiv({ cls: 'nav-empty-state' });
+                    emptyEl.createSpan({ 
+                        text: 'Empty folder', 
+                        cls: 'nav-empty-state-text'
                     });
                 }
             }
-            
-            // Add expand/collapse handler to the header
-            headerEl.addEventListener('click', (e: MouseEvent) => {
-                // Only toggle if not clicking a button or inside the button container
-                if (!(e.target instanceof HTMLElement) || !e.target.closest('.yaml-template-node__actions')) {
-                    const isCollapsed = childrenEl.hasClass('yaml-template-node__children--collapsed');
-                    childrenEl.toggleClass('yaml-template-node__children--collapsed', !isCollapsed);
-                    
-                    // Update aria-expanded state
-                    headerEl.setAttribute('aria-expanded', (!isCollapsed).toString());
-                    
-                    // Update icon using Obsidian's setIcon
-                    const newIsCollapsed = childrenEl.hasClass('yaml-template-node__children--collapsed');
-                    iconEl.empty();
-                    setIcon(iconEl, newIsCollapsed ? 'folder-closed' : 'folder-open');
-                    
-                    // Update expanded paths
-                    if (childrenEl.hasClass('yaml-template-node__children--collapsed')) {
-                        this.expandedPaths.delete(node.path);
-                    } else {
-                        this.expandedPaths.add(node.path);
-                        
-                        // If the folder was previously collapsed and now expanded
-                        if (childrenEl.childElementCount === 0) {
-                            // Check if the folder actually has any files in the current template paths
-                            const folderPrefix = node.path + '/';
-                            const hasChildren = this.plugin.settings.templatePaths.some(tp => tp.path.startsWith(folderPrefix));
-                            
-                            if (hasChildren && node.children.length > 0) {
-                                // Show a loading indicator briefly
-                                const loadingEl = childrenEl.createDiv({
-                                    cls: 'yaml-template-children-loading',
-                                    text: 'Loading items...'
-                                });
-                                
-                                // Render all children after a brief delay
-                                setTimeout(() => {
-                                    loadingEl.remove();
-                                    
-                                    // Render ALL children directly
-                                    for (const child of node.children) {
-                                        this.renderNode(child, childrenEl, level + 1);
-                                    }
-                                }, 50);
-                            } else {
-                                // Show empty message if folder is empty
-                                const emptyMessage = childrenEl.createDiv({
-                                    cls: 'yaml-empty-folder-message'
-                                });
-        
-                                // Add file icon
-                                const iconSpan = emptyMessage.createSpan({
-                                    cls: 'yaml-empty-folder-message-icon'
-                                });
-                                setIcon(iconSpan, 'file');
-        
-                                // Add text
-                                emptyMessage.createSpan({
-                                    text: 'Empty folder'
-                                });
-                            }
-                        }
-                    }
-                    
-                    // Save expanded paths to settings
-                    this.saveExpandedPaths();
-                }
-            });
         }
+        
+        // Handle delete button keyboard and click events
+        this.registerDomEventWithCleanup(deleteButton, 'click', async (e: MouseEvent) => {
+            e.stopPropagation();
+            deleteButton.addClass('is-disabled');
+            try {
+                await this.removeTemplateWithScrollPreservation(node.templatePathIndex, node, itemEl);
+            } catch (error) {
+                console.error("Removal failed:", error);
+                deleteButton.removeClass('is-disabled');
+            }
+        });
+        
+        this.registerDomEventWithCleanup(deleteButton, 'keydown', async (e: KeyboardEvent) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                deleteButton.addClass('is-disabled');
+                try {
+                    await this.removeTemplateWithScrollPreservation(node.templatePathIndex, node, itemEl);
+                } catch (error) {
+                    console.error("Removal failed:", error);
+                    deleteButton.removeClass('is-disabled');
+                }
+            }
+        });
     }
+    
+    // Helper methods for keyboard navigation
+    private findNextFocusableElement(currentEl: HTMLElement): HTMLElement | null {
+        // Find all focusable elements
+        const focusableElements = Array.from(
+            document.querySelectorAll('.tree-item-self[tabindex="0"], .clickable-icon[tabindex="0"]')
+        ) as HTMLElement[];
+        
+        // Get current index
+        const currentIndex = focusableElements.indexOf(currentEl);
+        if (currentIndex >= 0 && currentIndex < focusableElements.length - 1) {
+            return focusableElements[currentIndex + 1];
+        }
+        return null;
+    }
+    
+    private findPrevFocusableElement(currentEl: HTMLElement): HTMLElement | null {
+        // Find all focusable elements
+        const focusableElements = Array.from(
+            document.querySelectorAll('.tree-item-self[tabindex="0"], .clickable-icon[tabindex="0"]')
+        ) as HTMLElement[];
+        
+        // Get current index
+        const currentIndex = focusableElements.indexOf(currentEl);
+        if (currentIndex > 0) {
+            return focusableElements[currentIndex - 1];
+        }
+        return null;
+    }
+    
 
     // Helper to save expanded paths to settings
-    private saveExpandedPaths(): void {
+    private saveExpandedPathsToSettings(): void {
         this.plugin.settings.expandedTemplatePaths = Array.from(this.expandedPaths);
         this.plugin.saveSettings();
+    }
+
+    private registerDomEventWithCleanup(element: HTMLElement, type: string, callback: (event: any) => void): void {
+        this.plugin.registerDomEvent(element, type as keyof HTMLElementEventMap, callback);
+    }
+
+    hide(): void {
+        // Call the parent class hide method
+        super.hide();
     }
 }

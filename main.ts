@@ -1,4 +1,4 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, TFile, TFolder, normalizePath } from 'obsidian';
+import { App, Editor, MarkdownView, Modal, Notice, Plugin, TFile, TFolder, TAbstractFile, normalizePath } from 'obsidian';
 import { 
     // Models
     DEFAULT_SETTINGS,
@@ -24,6 +24,11 @@ import type {
     ObsidianPropertyType
 } from './src';
 
+// Type definitions
+type ModalType = 'main' | 'bulkEdit' | 'template' | 'batchSelect';
+type FileSelectionResult = { files: TFile[], folders: TFolder[] };
+type TemplatePathType = 'file' | 'directory';
+
 /**
  * YAML Property Manager Plugin
  * Provides tools for managing YAML frontmatter across multiple files
@@ -34,18 +39,9 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
     propertyCache: Map<string, Record<string, PropertyWithType>> = new Map();
     propertyTypeService: PropertyTypeService;
 
-    /**
-     * Get internal type from a property value
-     * @param propertyName - Name of the property
-     * @param propertyValue - Value to analyze
-     * @returns Internal type string
-     */
-    public getInternalPropertyType(propertyName: string, propertyValue: any): string {
-        const obsidianType = this.propertyTypeService.getValuePropertyType(propertyName, propertyValue);
-        return this.convertFromObsidianType(obsidianType);
-    }
+    //#region Lifecycle Methods
 
-    async onload() {
+    async onload(): Promise<void> {
         await this.loadSettings();
         
         // Initialize the Property Type Service
@@ -56,6 +52,105 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             this.registerVaultEvents();
         });
 
+        this.registerCommands();
+        this.addSettingTab(new YAMLPropertyManagerSettingTab(this.app, this));
+    }
+
+    onunload(): void {
+        this.debug('Unloading YAML Property Manager plugin');
+        
+        try {
+            // Clear data structures to prevent memory leaks
+            this.propertyCache.clear();
+            this.selectedFiles = [];
+            
+            // Attempt to save any pending settings
+            this.saveSettings().catch(error => {
+                this.logError("Error saving settings during unload:", error);
+            });
+        } catch (error) {
+            console.error("Error during plugin cleanup:", error);
+        }
+        
+        this.debug('YAML Property Manager plugin unloaded');
+    }
+
+    //#endregion
+
+    //#region Settings Management
+
+    async loadSettings(): Promise<void> {
+        try {
+            const loadedData = await this.loadData();
+            this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
+            
+            // Migrate from old format if needed
+            if (loadedData && 'defaultTemplateFilePath' in loadedData && 
+                loadedData.defaultTemplateFilePath && 
+                !('templatePaths' in loadedData)) {
+                
+                this.settings.templatePaths = [{
+                    type: 'file' as TemplatePathType,
+                    path: normalizePath(loadedData.defaultTemplateFilePath),
+                    includeSubdirectories: false
+                }];
+                
+                // Remove old property
+                delete (this.settings as any).defaultTemplateFilePath;
+                
+                // Save migrated settings
+                await this.saveSettings();
+            }
+        } catch (error) {
+            console.error("Failed to load settings:", error);
+            this.settings = Object.assign({}, DEFAULT_SETTINGS);
+            new Notice("Failed to load settings. Using defaults.");
+        }
+    }
+
+    async saveSettings(): Promise<void> {
+        try {
+            await this.saveData(this.settings);
+        } catch (error) {
+            console.error("Failed to save settings:", error);
+            new Notice("Failed to save settings. Please try again.");
+        }
+    }
+
+    // Add template to recent templates list
+    addToRecentTemplates(templatePath: string): void {
+        if (!templatePath) return;
+        
+        // Normalize the path first
+        const normalizedPath = normalizePath(templatePath);
+        
+        // Get recent templates or initialize if doesn't exist
+        const recentTemplates = this.settings.recentTemplates || [];
+        
+        // Normalize all paths for consistent comparison
+        const normalizedRecentTemplates = recentTemplates.map(path => normalizePath(path));
+        
+        // Remove if already in the list (to move to the top)
+        const existingIndex = normalizedRecentTemplates.indexOf(normalizedPath);
+        if (existingIndex > -1) {
+            recentTemplates.splice(existingIndex, 1);
+        }
+        
+        // Add to the beginning of the list
+        recentTemplates.unshift(normalizedPath);
+        
+        // Limit to max number of recent templates
+        this.settings.recentTemplates = recentTemplates.slice(0, this.settings.maxRecentTemplates || 10);
+        
+        // Save settings
+        this.saveSettings();
+    }
+
+    //#endregion
+
+    //#region Command Registration
+
+    private registerCommands(): void {
         // Add command to open the property manager
         this.addCommand({
             id: 'open-property-manager',
@@ -87,7 +182,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             callback: () => {
                 const browser = new BrowserModal(
                     this.app, 
-                    (result) => {
+                    (result: FileSelectionResult) => {
                         if (result.files && result.files.length > 0) {
                             this.selectedFiles = [...result.files];
                             new TemplateApplicationModal(this.app, this, this.selectedFiles).open();
@@ -109,9 +204,6 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             name: 'Reload YAML Property Manager',
             callback: () => this.reloadPlugin()
         });
-
-        // Add settings tab
-        this.addSettingTab(new YAMLPropertyManagerSettingTab(this.app, this));
     }
 
     /**
@@ -121,7 +213,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
     private registerVaultEvents(): void {
         // Register any vault events here
         this.registerEvent(
-            this.app.vault.on('modify', (file) => {
+            this.app.vault.on('modify', (file: TAbstractFile) => {
                 if (file instanceof TFile && file.extension === 'md') {
                     // Clear cache for the modified file
                     this.propertyCache.delete(file.path);
@@ -130,61 +222,9 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
         );
     }
 
-    async loadSettings() {
-        const loadedData = await this.loadData();
-        this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
-        
-        // Migrate from old format if needed
-        if (loadedData && 'defaultTemplateFilePath' in loadedData && 
-            loadedData.defaultTemplateFilePath && 
-            !('templatePaths' in loadedData)) {
-            
-            this.settings.templatePaths = [{
-                type: 'file',
-                path: normalizePath(loadedData.defaultTemplateFilePath),
-                includeSubdirectories: false
-            }];
-            
-            // Remove old property
-            delete (this.settings as any).defaultTemplateFilePath;
-            
-            // Save migrated settings
-            await this.saveSettings();
-        }
-    }
+    //#endregion
 
-    async saveSettings() {
-        await this.saveData(this.settings);
-    }
-
-    // Add template to recent templates list
-    addToRecentTemplates(templatePath: string) {
-        if (!templatePath) return;
-        
-        // Normalize the path first
-        const normalizedPath = normalizePath(templatePath);
-        
-        // Get recent templates or initialize if doesn't exist
-        const recentTemplates = this.settings.recentTemplates || [];
-        
-        // Normalize all paths for consistent comparison
-        const normalizedRecentTemplates = recentTemplates.map(path => normalizePath(path));
-        
-        // Remove if already in the list (to move to the top)
-        const existingIndex = normalizedRecentTemplates.indexOf(normalizedPath);
-        if (existingIndex > -1) {
-            recentTemplates.splice(existingIndex, 1);
-        }
-        
-        // Add to the beginning of the list
-        recentTemplates.unshift(normalizedPath);
-        
-        // Limit to max number of recent templates
-        this.settings.recentTemplates = recentTemplates.slice(0, this.settings.maxRecentTemplates || 10);
-        
-        // Save settings
-        this.saveSettings();
-    }
+    //#region Template Management
 
     // Get all template files based on configuration
     async getAllTemplateFiles(): Promise<TFile[]> {
@@ -217,7 +257,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                 }
             }
         } catch (error) {
-            console.error("Error getting template files:", error);
+            this.logError("Error getting template files:", error);
             // Don't rethrow, just return what we have so far
         }
         
@@ -247,11 +287,26 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                 }
             }
         } catch (error) {
-            console.error(`Error processing folder ${folder.path}:`, error);
+            this.logError(`Error processing folder ${folder.path}:`, error);
             // Don't rethrow, just return what we have so far
         }
         
         return templates;
+    }
+
+    //#endregion
+
+    //#region Property Management
+
+    /**
+     * Get internal type from a property value
+     * @param propertyName - Name of the property
+     * @param propertyValue - Value to analyze
+     * @returns Internal type string
+     */
+    public getInternalPropertyType(propertyName: string, propertyValue: any): string {
+        const obsidianType = this.propertyTypeService.getValuePropertyType(propertyName, propertyValue);
+        return this.convertFromObsidianType(obsidianType);
     }
 
     // Parse YAML frontmatter from a file
@@ -287,13 +342,13 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             
             return properties;
         } catch (error) {
-            console.error(`Error parsing properties for ${file.path}:`, error);
+            this.logError(`Error parsing properties for ${file.path}:`, error);
             return {};
         }
     }
 
     // Apply properties to a file
-    async applyProperties(file: TFile, properties: Record<string, any>, preserveExisting: boolean = false) {
+    async applyProperties(file: TFile, properties: Record<string, any>, preserveExisting: boolean = false): Promise<boolean> {
         try {
             // Use Obsidian's built-in processFrontMatter method for consistent YAML formatting
             await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
@@ -318,7 +373,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             
             return true;
         } catch (error) {
-            console.error('Error applying properties:', error);
+            this.logError('Error applying properties:', error);
             new Notice(`Error applying properties to ${file.name}: ${error.message}`);
             return false;
         }
@@ -339,7 +394,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             
             return true;
         } catch (error) {
-            console.error(`Error setting property for ${filePath}:`, error);
+            this.logError(`Error setting property for ${filePath}:`, error);
             return false;
         }
     }
@@ -369,7 +424,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                     }
                 }
             } catch (error) {
-                console.error(`Error checking properties in ${file.path}:`, error);
+                this.logError(`Error checking properties in ${file.path}:`, error);
                 // Continue with the next file
             }
         }
@@ -383,7 +438,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
         targetFiles: TFile[], 
         propertiesToApply: string[], 
         consistentProperties: string[]
-    ) {
+    ): Promise<number> {
         try {
             // Get template properties
             const templateProperties = await this.parseFileProperties(templateFile);
@@ -448,7 +503,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                     this.propertyCache.delete(file.path);
                     
                 } catch (error) {
-                    console.error(`Error applying template to ${file.path}:`, error);
+                    this.logError(`Error applying template to ${file.path}:`, error);
                     // Continue with other files
                 }
             }
@@ -456,95 +511,114 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             new Notice(`Applied template to ${successCount} of ${targetFiles.length} ${targetFiles.length === 1 ? 'file' : 'files'}`);
             return successCount;
         } catch (error) {
-            console.error('Error applying template:', error);
+            this.logError('Error applying template:', error);
             new Notice(`Error applying template: ${error.message}`);
             return 0;
         }
     }
     
-    // Debug logging helper
-    public debug(message: string, ...data: any[]): void {
-        console.log(`[YAML Property Manager] ${message}`, ...data);
-    }
-    
+    //#endregion
+
+    //#region Navigation and UI
+
     // Navigation method to move between modals
-    navigateToModal(currentModal: Modal, targetModalType: string, ...args: any[]) {
-        // Add debug logging
+    navigateToModal(currentModal: Modal, targetModalType: ModalType, ...args: any[]): void {
+        // Log navigation attempt
         this.debug(`Navigating from current modal to ${targetModalType}`);
         
         // Close current modal
         currentModal.close();
         
-        // Handle special case for file selection
-        if (targetModalType === 'bulkEdit') {
-            this.debug("Handling bulkEdit navigation");
-            
-            // If files are explicitly provided, use them
-            if (Array.isArray(args[0]) && args[0].length > 0) {
-                this.debug(`Navigating to bulk edit with ${args[0].length} explicitly provided files`);
-                this.selectedFiles = args[0];
-            }
-            
-            // Check if we have files selected
-            if (this.selectedFiles.length === 0) {
-                this.debug('No files selected for bulk edit');
-                new Notice('Please select files first');
-                new PropertyManagerModal(this.app, this).open();
-                return;
-            }
-            
-            this.debug(`Opening bulk edit with ${this.selectedFiles.length} files`);
-            new BulkPropertyEditorModal(this.app, this, [...this.selectedFiles]).open();
-            return;
-        }
-        
-        // Handle other modal types
+        // Handle navigation based on target type
         switch (targetModalType) {
             case 'main':
-                this.debug("Opening main modal");
-                new PropertyManagerModal(this.app, this).open();
+                this.openMainModal();
+                break;
+            case 'bulkEdit':
+                this.openBulkEditModal(args);
                 break;
             case 'template':
-                this.debug("Handling template modal navigation");
-                if (this.selectedFiles.length === 0 && Array.isArray(args[0]) && args[0].length > 0) {
-                    this.selectedFiles = args[0];
-                }
-                
-                if (this.selectedFiles.length > 0) {
-                    this.debug(`Opening template modal with ${this.selectedFiles.length} files`);
-                    new TemplateApplicationModal(this.app, this, [...this.selectedFiles]).open();
-                } else {
-                    new Notice('Please select files first');
-                    new PropertyManagerModal(this.app, this).open();
-                }
+                this.openTemplateModal(args);
                 break;
             case 'batchSelect':
-                if (typeof args[0] === 'function') {
-                    const callback = args[0];
-                    
-                    // Create browser modal with proper icon buttons
-                    const browser = new BrowserModal(
-                        this.app, 
-                        (result) => {
-                            if (result.files && result.files.length > 0) {
-                                this.debug(`Batch selection returned ${result.files.length} files`);
-                                this.selectedFiles = [...result.files];
-                                callback(result.files);
-                            }
-                        },
-                        {
-                            title: "Select Files",
-                            description: "Choose files to process.",
-                            confirmButtonText: "Select Files"
-                        }
-                    );
-                    browser.open();
-                }
+                this.openBatchSelectModal(args);
                 break;
             default:
                 this.debug(`Unknown modal type: ${targetModalType}`);
         }
     }
+
+    // Helper methods for modal navigation
+    private openMainModal(): void {
+        this.debug("Opening main modal");
+        new PropertyManagerModal(this.app, this).open();
+    }
+
+    private openBulkEditModal(args: any[]): void {
+        this.debug("Handling bulkEdit navigation");
+        
+        // If files are explicitly provided, use them
+        if (Array.isArray(args[0]) && args[0].length > 0) {
+            this.debug(`Navigating to bulk edit with ${args[0].length} explicitly provided files`);
+            this.selectedFiles = args[0];
+        }
+        
+        // Check if we have files selected
+        if (this.selectedFiles.length === 0) {
+            this.debug('No files selected for bulk edit');
+            new Notice('Please select files first');
+            this.openMainModal();
+            return;
+        }
+        
+        this.debug(`Opening bulk edit with ${this.selectedFiles.length} files`);
+        new BulkPropertyEditorModal(this.app, this, [...this.selectedFiles]).open();
+    }
+
+    private openTemplateModal(args: any[]): void {
+        this.debug("Handling template modal navigation");
+        
+        // If files are provided as an argument, use them
+        if (this.selectedFiles.length === 0 && Array.isArray(args[0]) && args[0].length > 0) {
+            this.selectedFiles = args[0];
+        }
+        
+        if (this.selectedFiles.length > 0) {
+            this.debug(`Opening template modal with ${this.selectedFiles.length} files`);
+            new TemplateApplicationModal(this.app, this, [...this.selectedFiles]).open();
+        } else {
+            new Notice('Please select files first');
+            this.openMainModal();
+        }
+    }
+
+    private openBatchSelectModal(args: any[]): void {
+        if (typeof args[0] === 'function') {
+            const callback = args[0];
+            
+            // Create browser modal with proper icon buttons
+            const browser = new BrowserModal(
+                this.app, 
+                (result: FileSelectionResult) => {
+                    if (result.files && result.files.length > 0) {
+                        this.debug(`Batch selection returned ${result.files.length} files`);
+                        this.selectedFiles = [...result.files];
+                        callback(result.files);
+                    }
+                },
+                {
+                    title: "Select Files",
+                    description: "Choose files to process.",
+                    confirmButtonText: "Select Files"
+                }
+            );
+            browser.open();
+        }
+    }
+
+    //#endregion
+
+    //#region Utility Methods
 
     // Helper to convert Obsidian types to your internal types
     public convertFromObsidianType(type: ObsidianPropertyType): string {
@@ -567,7 +641,8 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             // Get plugin ID
             const pluginId = this.manifest.id;
             
-            // Access the plugin manager with type assertion
+            // Access the internal plugins API (not exposed in public types)
+            // This is necessary to programmatically disable/enable the plugin
             const pluginManager = (this.app as any).plugins;
             
             // First disable the plugin
@@ -579,17 +654,20 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                 new Notice('YAML Property Manager has been reloaded');
             }, 300);
         } catch (error) {
-            console.error('Error reloading plugin:', error);
+            this.logError('Error reloading plugin:', error);
             new Notice('Failed to reload plugin: ' + error.message);
         }
     }
 
-    onunload() {
-        // Log unloading message
-        this.debug('Unloading YAML Property Manager plugin');
-        
-        // Clear data structures to prevent memory leaks
-        this.propertyCache.clear();
-        this.selectedFiles = [];
+    // Debug logging helper
+    public debug(message: string, ...data: any[]): void {
+        console.log(`[YAML Property Manager] ${message}`, ...data);
     }
+
+    // Error logging helper
+    public logError(message: string, error: any): void {
+        console.error(`[YAML Property Manager] ${message}`, error);
+    }
+
+    //#endregion
 }

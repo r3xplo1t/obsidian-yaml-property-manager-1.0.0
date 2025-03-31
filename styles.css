@@ -50,314 +50,262 @@
 }
 
 /* ===========================================
-   BROWSER MODAL - SIMPLIFIED WITH CUSTOM CHECKBOXES
+   BROWSER MODAL - NEW TREE STRUCTURE
    =========================================== */
 
-/* Basic modal styling */
-.yaml-browser-modal {
-  padding: 20px;
-  width: 100%;
-  box-sizing: border-box;
+   .yaml-browser-modal {
+    padding: var(--size-4-4);
+    width: 100%;
+    box-sizing: border-box;
 }
 
 /* Typography */
-.yaml-browser-modal h2 {
-  font-size: var(--h2-size);
-  color: var(--h2-color, var(--text-normal));
-  font-weight: var(--h2-weight, var(--font-medium));
-  line-height: var(--h2-line-height, var(--line-height-normal));
-  margin-top: 0;
-  margin-bottom: var(--h2-margin-bottom, var(--size-4-4));
-  padding-bottom: var(--size-4-2);
-  border-bottom: var(--h2-border-bottom, 1px solid var(--background-modifier-border));
+.yaml-browser-modal .setting-item-heading {
+    padding-top: 0;
+    border-top: none;
 }
 
-.yaml-browser-modal p.setting-item-description {
-  color: var(--text-muted);
-  font-size: var(--font-ui-small);
-  margin-bottom: 16px;
+.yaml-browser-modal .setting-item-description {
+    color: var(--text-muted);
+    font-size: var(--font-ui-small);
+    margin-bottom: var(--size-4-4);
 }
 
 /* File tree container */
-.yaml-browser-modal .yaml-file-tree {
-  margin: 12px 0;
-  max-height: 400px;
-  min-height: 300px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 4px;
-  padding: 8px;
+.yaml-browser-modal .yaml-template-paths {
+    margin: var(--size-4-2) 0;
+    max-height: 400px;
+    min-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--background-modifier-border);
+    border-radius: var(--radius-m);
+    padding: var(--size-4-2);
+    background-color: var(--background-secondary);
 }
 
 /* Selection counter */
 .yaml-browser-modal .yaml-selected-count {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  padding: 8px 10px;
-  background-color: var(--background-primary);
-  border-radius: 4px;
-  box-shadow: var(--input-shadow);
-  margin-bottom: 10px;
-  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+    display: flex;
+    align-items: center;
+    width: 100%;
+    padding: var(--size-4-2) var(--size-4-3);
+    background-color: var(--background-primary);
+    border-radius: var(--radius-s);
+    box-shadow: var(--input-shadow);
+    margin-bottom: var(--size-4-2);
+    transition: background-color 0.3s ease, box-shadow 0.3s ease;
 }
 
 .yaml-browser-modal .yaml-selected-count.has-selection {
-  background-color: rgba(var(--interactive-accent-rgb), 0.05);
-  box-shadow: 0 0 0 1px rgba(var(--interactive-accent-rgb), 0.2);
+    background-color: rgba(var(--interactive-accent-rgb), 0.05);
+    box-shadow: 0 0 0 1px rgba(var(--interactive-accent-rgb), 0.2);
 }
 
 .yaml-browser-modal .yaml-selection-text {
-  font-size: var(--font-ui-smaller);
-  color: var(--text-muted);
+    font-size: var(--font-ui-small);
+    color: var(--text-muted);
 }
 
-/* File and folder items */
-.yaml-browser-modal .yaml-file-item,
-.yaml-browser-modal .yaml-folder-item {
-  margin-bottom: 2px;
-  position: relative;
-  transition: all 0.2s ease;
+/* Tree styling */
+.yaml-browser-modal .tree-item-self {
+    display: flex;
+    align-items: center;
+    transition: background-color 0.15s ease;
+    border-radius: var(--radius-s);
+    cursor: pointer;
 }
 
-.yaml-browser-modal .yaml-file-header,
-.yaml-browser-modal .yaml-folder-header {
-  display: flex;
-  align-items: center;
-  padding: 4px 6px;
-  border-radius: 4px;
-  transition: background-color 0.1s ease;
-  padding-left: 0px;
+.yaml-browser-modal .tree-item-self:hover {
+    background-color: var(--background-modifier-hover);
 }
 
-.yaml-browser-modal .yaml-file-header,
-.yaml-browser-modal .yaml-folder-header {
-  transition: background-color 0.15s ease, transform 0.15s ease;
-  -webkit-transition: background-color 0.15s ease, transform 0.15s ease;
-  -moz-transition: background-color 0.15s ease, transform 0.15s ease;
-  -ms-transition: background-color 0.15s ease, transform 0.15s ease;
-  -o-transition: background-color 0.15s ease, transform 0.15s ease;
-}
-
-.yaml-browser-modal .yaml-file-header:hover,
-.yaml-browser-modal .yaml-folder-header:hover {
-  background-color: var(--background-modifier-hover);
-}
-
-.yaml-browser-modal .yaml-file-header:active,
-.yaml-browser-modal .yaml-folder-header:active {
-  transform: translateY(1px);
-  transition: transform 0.05s ease;
+.yaml-browser-modal .tree-item-self:active {
+    transform: translateY(1px);
+    transition: transform 0.05s ease;
 }
 
 /* Selection styling */
-.yaml-browser-modal .is-selected {
-  background-color: rgba(var(--interactive-accent-rgb), 0.1);
-  transition: background-color 0.2s ease;
+.yaml-browser-modal .is-selected > .tree-item-self {
+    background-color: rgba(var(--interactive-accent-rgb), 0.1);
+    transition: background-color 0.2s ease;
 }
 
-.yaml-browser-modal .is-selected:hover {
-  background-color: rgba(var(--interactive-accent-rgb), 0.15);
+.yaml-browser-modal .is-selected > .tree-item-self:hover {
+    background-color: rgba(var(--interactive-accent-rgb), 0.15);
 }
 
-.yaml-browser-modal .initially-selected {
-  color: var(--text-accent);
+.yaml-browser-modal .initially-selected > .tree-item-self {
+    color: var(--text-accent);
 }
 
-/* Custom checkbox container and styling */
-.yaml-browser-modal .yaml-custom-checkbox-container {
-  display: inline-flex;
-  align-items: center;
-  margin-right: 6px;
+/* Indeterminate state styling */
+.yaml-browser-modal .is-partially-selected > .tree-item-self {
+    background-color: rgba(var(--interactive-accent-rgb), 0.05);
 }
 
-.yaml-browser-modal .yaml-custom-checkbox {
-  width: 16px;
-  height: 16px;
-  border-radius: 3px;
-  background-color: var(--background-primary);
-  border: 1px solid var(--checkbox-border-color, var(--text-muted));
-  cursor: pointer;
+/* Checkbox container styling */
+.yaml-browser-modal .tree-item-checkbox-container {
+  margin-inline-start: var(--checkbox-margin-inline-start);
   display: flex;
   align-items: center;
   justify-content: center;
+}
+
+/* Checkbox styling */
+.yaml-browser-modal .tree-item-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: var(--checkbox-size);
+  height: var(--checkbox-size);
+  border: 1px solid var(--checkbox-border-color);
+  border-radius: var(--checkbox-radius);
+  cursor: pointer;
   position: relative;
-  transition: all 0.15s ease;
-  transform-origin: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+  margin: 0;
+  padding: 0;
 }
 
-/* Checked state styling */
-.yaml-browser-modal .yaml-custom-checkbox.is-checked {
-  background-color: var(--interactive-accent);
-  border-color: var(--interactive-accent);
-  animation: checkbox-check 0.2s ease forwards;
+.yaml-browser-modal .tree-item-checkbox:checked {
+  background-color: var(--checkbox-color);
+  border-color: var(--checkbox-color);
 }
 
-@keyframes checkbox-check {
-  0% {
-    transform: scale(0.8);
-  }
-  50% {
-    transform: scale(1.1);
-  }
-  100% {
-    transform: scale(1);
-  }
+.yaml-browser-modal .tree-item-checkbox:checked::after {
+  content: "";
+  top: -1px;
+  inset-inline-start: -1px;
+  position: absolute;
+  width: var(--checkbox-size);
+  height: var(--checkbox-size);
+  display: block;
+  background-color: var(--checkbox-marker-color);
+  -webkit-mask-position: 52% 52%;
+  -webkit-mask-size: 65%;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-image: url('data:image/svg+xml; utf8, <svg width="12px" height="10px" viewBox="0 0 12 8" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"><g stroke="none" stroke-width="1" fill="none" fill-rule="evenodd"><g transform="translate(-4.000000, -6.000000)" fill="%23000000"><path d="M8.1043257,14.0367999 L4.52468714,10.5420499 C4.32525014,10.3497722 4.32525014,10.0368095 4.52468714,9.8424863 L5.24777413,9.1439454 C5.44721114,8.95166768 5.77142411,8.95166768 5.97086112,9.1439454 L8.46638057,11.5903727 L14.0291389,6.1442083 C14.2285759,5.95193057 14.5527889,5.95193057 14.7522259,6.1442083 L15.4753129,6.84377194 C15.6747499,7.03604967 15.6747499,7.35003511 15.4753129,7.54129009 L8.82741268,14.0367999 C8.62797568,14.2290777 8.3037627,14.2290777 8.1043257,14.0367999"></path></g></g></svg>');
 }
 
-/* SVG Checkbox styling */
-.yaml-browser-modal .yaml-checkbox-svg {
+.yaml-browser-modal .tree-item-checkbox:indeterminate {
+    background-color: var(--checkbox-color);
+    border-color: var(--checkbox-color);
+}
+
+.yaml-browser-modal .tree-item-checkbox:indeterminate::after {
+  content: "";
+  width: calc(var(--checkbox-size) * 0.5);
+  height: 2px;
+  background-color: var(--checkbox-marker-color);
   position: absolute;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  color: white;
-  width: 14px;
-  height: 14px;
-  stroke-width: 3;
-  opacity: 0;
-  animation: checkbox-svg-appear 0.15s ease forwards;
 }
 
-@keyframes checkbox-svg-appear {
-  0% {
-    opacity: 0;
-    transform: translate(-50%, -50%) scale(0.5);
-  }
-  100% {
-    opacity: 1;
-    transform: translate(-50%, -50%) scale(1);
-  }
+.yaml-browser-modal .tree-item-checkbox:hover {
+  border-color: var(--checkbox-border-color-hover);
 }
 
-/* Indeterminate state styling */
-.yaml-browser-modal .is-partially-selected {
-  background-color: rgba(var(--interactive-accent-rgb), 0.05);
-}
-
-.yaml-browser-modal .yaml-folder-item.is-partially-selected > .yaml-folder-header {
-  background-color: rgba(var(--interactive-accent-rgb), 0.08);
-}
-
-/* More prominent indeterminate checkbox */
-.yaml-browser-modal .yaml-custom-checkbox.is-indeterminate {
-  background-color: var(--interactive-accent);
-  border-color: var(--interactive-accent);
-  position: relative;
-}
-
-/* Icons */
-.yaml-browser-modal .yaml-folder-icon,
-.yaml-browser-modal .yaml-file-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  margin-right: 4px;
-  flex-shrink: 0;
-  transition: transform 0.2s ease, color 0.2s ease;
-}
-
-.yaml-browser-modal .yaml-folder-icon svg,
-.yaml-browser-modal .yaml-file-icon svg {
-  width: 18px;
-  height: 18px;
-  color: var(--text-muted);
-}
-
-.yaml-browser-modal .yaml-folder-header:hover .yaml-folder-icon svg,
-.yaml-browser-modal .yaml-file-header:hover .yaml-file-icon svg {
-  color: var(--text-normal);
-  transform: scale(1.05);
-}
-
-/* File and folder names */
-.yaml-browser-modal .yaml-file-name,
-.yaml-browser-modal .yaml-folder-name {
-  flex: 1;
-  font-size: var(--font-ui-small);
-}
-
-/* Folder children container */
-.yaml-browser-modal .yaml-folder-children {
-  margin-left: 20px;
-  border-left: 1px solid var(--background-modifier-border);
-  padding-left: 4px;
-}
-
-.yaml-browser-modal .yaml-folder-children {
-  max-height: fit-content;
-  overflow: hidden;
-  transition: max-height 0.25s ease-in-out, opacity 0.2s ease;
-  opacity: 1;
-}
-
-.yaml-browser-modal .yaml-folder-children--collapsed {
-  max-height: 0;
-  opacity: 0;
-  transition: max-height 0.2s ease-in-out, opacity 0.1s ease;
-  overflow: hidden;
-}
-
-/* Empty folder message styling for browser modal */
-.yaml-browser-modal .yaml-empty-folder-message {
-  color: var(--text-muted);
-  padding: 4px 0;
-  font-size: var(--font-ui-small);
-  margin-left: 20px;
-  opacity: 0.7;
-  display: flex;
-  align-items: center;
-}
-
-.yaml-browser-modal .yaml-empty-folder-message-icon {
-  margin-right: 6px;
-  opacity: 0.5;
+.yaml-browser-modal .tree-item-checkbox:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.3);
 }
 
 /* Button container */
 .yaml-browser-modal .modal-button-container {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  margin-top: 20px;
-  padding-top: 8px;
-  border-top: 1px solid var(--background-modifier-border);
-  animation: fade-in-up 0.3s ease;
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--size-4-2);
+    margin-top: var(--size-4-4);
+    padding-top: var(--size-4-2);
+    border-top: 1px solid var(--background-modifier-border);
+    animation: fade-in-up 0.3s ease;
 }
 
 @keyframes fade-in-up {
-  0% {
-    opacity: 0;
-    transform: translateY(10px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
+    0% {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+    100% {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
-/* Loading spinner for folder expansion */
-.yaml-browser-modal .yaml-folder-loading {
+/* Focus styles for accessibility */
+.yaml-browser-modal .tree-item-self:focus-visible {
+    outline: 2px solid var(--interactive-accent);
+    outline-offset: -2px;
+}
+
+/* RTL Support */
+.yaml-browser-modal .tree-item-children {
+    padding-inline-start: var(--size-4-3);
+    border-inline-start: 1px solid var(--nav-indentation-guide-color);
+}
+
+/* Inner content styling */
+.yaml-browser-modal .tree-item-inner {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    overflow: hidden;
+}
+
+.yaml-browser-modal .tree-item-inner-text {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Folder collapse arrow styling */
+.yaml-browser-modal .collapse-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 0;
-  color: var(--text-muted);
-  font-size: var(--font-ui-small);
-  margin-left: 20px;
+  margin-inline-end: var(--size-4-1);
+  color: var(--nav-collapse-icon-color);
+  transition: transform 100ms ease-in-out;
 }
 
-.yaml-browser-modal .yaml-folder-loading-spinner {
-  width: 16px;
-  height: 16px;
-  border: 2px solid var(--background-modifier-border);
-  border-top: 2px solid var(--interactive-accent);
-  border-radius: 50%;
-  margin-right: 8px;
-  animation: spin 1s linear infinite;
+.yaml-browser-modal .collapse-icon svg.svg-icon {
+  color: var(--nav-collapse-icon-color);
+  stroke-width: var(--icon-s-stroke-width);
+  width: var(--size-4-3);
+  height: var(--size-4-3);
+  transition: transform 100ms ease-in-out;
+}
+
+.yaml-browser-modal .collapse-icon.is-collapsed svg.svg-icon {
+  transform: rotate(calc(var(--direction, 1) * 90deg));
+  -webkit-transform: rotate(calc(var(--direction, 1) * 90deg));
+  -moz-transform: rotate(calc(var(--direction, 1) * 90deg));
+  -ms-transform: rotate(calc(var(--direction, 1) * 90deg));
+  -o-transform: rotate(calc(var(--direction, 1) * 90deg));
+}
+
+/* Empty state styling */
+.yaml-browser-modal .nav-empty-state {
+    padding: var(--size-4-4);
+    text-align: center;
+    color: var(--text-muted);
+}
+
+.yaml-browser-modal .nav-empty-state-text {
+    font-size: var(--font-ui-small);
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    .yaml-browser-modal .tree-item-self,
+    .yaml-browser-modal .is-selected > .tree-item-self,
+    .yaml-browser-modal .collapse-icon {
+        transition: none;
+    }
 }
 
 /* ===========================================
@@ -1764,12 +1712,24 @@
 /* ===========================================
    8. SETTINGS TAB
    =========================================== */
+
+/* ----- 8.1 Basic Container Styles ----- */
+.yaml-settings-tab {
+  overflow-y: auto;
+  height: 100%;
+  padding-top: var(--size-4-8);
+  padding-bottom: var(--size-4-16);
+  background-color: var(--background-primary);
+  padding-inline-start: var(--size-4-12);
+  padding-inline-end: var(--size-4-12);
+}
+
 /* ----- 8.2 Typography ----- */
 .yaml-settings-description {
   color: var(--text-muted);
-  font-size: var(--font-ui-smaller);
+  font-size: var(--font-ui-small);
   margin-top: var(--size-4-1);
-  margin-bottom: var(--size-4-2);
+  margin-bottom: var(--size-4-1);
 }
 
 /* ----- 8.3 Template Paths Container ----- */
@@ -1777,7 +1737,7 @@
   background-color: var(--background-secondary);
   border-radius: var(--radius-m);
   padding: var(--size-4-2);
-  max-height: 40vh; /* Updated to 40vh as requested */
+  max-height: 40vh;
   overflow-y: auto;
   margin-bottom: var(--size-4-4);
   border: 1px solid var(--background-modifier-border);
@@ -1789,7 +1749,7 @@
 
 /* Scrollbar styling */
 .yaml-template-paths::-webkit-scrollbar {
-  width: 8px;
+  width: var(--size-4-2);
 }
 
 .yaml-template-paths::-webkit-scrollbar-track {
@@ -1809,7 +1769,7 @@
   bottom: 0;
   left: 0;
   right: 0;
-  height: 20px;
+  height: var(--size-4-5);
   background: linear-gradient(to bottom, transparent, var(--background-primary));
   pointer-events: none;
   opacity: 0.7;
@@ -1823,219 +1783,181 @@
 }
 
 /* ----- 8.4 Tree Structure Components ----- */
-/* Basic node styling */
-.yaml-template-node {
-  position: relative;
-  margin-bottom: var(--size-4-1);
-  transition: opacity 0.3s ease, transform 0.3s ease;
-  max-height: fit-content; /* Allow natural height */
-  opacity: 1;
-  overflow: hidden;
-  transform-origin: top;
-  transform: translateY(0);
-}
-
-.yaml-template-node--removing {
-  opacity: 0;
-  margin-top: 0;
-  margin-bottom: 0;
-  transform: translateY(-8px); /* Slight upward movement while fading */
-  pointer-events: none; /* Prevent clicks during animation */
-}
-
-/* Node headers - containers for icon, name, and actions */
-.yaml-template-node__header {
+/* Base tree item styling */
+.yaml-template-paths .tree-item {
   position: relative;
   display: flex;
+  flex-direction: column;
+}
+
+/* Basic tree item styling - applies to files and folders */
+.yaml-template-paths .tree-item-self {
+  display: flex;
   align-items: center;
-  padding: var(--size-4-1) var(--size-4-2);
+  height: var(--nav-item-height);
+  position: relative;
   border-radius: var(--radius-s);
-  transition: background-color 0.1s ease;
-  width: 100%;
+  color: var(--nav-item-color);
+  font-size: var(--nav-item-size);
+  line-height: var(--line-height-tight);
+  cursor: var(--cursor);
 }
 
-.yaml-template-node__header:hover {
-  background-color: var(--background-modifier-hover);
-}
-
-.yaml-template-node__header--folder {
-  cursor: pointer;
-}
-
-/* Add level-based indentation classes */
-.yaml-template-node__level-0 {
-  padding-left: 0;
-}
-
-.yaml-template-node__level-1 {
-  padding-left: var(--size-4-4);
-}
-
-.yaml-template-node__level-2 {
-  padding-left: calc(var(--size-4-4) * 2);
-}
-
-.yaml-template-node__level-3 {
-  padding-left: calc(var(--size-4-4) * 3);
-}
-
-.yaml-template-node__level-4 {
-  padding-left: calc(var(--size-4-4) * 4);
-}
-
-/* Icon container */
-.yaml-template-node__icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: var(--icon-size);
-  height: var(--icon-size);
-  margin-right: var(--size-4-2);
-  flex-shrink: 0;
-}
-
-.yaml-template-node__icon svg {
-  width: var(--icon-s);
-  height: var(--icon-s);
-  color: var(--text-muted);
+/* The SVG triangle icon itself */
+.yaml-template-paths .tree-item-icon.collapse-icon svg.svg-icon {
+  color: var(--nav-collapse-icon-color);
   stroke-width: var(--icon-s-stroke-width);
+  width: var(--size-4-3);
+  height: var(--size-4-3);
+  transition: transform 100ms ease-in-out;
 }
 
-.yaml-template-node__header:hover .yaml-template-node__icon svg {
-  color: var(--text-normal);
+/* Rotation for the collapsed state */
+.yaml-template-paths .tree-item-icon.collapse-icon.is-collapsed svg.svg-icon {
+  transform: rotate(calc(var(--direction, 1) * -1 * 90deg));
+  -webkit-transform: rotate(calc(var(--direction, 1) * -1 * 90deg));
+  -moz-transform: rotate(calc(var(--direction, 1) * -1 * 90deg));
+  -ms-transform: rotate(calc(var(--direction, 1) * -1 * 90deg));
+  -o-transform: rotate(calc(var(--direction, 1) * -1 * 90deg));
 }
 
-/* Node name */
-.yaml-template-node__name {
+/* Hover state */
+.yaml-template-paths .tree-item-self:hover {
+  background-color: var(--nav-item-background-hover);
+  color: var(--nav-item-color-hover);
+}
+
+/* The text content container */
+.yaml-template-paths .tree-item-inner {
   flex: 1;
+  min-width: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 0;
-  margin: 0;
-  margin-right: 40px; /* Reserve space for trash icon */
-  font-size: var(--font-ui-small);
 }
 
-/* ----- 8.5 Actions Container & Buttons ----- */
-.yaml-template-node__actions {
-  position: absolute;
-  right: var(--size-4-2);
-  top: 50%;
-  transform: translateY(-50%);
+/* The actions container (delete button) */
+.yaml-template-paths .tree-item-flair-outer {
   display: flex;
   align-items: center;
-  justify-content: center;
-  opacity: 0.7;
-  transition: opacity 0.1s ease;
+  margin-inline-start: var(--size-4-2);
 }
 
-.yaml-template-node__header:hover .yaml-template-node__actions {
-  opacity: 1;
+/* Children container */
+.yaml-template-paths .tree-item-children {
+  padding-inline-start: var(--size-4-3);
+  border-inline-start: 1px solid var(--nav-indentation-guide-color);
 }
 
-.yaml-template-node__actions button {
-  margin: 0 !important;
-  padding: var(--size-4-1) var(--size-4-2) !important;
-  height: auto !important;
+/* Nested levels styling */
+.yaml-template-paths .tree-item-children .nav-folder > .tree-item-self.mod-collapsible {
+  padding-inline-start: var(--size-4-6);
 }
 
-.yaml-template-remove-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 var(--size-4-1);
-  height: 24px;
-}
-
-/* ----- 8.6 Hierarchy Structure & Children ----- */
-/* Children container - holds nested items */
-.yaml-template-node__children {
-  position: relative;
-  padding-left: var(--size-4-6);
-  border-left: 1px solid var(--background-modifier-border);
-  margin-left: var(--size-4-1);
-  opacity: 1;
-  transition: opacity 0.2s ease;
-}
-
-/* Collapsed state */
-.yaml-template-node__children--collapsed {
-  display: none;
+/* Animation for removing nodes */
+.yaml-template-paths .is-removing {
   opacity: 0;
-  max-height: 0;
-  overflow: hidden;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-/* Nested levels maintain proper hierarchy */
-.yaml-template-node__children .yaml-template-node__children {
-  padding-left: var(--size-4-5);
-  margin-left: 0;
-}
-
-/* Spacing for nested nodes */
-.yaml-template-node__children .yaml-template-node {
-  position: relative;
-}
-
-.yaml-template-node__children .yaml-template-node:first-child {
-  margin-top: var(--size-4-1);
-}
-
-.yaml-template-node__children .yaml-template-node:last-child {
-  margin-bottom: var(--size-4-1);
-}
-
-/* Loading indicator for chunked rendering */
-.yaml-template-children-loading {
-  padding: var(--size-4-2);
-  margin: var(--size-4-1) 0;
-  color: var(--text-muted);
-  font-style: italic;
-  font-size: var(--font-ui-smaller);
-}
-
-/* Empty folder message styling for settings tab */
-.yaml-template-node__children .yaml-empty-folder-message {
-  color: var(--text-muted);
-  padding: var(--size-4-1) 0;
+/* ----- 8.5 Buttons and Actions ----- */
+/* Action buttons in the settings section */
+.yaml-settings-tab .setting-item-control button {
+  padding: var(--size-4-1) var(--size-4-3);
+  border-radius: var(--button-radius);
   font-size: var(--font-ui-small);
-  opacity: 0.7;
+}
+
+.yaml-settings-tab .setting-item-control .clickable-icon {
   display: flex;
   align-items: center;
+  justify-content: center;
+  width: var(--icon-s);
+  height: var(--icon-s);
+  padding: var(--size-4-1);
+  color: var(--text-muted);
+  transition: color 0.1s ease;
 }
 
-.yaml-template-node__children .yaml-empty-folder-message-icon {
-  margin-right: var(--size-4-1);
-  opacity: 0.5;
+.yaml-settings-tab .setting-item-control .clickable-icon:hover {
+  box-shadow: none;
+  opacity: var(--icon-opacity-hover);
+  background: none;
+  color: var(--nav-item-color-hover) !important;
 }
 
-/* Hide the old empty message styling */
-.yaml-template-empty,
-.yaml-template-node__name--empty {
-  display: none;
+/* ----- 8.6 Modals ----- */
+/* Confirmation modal */
+.modal-content .setting-item {
+  border-top: none;
+  padding-top: 0;
 }
 
-/* Hide item count badges - keeping the selector for backward compatibility */
-.yaml-template-item-count {
-  display: none;
+.modal-button-container {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--size-4-2);
+  margin-top: var(--size-4-4);
 }
 
-/* Responsive styles */
-@media screen and (max-width: 768px) {
-  .yaml-window {
-    width: 95%;
-    padding: var(--size-4-3);
-  }
-}
-
-@media screen and (max-width: 650px) {
-  .yaml-browser-modal {
-    padding: var(--size-4-3);
+/* ----- 8.7 Reduced Motion Support ----- */
+@media (prefers-reduced-motion: reduce) {
+  .yaml-template-paths .is-removing {
+    transition: none;
   }
   
-  .yaml-window__property-manager {
-    width: 95%;
-    padding: var(--size-4-3);
+  .yaml-template-paths .nav-folder-collapse-indicator {
+    transition: none;
+  }
+}
+
+/* ----- 8.8 Responsive Styles ----- */
+@media screen and (max-width: 768px) {
+  .yaml-template-paths {
+    max-height: 30vh;
+  }
+}
+
+/* ----- 8.9 Focus Styles ----- */
+/* Proper focus visibility for keyboard navigation */
+.yaml-template-paths .tree-item-self:focus-visible,
+.yaml-template-paths .clickable-icon:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: -2px;
+  border-radius: var(--radius-s);
+}
+
+/* Only show focus styles when using keyboard, not mouse */
+.yaml-template-paths .tree-item-self:focus:not(:focus-visible),
+.yaml-template-paths .clickable-icon:focus:not(:focus-visible) {
+  outline: none;
+}
+
+/* Enhanced visual feedback for interactive elements */
+.yaml-template-paths .tree-item-self:focus-visible {
+  background-color: var(--background-modifier-hover);
+}
+
+.yaml-template-paths .clickable-icon:focus-visible {
+  background-color: var(--background-modifier-hover);
+}
+
+/* ----- 8.10 Color Scheme & Contrast Adjustments ----- */
+/* High contrast mode support */
+@media (prefers-contrast: more) {
+  .yaml-template-paths .tree-item-self:focus-visible,
+  .yaml-template-paths .clickable-icon:focus-visible {
+    outline-width: 3px;
+    outline-offset: -3px;
+  }
+  
+  .yaml-template-paths .tree-item-icon.collapse-icon svg.svg-icon {
+    stroke-width: 3px;
+  }
+  
+  .yaml-template-paths .tree-item-children {
+    border-inline-start-width: 2px;
   }
 }

@@ -1,5 +1,6 @@
-// For BrowserModal.ts:
-import { App, Modal, TFile, TFolder } from 'obsidian';
+// BrowserModal.ts
+import { App, Modal, TFile, TFolder, Setting, setIcon, EventRef } from 'obsidian';
+import { TreeNode } from '../interfaces';
 
 export interface BrowserModalResult {
     files: TFile[], 
@@ -21,6 +22,11 @@ export class BrowserModal extends Modal {
     description: string = "Select files or folders to use.";
     confirmButtonText: string = "Confirm Selection";
     expandedFolders: Set<string> = new Set();
+    
+    // New property for tree structure
+    private rootNode: TreeNode;
+    // Add a property to track event listeners
+    private eventListeners: Array<{ el: HTMLElement, type: string, callback: any }> = [];
 
     constructor(app: App, 
         onSelect: (result: BrowserModalResult) => void,
@@ -51,6 +57,13 @@ export class BrowserModal extends Modal {
         if (options.confirmButtonText) this.confirmButtonText = options.confirmButtonText;
     }
 
+    // Helper method for registering DOM events with automatic cleanup
+    private registerDomEvent(el: HTMLElement, type: string, callback: (event: any) => void): void {
+        // Track the event listener for cleanup
+        this.eventListeners.push({ el, type, callback });
+        el.addEventListener(type, callback);
+    }
+
     // Handle keyboard navigation
     private handleKeyDown(e: KeyboardEvent) {
         // If Escape key, close the modal
@@ -62,74 +75,27 @@ export class BrowserModal extends Modal {
         // If Enter key on a focused element
         if (e.key === 'Enter') {
             const focused = document.activeElement;
-            if (focused && focused.classList.contains('yaml-file-header')) {
-                // Simulate click on focused file
-                const checkbox = focused.querySelector('.yaml-custom-checkbox') as HTMLElement;
-                if (checkbox) checkbox.click();
-            } else if (focused && focused.classList.contains('yaml-folder-header')) {
-                // Simulate click on focused folder
+            if (focused && focused.classList.contains('tree-item-self')) {
+                // Simulate click on focused item
                 (focused as HTMLElement).click();
             }
         }
-        
-        // Allow tab navigation to work normally
-    }
-
-    // Helper method to get checkbox icon SVG HTML
-    private getCheckboxIconSvg(state: 'checked' | 'unchecked' | 'indeterminate'): string {
-        if (state === 'checked') {
-            return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="svg-icon yaml-checkbox-svg"><path d="M20 6L9 17l-5-5"/></svg>';
-        } else if (state === 'indeterminate') {
-            return '<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" class="svg-icon yaml-checkbox-svg"><line x1="5" y1="12" x2="19" y2="12"></line></svg>';
-        } else {
-            return ''; // Empty for unchecked state
-        }
-    }
-
-    // Helper to update checkbox state
-    private updateCheckboxState(checkbox: HTMLElement, state: 'checked' | 'unchecked' | 'indeterminate'): void {
-        // Remove existing states
-        checkbox.removeClass('is-checked');
-        checkbox.removeClass('is-indeterminate');
-        checkbox.empty();
-        
-        if (state === 'checked') {
-            checkbox.addClass('is-checked');
-            checkbox.innerHTML = this.getCheckboxIconSvg('checked');
-        } else if (state === 'indeterminate') {
-            checkbox.addClass('is-indeterminate');
-            checkbox.innerHTML = this.getCheckboxIconSvg('indeterminate');
-        }
-        // For unchecked, just leave it empty
-    }
-
-    createCustomCheckbox(isChecked: boolean, className: string): HTMLElement {
-        // Container for checkbox
-        const checkboxContainer = document.createElement('span');
-        checkboxContainer.addClass('yaml-custom-checkbox-container');
-        
-        // Create the custom checkbox element
-        const checkbox = document.createElement('div');
-        checkbox.addClass('yaml-custom-checkbox');
-        checkbox.addClass(className);
-        
-        // Set initial state
-        if (isChecked) {
-            checkbox.addClass('is-checked');
-            checkbox.innerHTML = this.getCheckboxIconSvg('checked');
-        }
-        
-        // Add to container
-        checkboxContainer.appendChild(checkbox);
-        return checkboxContainer;
     }
 
     onOpen() {
         const { contentEl } = this;
         contentEl.empty();
         
-        // Enable keyboard navigation when the modal opens
-        contentEl.addEventListener('keydown', this.handleKeyDown.bind(this));
+        // Add class for browser modal
+        contentEl.addClass('yaml-browser-modal');
+        
+        // Set title and instructions using Setting component
+        new Setting(contentEl)
+            .setName(this.title)
+            .setHeading();
+        
+        new Setting(contentEl)
+            .setDesc(this.description);
         
         // Initialize selection from existing paths  
         this.selectedFiles = [];
@@ -154,26 +120,17 @@ export class BrowserModal extends Modal {
         // Ensure all folder selections are properly set based on child selections
         this.ensureAllFolderSelections();
         
-        // Add class for browser modal
-        contentEl.addClass('yaml-browser-modal');
-        
-        // Set title and instructions based on configuration
-        contentEl.createEl('h2', { text: this.title });
-        contentEl.createEl('p', { 
-            text: this.description,
-            cls: 'setting-item-description' 
-        });
-        
-        // File tree container
-        const fileTreeContainer = contentEl.createDiv({ cls: 'yaml-file-tree' });
-        
         // Selection counter
         const selectionCountEl = contentEl.createDiv({ cls: 'yaml-selected-count' });
         const countTextSpan = selectionCountEl.createSpan({ cls: 'yaml-selection-text' });
         this.updateSelectionCount(countTextSpan);
         
-        // Add root folder contents
-        this.renderFileTree(fileTreeContainer, this.app.vault.getRoot(), countTextSpan);
+        // File tree container
+        const fileTreeContainer = contentEl.createDiv({ cls: 'yaml-template-paths' });
+        
+        // Build and render the file tree
+        this.buildFileTree();
+        this.renderFileTree(fileTreeContainer, countTextSpan);
         
         // Button container
         const buttonContainer = contentEl.createDiv({ cls: 'modal-button-container' });
@@ -194,13 +151,12 @@ export class BrowserModal extends Modal {
             attr: { type: 'button' }
         });
         
-        cancelButton.addEventListener('click', () => {
-            // Just close the modal without saving any changes
+        // Register event handlers with proper cleanup
+        this.registerDomEvent(cancelButton, 'click', () => {
             this.close();
         });
         
-        // Event handlers
-        confirmButton.addEventListener('click', () => {
+        this.registerDomEvent(confirmButton, 'click', () => {
             // Track which initially selected items were removed
             const removedFilePaths = this.initialSelectedFilePaths.filter(
                 path => !this.selectedFiles.some(f => f.path === path)
@@ -219,349 +175,584 @@ export class BrowserModal extends Modal {
             });
             this.close();
         });
+        
+        // Register keyboard event handler
+        this.registerDomEvent(contentEl, 'keydown', this.handleKeyDown.bind(this));
     }
 
-    renderFileTree(container: HTMLElement, folder: TFolder, countEl: HTMLElement, level: number = 0) {
-        // Skip hidden folders
-        if (folder.path.startsWith('.') && !folder.isRoot()) return;
+    // Build hierarchical tree structure
+    private buildFileTree() {
+        // Initialize root node
+        this.rootNode = {
+            name: this.app.vault.getName(),
+            path: '',
+            isDirectory: true,
+            children: []
+        };
         
-        // For non-root folders, create folder item
-        if (!folder.isRoot()) {
-            this.renderFolderItem(container, folder, countEl, level);
-            return;
+        // Get all markdown files and folders
+        const allFiles = this.app.vault.getMarkdownFiles();
+        const allFolders = this.app.vault.getAllLoadedFiles()
+            .filter(file => file instanceof TFolder && !file.path.startsWith('.')) as TFolder[];
+        
+        // Sort folders by path length to process parent folders first
+        allFolders.sort((a, b) => a.path.length - b.path.length);
+        
+        // Add all folders to the tree
+        for (const folder of allFolders) {
+            if (folder.path === '') continue; // Skip root
+            
+            this.addNodeToTree(this.rootNode, folder.path, folder.name, true);
         }
         
-        // For root folder, render children directly
-        const sortedChildren = [...folder.children].sort((a, b) => {
-            const aIsFolder = a instanceof TFolder;
-            const bIsFolder = b instanceof TFolder;
+        // Add all files to the tree
+        for (const file of allFiles) {
+            this.addNodeToTree(this.rootNode, file.path, file.name, false);
+        }
+        
+        // Sort all nodes
+        this.sortTreeNodes(this.rootNode.children);
+    }
+
+    // Helper to add a node to the tree
+    private addNodeToTree(root: TreeNode, path: string, name: string, isDirectory: boolean) {
+        const parts = path.split('/');
+        let currentNode = root;
+        let currentPath = '';
+        
+        // Navigate/create the path structure
+        for (let i = 0; i < parts.length; i++) {
+            const part = parts[i];
+            currentPath = currentPath ? `${currentPath}/${part}` : part;
+            const isLastPart = i === parts.length - 1;
             
-            // Folders first, then files
-            if (aIsFolder !== bIsFolder) {
-                return aIsFolder ? -1 : 1;
+            // Look for existing node
+            let found = currentNode.children.find(c => c.name === part);
+            
+            if (!found) {
+                // Create a new node
+                const newNode: TreeNode = {
+                    name: part,
+                    path: currentPath,
+                    isDirectory: isLastPart ? isDirectory : true, // Intermediate nodes are always directories
+                    children: []
+                };
+                
+                currentNode.children.push(newNode);
+                found = newNode;
             }
             
-            // Alphabetical within type
+            currentNode = found;
+        }
+    }
+
+    // Sort helper for tree nodes
+    private sortTreeNodes(nodes: TreeNode[]) {
+        // Sort by type first (directories before files), then by name
+        nodes.sort((a, b) => {
+            if (a.isDirectory !== b.isDirectory) {
+                return a.isDirectory ? -1 : 1;
+            }
             return a.name.localeCompare(b.name);
         });
         
-        for (const child of sortedChildren) {
-            if (child instanceof TFolder && !child.path.startsWith('.')) {
-                this.renderFileTree(container, child, countEl, level);
-            } else if (child instanceof TFile && child.extension === 'md') {
-                this.renderFileItem(container, child, countEl, level);
+        // Recursively sort children
+        for (const node of nodes) {
+            if (node.children.length > 0) {
+                this.sortTreeNodes(node.children);
             }
         }
     }
 
-    renderFolderItem(container: HTMLElement, folder: TFolder, countEl: HTMLElement, level: number) {
-        const isSelected = this.selectedFolders.some(f => f.path === folder.path);
-        const wasInitiallySelected = this.initialSelectedFolderPaths.includes(folder.path);
+    // Render file tree based on tree structure
+    private renderFileTree(container: HTMLElement, countTextSpan: HTMLElement) {
+        // Clear the container first
+        container.empty();
         
-        const folderItem = container.createDiv({ 
-            cls: 'yaml-folder-item',
-            attr: { 'data-path': folder.path }
+        // Create a tree container
+        const treeRoot = container.createDiv({ cls: 'tree-item nav-folder mod-root' });
+        
+        // Render the tree starting with the root's children
+        for (const child of this.rootNode.children) {
+            this.renderTreeItem(treeRoot, child, countTextSpan);
+        }
+        
+        // Add an info message if no items are available
+        if (this.rootNode.children.length === 0) {
+            const emptyState = container.createDiv({
+                cls: 'nav-empty-state'
+            });
+            
+            emptyState.createSpan({
+                text: 'No files or folders found.',
+                cls: 'nav-empty-state-text'
+            });
+        }
+    }
+
+    private renderTreeItem(parentEl: HTMLElement, node: TreeNode, countTextSpan: HTMLElement) {
+        // Create a tree item container
+        const itemEl = parentEl.createDiv({ 
+            cls: 'tree-item ' + (node.isDirectory ? 'nav-folder' : 'nav-file'),
+            attr: { 'data-path': node.path }
         });
+        
+        // Track if this item is selected
+        const isSelected = node.isDirectory 
+            ? this.selectedFolders.some(f => f.path === node.path)
+            : this.selectedFiles.some(f => f.path === node.path);
+        
+        // Track if item was initially selected
+        const wasInitiallySelected = node.isDirectory
+            ? this.initialSelectedFolderPaths.includes(node.path)
+            : this.initialSelectedFilePaths.includes(node.path);
         
         if (wasInitiallySelected) {
-            folderItem.addClass('initially-selected');
+            itemEl.addClass('initially-selected');
         }
-        
-        // Check if this folder has the indeterminate state before applying classes
-        const isIndeterminate = !isSelected && this.hasIndeterminateSelection(folder);
         
         if (isSelected) {
-            folderItem.addClass('is-selected');
-        } else if (isIndeterminate) {
-            folderItem.addClass('is-partially-selected');
+            itemEl.addClass('is-selected');
         }
         
-        // Create folder header
-        const headerRow = folderItem.createDiv({ 
-            cls: 'yaml-folder-header',
-            attr: { 
-                tabindex: '0',
-                'aria-label': `Folder: ${folder.name}, ${isSelected ? 'Selected' : isIndeterminate ? 'Partially selected' : 'Not selected'}`,
-                'aria-expanded': 'false' // Will be toggled when clicked
+        // Check for indeterminate state for folders
+        let isIndeterminate = false;
+        if (node.isDirectory && !isSelected) {
+            const folder = this.app.vault.getFolderByPath(node.path);
+            if (folder) {
+                isIndeterminate = this.hasIndeterminateSelection(folder);
+                if (isIndeterminate) {
+                    itemEl.addClass('is-partially-selected');
+                }
+            }
+        }
+        
+        // Create the self (clickable title area)
+        const selfEl = itemEl.createDiv({ 
+            cls: 'tree-item-self ' + (node.isDirectory ? 'mod-collapsible' : ''),
+            attr: {
+                'aria-label': node.isDirectory 
+                    ? `Folder: ${node.name}, ${isSelected ? 'Selected' : isIndeterminate ? 'Partially selected' : 'Not selected'}`
+                    : `File: ${node.name}, ${isSelected ? 'Selected' : 'Not selected'}`,
+                'data-path': node.path,
+                'tabindex': '0',
+                'role': node.isDirectory ? 'button' : 'listitem',
+                ...(node.isDirectory ? { 
+                    'aria-expanded': this.expandedFolders.has(node.path).toString(),
+                    'aria-controls': `children-${node.path.replace(/[^a-zA-Z0-9]/g, '-')}` 
+                } : {})
             }
         });
-        headerRow.style.paddingLeft = `${level * 0}px`;
         
-        // Only show checkboxes for folders if not in single file selection mode
-        if (!this.singleFileSelectionMode) {
-            const checkboxContainer = this.createCustomCheckbox(isSelected, 'yaml-folder-checkbox');
-            headerRow.appendChild(checkboxContainer);
-            const checkbox = checkboxContainer.querySelector('.yaml-custom-checkbox') as HTMLElement;
+        // Add collapse indicator for directories (ONLY the triangle arrow, no folder icon)
+        if (node.isDirectory) {
+            const collapseIconEl = selfEl.createDiv({ cls: 'tree-item-icon collapse-icon' });
+            setIcon(collapseIconEl, 'right-triangle');
             
-            // Apply indeterminate styling if needed
-            if (isIndeterminate) {
-                this.updateCheckboxState(checkbox, 'indeterminate');
+            // When collapsed, add is-collapsed class to the icon element
+            if (!this.expandedFolders.has(node.path)) {
+                collapseIconEl.addClass('is-collapsed');
+            }
+        }
+        
+        // Add the main content
+        const innerEl = selfEl.createDiv({ cls: 'tree-item-inner' });
+        innerEl.createSpan({ 
+            text: node.name,
+            cls: 'tree-item-inner-text'
+        });
+        
+        // Add checkbox for selection at the END of the tree item
+        if (!this.singleFileSelectionMode || !node.isDirectory) {
+            // Create checkbox container at the end
+            const checkboxContainer = selfEl.createDiv({ cls: 'tree-item-checkbox-container' });
+            
+            // Create custom checkbox element (using actual checkbox for accessibility)
+            const checkbox = checkboxContainer.createEl('input', {
+                type: 'checkbox',
+                cls: 'tree-item-checkbox',
+                attr: {
+                    'checked': isSelected ? 'checked' : '',
+                    'aria-label': `Select ${node.name}`,
+                    'tabindex': '-1' // Make it not focusable directly, focus goes to the tree item
+                }
+            }) as HTMLInputElement;
+            
+            // Set initial checkbox state
+            checkbox.checked = isSelected;
+            
+            // Handle indeterminate state for folders
+            if (node.isDirectory && isIndeterminate) {
+                checkbox.indeterminate = true;
             }
             
-            checkbox.addEventListener('click', (e) => {
-                e.stopPropagation();
-                
-                const isCurrentlyChecked = checkbox.hasClass('is-checked');
-                const isCurrentlyIndeterminate = checkbox.hasClass('is-indeterminate');
-
-                if (!isCurrentlyChecked) {
-                    // Select folder
-                    this.updateCheckboxState(checkbox, 'checked');
-                    
-                    if (!this.selectedFolders.some(f => f.path === folder.path)) {
-                        this.selectedFolders.push(folder);
-                        this.folderSettings.set(folder.path, true);
-                        folderItem.addClass('is-selected');
-                        folderItem.removeClass('is-partially-selected');
-                    }
-                    
-                    // Select all children
-                    this.selectAllChildren(folder);
-                    
-                    // Check if this completes the parent folder selection
-                    if (folder.path.includes('/')) {
-                        this.updateParentFoldersOnSelection(folder.path);
-                    }
+            // Add change handler
+            this.registerDomEvent(checkbox, 'change', () => {
+                if (node.isDirectory) {
+                    this.handleFolderSelection(node, checkbox.checked, itemEl);
                 } else {
-                    // Deselect folder and all children
-                    this.updateCheckboxState(checkbox, 'unchecked');
-                    this.deselectFolderAndChildren(folder);
-                    folderItem.removeClass('is-selected');
-                    folderItem.removeClass('is-partially-selected');
+                    this.handleFileSelection(node, checkbox.checked, itemEl);
                 }
                 
-                // Update selection count
-                this.updateSelectionCount(countEl);
+                // Update the selection count
+                this.updateSelectionCount(countTextSpan);
                 
-                // Update all visible checkboxes to match data
+                // Update all visible toggles
                 this.updateVisibleCheckboxes();
             });
         }
         
-        // Folder icon
-        const folderIcon = headerRow.createSpan({ cls: 'yaml-folder-icon' });
-        folderIcon.innerHTML = this.getSvgIcon(this.expandedFolders.has(folder.path) ? 'folder-open' : 'folder-closed');
-        
-        // Folder name
-        headerRow.createSpan({ 
-            text: folder.name, 
-            cls: 'yaml-folder-name' 
-        });
-        
-        // Children container
-        const childrenContainer = folderItem.createDiv({ 
-            cls: `yaml-folder-children ${!this.expandedFolders.has(folder.path) ? 'yaml-folder-children--collapsed' : ''}`
-        });
-        
-        // Toggle expansion on click
-        headerRow.addEventListener('click', (e) => {
-            // Only toggle if not clicking the checkbox
-            if (!(e.target instanceof HTMLElement) || 
-                (!e.target.closest('.yaml-custom-checkbox-container') && !e.target.classList.contains('yaml-custom-checkbox'))) {
-                
-                const isCollapsed = childrenContainer.hasClass('yaml-folder-children--collapsed');
-                
-                // Toggle collapsed state
-                childrenContainer.toggleClass('yaml-folder-children--collapsed', !isCollapsed);
-
-                // Update aria-expanded attribute for accessibility
-                headerRow.setAttribute('aria-expanded', isCollapsed ? 'true' : 'false');
-                
-                // Log state before and after for debugging
-                console.log('Folder toggled:', {
-                    path: folder.path,
-                    wasCollapsed: isCollapsed,
-                    isNowCollapsed: !isCollapsed
-                });
-                
-                // Update folder icon
-                folderIcon.empty();
-                folderIcon.innerHTML = this.getSvgIcon(isCollapsed ? 'folder-open' : 'folder-closed');
-                
-                // Track expanded state
-                if (isCollapsed) {
-                    this.expandedFolders.add(folder.path);
+        // For directories, create children container
+        if (node.isDirectory) {
+            const childrenId = `children-${node.path.replace(/[^a-zA-Z0-9]/g, '-')}`;
+            const childrenEl = itemEl.createDiv({ 
+                cls: 'tree-item-children',
+                attr: {
+                    'id': childrenId,
+                    'role': 'group',
+                    'aria-label': `${node.name} contents`
+                }
+            });
+            
+            // Hide if not expanded
+            if (!this.expandedFolders.has(node.path)) {
+                childrenEl.style.display = 'none';
+            }
+            
+            // Add click handler for expansion toggling
+            this.registerDomEvent(selfEl, 'click', (e: MouseEvent) => {
+                // Only process clicks that aren't on the checkbox
+                if (!(e.target instanceof HTMLElement) || 
+                    !e.target.closest('.tree-item-checkbox-container') && 
+                    !e.target.classList.contains('tree-item-checkbox')) {
                     
-                    // If the folder was previously collapsed and now expanded
-                    if (childrenContainer.childElementCount === 0) {
-                        // First, show a loading indicator
-                        const loadingEl = childrenContainer.createDiv({
-                            cls: 'yaml-folder-loading',
-                        });
-                        
-                        // Add spinner
-                        loadingEl.createDiv({
-                            cls: 'yaml-folder-loading-spinner'
-                        });
-                        
-                        // Add loading text
-                        loadingEl.createSpan({
-                            text: 'Loading...'
-                        });
-                        
-                        // Use setTimeout to give the UI time to show the loading state
-                        setTimeout(() => {
-                            // Remove loading indicator
-                            loadingEl.remove();
-                            
-                            // Check if folder is empty after filtering hidden items
-                            const visibleChildren = folder.children.filter(child => 
-                                (child instanceof TFolder && !child.path.startsWith('.')) || 
-                                (child instanceof TFile && child.extension === 'md')
-                            );
-                            
-                            if (visibleChildren.length === 0) {
-                                // Show empty message if folder is empty
-                                const emptyMessage = childrenContainer.createDiv({
-                                    cls: 'yaml-empty-folder-message'
-                                });
-                                
-                                // Add file icon
-                                const iconSpan = emptyMessage.createSpan({
-                                    cls: 'yaml-empty-folder-message-icon'
-                                });
-                                iconSpan.innerHTML = this.getSvgIcon('file');
-                                
-                                // Add text
-                                emptyMessage.createSpan({
-                                    text: 'Empty folder'
-                                });
-                            } else {
-                                // Non-empty folder, render all visible children
-                                const sortedChildren = [...visibleChildren].sort((a, b) => {
-                                    const aIsFolder = a instanceof TFolder;
-                                    const bIsFolder = b instanceof TFolder;
-                                    
-                                    // Folders first, then files
-                                    if (aIsFolder !== bIsFolder) {
-                                        return aIsFolder ? -1 : 1;
-                                    }
-                                    
-                                    // Alphabetical within type
-                                    return a.name.localeCompare(b.name);
-                                });
-                                
-                                for (const child of sortedChildren) {
-                                    if (child instanceof TFolder && !child.path.startsWith('.')) {
-                                        this.renderFolderItem(childrenContainer, child, countEl, level + 1);
-                                    } else if (child instanceof TFile && child.extension === 'md') {
-                                        this.renderFileItem(childrenContainer, child, countEl, level + 1);
-                                    }
-                                }
+                    // Toggle expanded state
+                    const isExpanded = this.expandedFolders.has(node.path);
+                    
+                    if (isExpanded) {
+                            // Collapse folder
+                            this.expandedFolders.delete(node.path);
+                            childrenEl.style.display = 'none';
+                            selfEl.setAttribute('aria-expanded', 'false');
+                            const collapseIcon = selfEl.querySelector('.collapse-icon');
+                            if (collapseIcon) {
+                                collapseIcon.addClass('is-collapsed');
                             }
-                        }, 300); // Short delay to show loading state
+                        } else {
+                            // Expand folder
+                            this.expandedFolders.add(node.path);
+                            childrenEl.style.display = '';
+                            selfEl.setAttribute('aria-expanded', 'true');
+                            const collapseIcon = selfEl.querySelector('.collapse-icon');
+                            if (collapseIcon) {
+                                collapseIcon.removeClass('is-collapsed');
+                            }
+                        
+                        // Lazy load children if needed
+                        if (childrenEl.childElementCount === 0 && node.children.length > 0) {
+                            for (const child of node.children) {
+                                this.renderTreeItem(childrenEl, child, countTextSpan);
+                            }
+                        } else if (node.children.length === 0 && childrenEl.childElementCount === 0) {
+                            // Show empty folder message
+                            const emptyEl = childrenEl.createDiv({ cls: 'nav-empty-state' });
+                            emptyEl.createSpan({ 
+                                text: 'Empty folder', 
+                                cls: 'nav-empty-state-text'
+                            });
+                        }
+                    }
+                }
+            });
+            
+            // Add keyboard handler for folder
+            this.registerDomEvent(selfEl, 'keydown', (e: KeyboardEvent) => {
+                this.handleItemKeyDown(e, node, selfEl, childrenEl);
+            });
+            
+            // Render children if expanded initially
+            if (this.expandedFolders.has(node.path)) {
+                if (node.children.length > 0) {
+                    for (const child of node.children) {
+                        this.renderTreeItem(childrenEl, child, countTextSpan);
                     }
                 } else {
-                    this.expandedFolders.delete(folder.path);
+                    // Show empty folder message
+                    const emptyEl = childrenEl.createDiv({ cls: 'nav-empty-state' });
+                    emptyEl.createSpan({ 
+                        text: 'Empty folder', 
+                        cls: 'nav-empty-state-text'
+                    });
                 }
             }
-        });
+        } else {
+            // Add keyboard handler for file
+            this.registerDomEvent(selfEl, 'keydown', (e: KeyboardEvent) => {
+                this.handleItemKeyDown(e, node, selfEl);
+            });
+        }
     }
 
-    renderFileItem(container: HTMLElement, file: TFile, countEl: HTMLElement, level: number) {
-        const isSelected = this.selectedFiles.some(f => f.path === file.path);
-        const wasInitiallySelected = this.initialSelectedFilePaths.includes(file.path);
+    // Handle folder selection toggle
+    private handleFolderSelection(node: TreeNode, isSelected: boolean, itemEl: HTMLElement) {
+        const folder = this.app.vault.getFolderByPath(node.path);
+        if (!folder) return;
         
-        const fileItem = container.createDiv({ 
-            cls: 'yaml-file-item',
-            attr: { 'data-path': file.path }
-        });
+        if (isSelected) {
+            // Add to selection if not already selected
+            if (!this.selectedFolders.some(f => f.path === node.path)) {
+                this.selectedFolders.push(folder);
+                this.folderSettings.set(node.path, true);
+                itemEl.addClass('is-selected');
+                itemEl.removeClass('is-partially-selected');
+            }
+            
+            // Select all children
+            this.selectAllChildren(folder);
+            
+            // Check if this completes the parent folder selection
+            if (node.path.includes('/')) {
+                this.updateParentFoldersOnSelection(node.path);
+            }
+        } else {
+            // Deselect folder and all children
+            this.deselectFolderAndChildren(folder);
+            itemEl.removeClass('is-selected');
+            itemEl.removeClass('is-partially-selected');
+        }
+    }
+
+    // Handle file selection toggle
+    private handleFileSelection(node: TreeNode, isSelected: boolean, itemEl: HTMLElement) {
+        const file = this.app.vault.getFileByPath(node.path);
+        if (!(file instanceof TFile)) return;
         
-        if (wasInitiallySelected) {
-            fileItem.addClass('initially-selected');
+        if (this.singleFileSelectionMode && isSelected) {
+            // In single file mode, clear all other selections
+            this.selectedFiles = [];
+            
+            // Clear all file selections visually
+            document.querySelectorAll('.nav-file').forEach((el: Element) => {
+                if (el instanceof HTMLElement) {
+                    el.removeClass('is-selected');
+                }
+            });
+            
+            // Reset all checkboxes in single selection mode
+            document.querySelectorAll('.tree-item-checkbox').forEach((cb: Element) => {
+                if (cb instanceof HTMLInputElement && cb.closest('.nav-file') && cb.checked) {
+                    cb.checked = false;
+                }
+            });
         }
         
         if (isSelected) {
-            fileItem.addClass('is-selected');
+            // Add to selection
+            if (!this.selectedFiles.some(f => f.path === node.path)) {
+                this.selectedFiles.push(file);
+                itemEl.addClass('is-selected');
+                
+                // Check if this completes the parent folder selection
+                this.updateParentFoldersOnSelection(node.path);
+                
+                // Ensure all parent folder states are correct
+                this.ensureAllFolderSelections();
+            }
+        } else {
+            // Remove from selection
+            this.selectedFiles = this.selectedFiles.filter(f => f.path !== node.path);
+            itemEl.removeClass('is-selected');
+            
+            // Update parent folders when a file is deselected
+            this.updateParentFoldersState(node.path);
         }
+    }
+
+    // Update all visible checkboxes to match current selection state
+    private updateVisibleCheckboxes() {
+        // Ensure all folder selections are consistent
+        this.ensureAllFolderSelections();
         
-        const headerRow = fileItem.createDiv({ 
-            cls: 'yaml-file-header',
-            attr: { 
-                tabindex: '0',
-                'aria-label': `File: ${file.name}, ${isSelected ? 'Selected' : 'Not selected'}`
-            }
-        });
-        headerRow.style.paddingLeft = `${level * 0}px`;
-        
-        // Create checkbox
-        const checkboxContainer = this.createCustomCheckbox(isSelected, 'yaml-file-checkbox');
-        headerRow.appendChild(checkboxContainer);
-        const checkbox = checkboxContainer.querySelector('.yaml-custom-checkbox') as HTMLElement;
-        
-        // File icon
-        const fileIcon = headerRow.createSpan({ cls: 'yaml-file-icon' });
-        fileIcon.innerHTML = this.getSvgIcon('file');
-        
-        // File name
-        headerRow.createSpan({ 
-            text: file.name, 
-            cls: 'yaml-file-name' 
-        });
-        
-        // Checkbox handling
-        checkbox.addEventListener('click', (e) => {
-            e.stopPropagation();
+        // Update folder checkboxes
+        document.querySelectorAll('.nav-folder').forEach((folderEl: Element) => {
+            if (!(folderEl instanceof HTMLElement)) return;
             
-            const isCurrentlyChecked = checkbox.hasClass('is-checked');
+            const pathEl = folderEl.querySelector('.tree-item-self')?.getAttribute('data-path');
+            if (!pathEl) return;
             
-            if (this.singleFileSelectionMode && !isCurrentlyChecked) {
-                // In single file mode, clear all other selections
-                this.selectedFiles = [];
-                document.querySelectorAll('.yaml-custom-checkbox.yaml-file-checkbox').forEach((cb: HTMLElement) => {
-                    cb.removeClass('is-checked');
-                    const checkmark = cb.querySelector('.yaml-checkbox-checkmark');
-                    if (checkmark) cb.removeChild(checkmark);
-                });
-                document.querySelectorAll('.yaml-file-item').forEach((item: HTMLElement) => {
-                    item.removeClass('is-selected');
-                });
+            const isSelected = this.selectedFolders.some(f => f.path === pathEl);
+            
+            // Get checkbox
+            const checkboxEl = folderEl.querySelector('.tree-item-checkbox') as HTMLInputElement | null;
+            if (!checkboxEl) return;
+            
+            // Check for indeterminate state
+            const folder = this.app.vault.getFolderByPath(pathEl);
+            let isIndeterminate = false;
+            
+            if (folder && !isSelected) {
+                isIndeterminate = this.hasIndeterminateSelection(folder);
             }
             
-            if (!isCurrentlyChecked) {
-                // Add to selection
-                this.updateCheckboxState(checkbox, 'checked');
-                
-                if (!this.selectedFiles.some(f => f.path === file.path)) {
-                    this.selectedFiles.push(file);
-                    fileItem.addClass('is-selected');
-                    
-                    // Check if this completes the parent folder selection
-                    this.updateParentFoldersOnSelection(file.path);
-                    
-                    // Additional: ensure all parent folder states are correct
-                    this.ensureAllFolderSelections();
-                }
+            // Update checkbox state
+            checkboxEl.checked = isSelected;
+            checkboxEl.indeterminate = isIndeterminate;
+            
+            // Update folder classes
+            if (isSelected) {
+                folderEl.addClass('is-selected');
+                folderEl.removeClass('is-partially-selected');
+            } else if (isIndeterminate) {
+                folderEl.removeClass('is-selected');
+                folderEl.addClass('is-partially-selected');
             } else {
-                // Remove from selection
-                this.updateCheckboxState(checkbox, 'unchecked');
-                
-                this.selectedFiles = this.selectedFiles.filter(f => f.path !== file.path);
-                fileItem.removeClass('is-selected');
-                
-                // Update parent folders when a file is deselected
-                this.updateParentFoldersState(file.path);
+                folderEl.removeClass('is-selected');
+                folderEl.removeClass('is-partially-selected');
             }
-            
-            // Update selection count
-            this.updateSelectionCount(countEl);
-            
-            // Update all visible checkboxes
-            this.updateVisibleCheckboxes();
-        }); 
+        });
         
-        // Make row clickable to toggle checkbox
-        headerRow.addEventListener('click', (e) => {
-            // Only handle clicks that aren't on the checkbox itself
-            if (!(e.target instanceof HTMLElement) || 
-                (!e.target.closest('.yaml-custom-checkbox-container') && !e.target.classList.contains('yaml-custom-checkbox'))) {
-                
-                // Simulate a click on the checkbox
-                checkbox.click();
+        // Update file checkboxes
+        document.querySelectorAll('.nav-file').forEach((fileEl: Element) => {
+            if (!(fileEl instanceof HTMLElement)) return;
+            
+            const pathEl = fileEl.querySelector('.tree-item-self')?.getAttribute('data-path');
+            if (!pathEl) return;
+            
+            const isSelected = this.selectedFiles.some(f => f.path === pathEl);
+            
+            // Get checkbox
+            const checkboxEl = fileEl.querySelector('.tree-item-checkbox') as HTMLInputElement | null;
+            if (!checkboxEl) return;
+            
+            // Update checkbox state
+            checkboxEl.checked = isSelected;
+            
+            // Update file classes
+            if (isSelected) {
+                fileEl.addClass('is-selected');
+            } else {
+                fileEl.removeClass('is-selected');
             }
         });
     }
 
+    // Handle keyboard navigation for tree items
+    private handleItemKeyDown(e: KeyboardEvent, node: TreeNode, selfEl: HTMLElement, childrenEl?: HTMLElement) {
+        if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            
+            // For files or selecting folders, toggle checkbox
+            const checkbox = selfEl.querySelector('.tree-item-checkbox') as HTMLInputElement | null;
+            if (checkbox) {
+                checkbox.checked = !checkbox.checked;
+                checkbox.dispatchEvent(new Event('change'));
+            }
+            
+            // For folders, also toggle expanded state if it was Space key
+            if (node.isDirectory && childrenEl && e.key === ' ') {
+                const isExpanded = this.expandedFolders.has(node.path);
+                
+                if (isExpanded) {
+                    this.expandedFolders.delete(node.path);
+                    childrenEl.style.display = 'none';
+                    selfEl.setAttribute('aria-expanded', 'false');
+                    const collapseIcon = selfEl.querySelector('.collapse-icon');
+                    if (collapseIcon) {
+                        collapseIcon.addClass('is-collapsed');
+                    }
+                } else {
+                    this.expandedFolders.add(node.path);
+                    childrenEl.style.display = '';
+                    selfEl.setAttribute('aria-expanded', 'true');
+                    const collapseIcon = selfEl.querySelector('.collapse-icon');
+                    if (collapseIcon) {
+                        collapseIcon.removeClass('is-collapsed');
+                    }
+                    
+                    // Lazy load children if needed
+                    if (childrenEl.childElementCount === 0 && node.children.length > 0) {
+                        const selectionText = this.contentEl.querySelector('.yaml-selection-text');
+                        if (selectionText instanceof HTMLElement) {
+                            for (const child of node.children) {
+                                this.renderTreeItem(childrenEl, child, selectionText);
+                            }
+                        }
+                    } else if (node.children.length === 0 && childrenEl.childElementCount === 0) {
+                        // Show empty folder message
+                        const emptyEl = childrenEl.createDiv({ cls: 'nav-empty-state' });
+                        emptyEl.createSpan({ 
+                            text: 'Empty folder', 
+                            cls: 'nav-empty-state-text'
+                        });
+                    }
+                }
+            }
+        } else if (e.key === 'ArrowRight' && node.isDirectory && childrenEl) {
+            e.preventDefault();
+            const isExpanded = this.expandedFolders.has(node.path);
+            
+            if (!isExpanded) {
+                // Expand if collapsed
+                selfEl.click();
+            } else {
+                // Move to first child if expanded
+                const firstChild = childrenEl.querySelector('.tree-item-self') as HTMLElement | null;
+                if (firstChild) firstChild.focus();
+            }
+        } else if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            
+            if (node.isDirectory && this.expandedFolders.has(node.path) && childrenEl) {
+                // Collapse if expanded
+                selfEl.click();
+            } else {
+                // Move to parent
+                const parentItem = selfEl.closest('.tree-item-children')?.parentElement;
+                const parentSelf = parentItem?.querySelector('.tree-item-self') as HTMLElement | null;
+                if (parentSelf) parentSelf.focus();
+            }
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            
+            // Find the next item to focus
+            const nextFocusable = this.findNextFocusableElement(selfEl);
+            if (nextFocusable) nextFocusable.focus();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            
+            // Find the previous item to focus
+            const prevFocusable = this.findPrevFocusableElement(selfEl);
+            if (prevFocusable) prevFocusable.focus();
+        }
+    }
+
+    // Helper to find next focusable element
+    private findNextFocusableElement(currentEl: HTMLElement): HTMLElement | null {
+        const allFocusable = Array.from(
+            document.querySelectorAll('.tree-item-self[tabindex="0"]')
+        ) as HTMLElement[];
+        
+        const currentIndex = allFocusable.indexOf(currentEl);
+        if (currentIndex >= 0 && currentIndex < allFocusable.length - 1) {
+            return allFocusable[currentIndex + 1];
+        }
+        return null;
+    }
+
+    // Helper to find previous focusable element
+    private findPrevFocusableElement(currentEl: HTMLElement): HTMLElement | null {
+        const allFocusable = Array.from(
+            document.querySelectorAll('.tree-item-self[tabindex="0"]')
+        ) as HTMLElement[];
+        
+        const currentIndex = allFocusable.indexOf(currentEl);
+        if (currentIndex > 0) {
+            return allFocusable[currentIndex - 1];
+        }
+        return null;
+    }
+
+    // Other methods remain largely the same...
     selectAllChildren(folder: TFolder) {
         for (const child of folder.children) {
             if (child instanceof TFolder && !child.path.startsWith('.')) {
@@ -578,7 +769,6 @@ export class BrowserModal extends Modal {
         }
         
         // After selecting all children, ensure parent folders are updated
-        // This will cascade upwards from any selection changes
         this.ensureAllFolderSelections();
     }
 
@@ -603,10 +793,13 @@ export class BrowserModal extends Modal {
         const folderCount = this.selectedFolders.length;
         
         // Add or remove the has-selection class based on selection state
-        if (fileCount > 0 || folderCount > 0) {
-            countEl.addClass('has-selection');
-        } else {
-            countEl.removeClass('has-selection');
+        const selCountEl = countEl.closest('.yaml-selected-count');
+        if (selCountEl instanceof HTMLElement) {
+            if (fileCount > 0 || folderCount > 0) {
+                selCountEl.addClass('has-selection');
+            } else {
+                selCountEl.removeClass('has-selection');
+            }
         }
         
         // Update count text
@@ -626,73 +819,12 @@ export class BrowserModal extends Modal {
         }
         
         // Update confirm button state
-        const confirmButton = this.contentEl.querySelector('.mod-cta') as HTMLButtonElement;
+        const confirmButton = this.contentEl.querySelector('.mod-cta') as HTMLButtonElement | null;
         if (confirmButton) {
             // In single file mode, require exactly one file selected
             // In multi-selection mode, always enable the button (even with nothing selected)
             confirmButton.disabled = this.singleFileSelectionMode ? fileCount !== 1 : false;
         }
-    }
-
-    updateVisibleCheckboxes() {
-        // First ensure all folder selections are consistent
-        this.ensureAllFolderSelections();
-        
-        // Now update folder checkboxes
-        document.querySelectorAll('.yaml-folder-item').forEach((item: HTMLElement) => {
-            const path = item.getAttribute('data-path');
-            if (path) {
-                const isSelected = this.selectedFolders.some(f => f.path === path);
-                const checkbox = item.querySelector('.yaml-custom-checkbox.yaml-folder-checkbox') as HTMLElement;
-                
-                if (checkbox) {
-                    // Check for indeterminate state - only if not selected
-                    const folder = this.app.vault.getFolderByPath(path);
-                    let isIndeterminate = false;
-                    
-                    if (folder && !isSelected) {
-                        isIndeterminate = this.hasIndeterminateSelection(folder);
-                    }
-                    
-                    if (isSelected) {
-                        // Add checked state and checkmark
-                        this.updateCheckboxState(checkbox, 'checked');
-                        item.addClass('is-selected');
-                        item.removeClass('is-partially-selected');
-                    } else if (isIndeterminate) {
-                        // Apply indeterminate styling
-                        this.updateCheckboxState(checkbox, 'indeterminate');
-                        
-                        item.removeClass('is-selected');
-                        item.addClass('is-partially-selected');
-                    } else {
-                        this.updateCheckboxState(checkbox, 'unchecked');
-                        item.removeClass('is-selected');
-                        item.removeClass('is-partially-selected');
-                    }
-                }
-            }
-        });
-        
-        // Update file checkboxes
-        document.querySelectorAll('.yaml-file-item').forEach((item: HTMLElement) => {
-            const path = item.getAttribute('data-path');
-            if (path) {
-                const isSelected = this.selectedFiles.some(f => f.path === path);
-                const checkbox = item.querySelector('.yaml-custom-checkbox.yaml-file-checkbox') as HTMLElement;
-                
-                if (checkbox) {
-                    if (isSelected) {
-                        // Add checked state and checkmark
-                        this.updateCheckboxState(checkbox, 'checked');
-                        item.addClass('is-selected');
-                    } else {
-                        this.updateCheckboxState(checkbox, 'unchecked');
-                        item.removeClass('is-selected');
-                    }
-                }
-            }
-        });
     }
 
     hasIndeterminateSelection(folder: TFolder): boolean {
@@ -799,16 +931,10 @@ export class BrowserModal extends Modal {
             
             // Check if all children are selected
             if (this.areAllChildrenSelected(folder)) {
-                console.log(`Auto-selecting folder ${folder.path} because all children are selected`);
                 this.selectedFolders.push(folder);
                 this.folderSettings.set(folder.path, true);
                 selectionChanged = true;
             }
-        }
-        
-        // If we made changes, update the UI
-        if (selectionChanged) {
-            // We'll update UI separately
         }
         
         return selectionChanged;
@@ -863,8 +989,6 @@ export class BrowserModal extends Modal {
             const allChildrenSelected = this.areAllChildrenSelected(parentFolder);
             
             if (allChildrenSelected) {
-                console.log(`All children selected for ${parentPath}, selecting the folder`);
-                
                 // Add the parent to selected folders
                 if (!this.selectedFolders.some(f => f.path === parentPath)) {
                     this.selectedFolders.push(parentFolder);
@@ -877,23 +1001,14 @@ export class BrowserModal extends Modal {
         }
     }
 
-    // Helper method to get SVG icon HTML
-    private getSvgIcon(type: 'folder-closed' | 'folder-open' | 'file'): string {
-        if (type === 'folder-closed') {
-            return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-folder-closed"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"></path><path d="M2 10h20"></path></svg>';
-        } else if (type === 'folder-open') {
-            return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-folder-open"><path d="m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2"></path></svg>';
-        } else {
-            return '<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="svg-icon lucide-file"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path><path d="M14 2v4a2 2 0 0 0 2 2h4"></path></svg>';
-        }
-    }
-
     onClose() {
+        // Remove all registered event listeners
+        for (const { el, type, callback } of this.eventListeners) {
+            el.removeEventListener(type, callback);
+        }
+        this.eventListeners = [];
+        
         const { contentEl } = this;
-        
-        // Remove keyboard event listener
-        contentEl.removeEventListener('keydown', this.handleKeyDown.bind(this));
-        
         contentEl.empty();
     }
 }
