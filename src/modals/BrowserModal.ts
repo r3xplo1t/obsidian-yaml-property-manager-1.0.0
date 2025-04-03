@@ -1,5 +1,5 @@
 // BrowserModal.ts
-import { App, Modal, TFile, TFolder, Setting, setIcon, EventRef } from 'obsidian';
+import { App, Modal, TFile, TFolder, Setting, setIcon, Plugin } from 'obsidian';
 import { TreeNode } from '../interfaces';
 
 export interface BrowserModalResult {
@@ -11,6 +11,7 @@ export interface BrowserModalResult {
 }
 
 export class BrowserModal extends Modal {
+    private plugin: Plugin;
     onSelect: (result: BrowserModalResult) => void;
     selectedFiles: TFile[] = [];
     selectedFolders: TFolder[] = [];
@@ -25,10 +26,10 @@ export class BrowserModal extends Modal {
     
     // New property for tree structure
     private rootNode: TreeNode;
-    // Add a property to track event listeners
-    private eventListeners: Array<{ el: HTMLElement, type: string, callback: any }> = [];
 
-    constructor(app: App, 
+    constructor(
+        app: App,
+        plugin: Plugin, // Add this parameter
         onSelect: (result: BrowserModalResult) => void,
         options: {
             existingPathsToHighlight?: {type: string, path: string}[],
@@ -39,6 +40,7 @@ export class BrowserModal extends Modal {
         } = {}
     ) {
         super(app);
+        this.plugin = plugin; // Store the plugin reference
         this.onSelect = onSelect;
         
         // Set optional configurations
@@ -55,13 +57,6 @@ export class BrowserModal extends Modal {
         if (options.title) this.title = options.title;
         if (options.description) this.description = options.description;
         if (options.confirmButtonText) this.confirmButtonText = options.confirmButtonText;
-    }
-
-    // Helper method for registering DOM events with automatic cleanup
-    private registerDomEvent(el: HTMLElement, type: string, callback: (event: any) => void): void {
-        // Track the event listener for cleanup
-        this.eventListeners.push({ el, type, callback });
-        el.addEventListener(type, callback);
     }
 
     // Handle keyboard navigation
@@ -85,9 +80,6 @@ export class BrowserModal extends Modal {
     onOpen() {
         const { contentEl } = this;
         contentEl.empty();
-        
-        // Add class for browser modal
-        contentEl.addClass('yaml-browser-modal');
         
         // Set title and instructions using Setting component
         new Setting(contentEl)
@@ -121,12 +113,12 @@ export class BrowserModal extends Modal {
         this.ensureAllFolderSelections();
         
         // Selection counter
-        const selectionCountEl = contentEl.createDiv({ cls: 'yaml-selected-count' });
-        const countTextSpan = selectionCountEl.createSpan({ cls: 'yaml-selection-text' });
+        const selectionCountEl = contentEl.createDiv({ cls: 'selection-counter' });
+        const countTextSpan = selectionCountEl.createSpan({ cls: 'selection-text' });
         this.updateSelectionCount(countTextSpan);
         
-        // File tree container
-        const fileTreeContainer = contentEl.createDiv({ cls: 'yaml-template-paths' });
+        // File tree container - change class name
+        const fileTreeContainer = contentEl.createDiv({ cls: 'file-tree-container' });
         
         // Build and render the file tree
         this.buildFileTree();
@@ -152,11 +144,11 @@ export class BrowserModal extends Modal {
         });
         
         // Register event handlers with proper cleanup
-        this.registerDomEvent(cancelButton, 'click', () => {
+        this.plugin.registerDomEvent(cancelButton, 'click', () => {
             this.close();
         });
         
-        this.registerDomEvent(confirmButton, 'click', () => {
+        this.plugin.registerDomEvent(confirmButton, 'click', () => {
             // Track which initially selected items were removed
             const removedFilePaths = this.initialSelectedFilePaths.filter(
                 path => !this.selectedFiles.some(f => f.path === path)
@@ -177,7 +169,7 @@ export class BrowserModal extends Modal {
         });
         
         // Register keyboard event handler
-        this.registerDomEvent(contentEl, 'keydown', this.handleKeyDown.bind(this));
+        this.plugin.registerDomEvent(contentEl, 'keydown', this.handleKeyDown.bind(this));
     }
 
     // Build hierarchical tree structure
@@ -214,15 +206,35 @@ export class BrowserModal extends Modal {
         this.sortTreeNodes(this.rootNode.children);
     }
 
+    // Helper to filter out invalid nodes (e.g., empty names)
+    private filterInvalidNodes(node: TreeNode): boolean {
+        // Filter children recursively
+        node.children = node.children.filter(child => {
+            // Remove nodes with empty names
+            if (!child.name || !child.name.trim()) {
+                return false;
+            }
+            
+            // Recursively filter children
+            return this.filterInvalidNodes(child);
+        });
+        
+        return true;
+    }
+
     // Helper to add a node to the tree
     private addNodeToTree(root: TreeNode, path: string, name: string, isDirectory: boolean) {
-        const parts = path.split('/');
+        const parts = path.split('/').filter(part => part.trim() !== ''); // Filter out empty parts
         let currentNode = root;
         let currentPath = '';
         
         // Navigate/create the path structure
         for (let i = 0; i < parts.length; i++) {
             const part = parts[i];
+            
+            // Skip empty parts
+            if (!part || !part.trim()) continue;
+            
             currentPath = currentPath ? `${currentPath}/${part}` : part;
             const isLastPart = i === parts.length - 1;
             
@@ -234,7 +246,7 @@ export class BrowserModal extends Modal {
                 const newNode: TreeNode = {
                     name: part,
                     path: currentPath,
-                    isDirectory: isLastPart ? isDirectory : true, // Intermediate nodes are always directories
+                    isDirectory: isLastPart ? isDirectory : true,
                     children: []
                 };
                 
@@ -245,6 +257,7 @@ export class BrowserModal extends Modal {
             currentNode = found;
         }
     }
+    
 
     // Sort helper for tree nodes
     private sortTreeNodes(nodes: TreeNode[]) {
@@ -272,20 +285,25 @@ export class BrowserModal extends Modal {
         // Create a tree container
         const treeRoot = container.createDiv({ cls: 'tree-item nav-folder mod-root' });
         
-        // Render the tree starting with the root's children
-        for (const child of this.rootNode.children) {
+        // Filter and render only valid children
+        const validChildren = this.rootNode.children.filter(child => 
+            child && child.name && child.name.trim() !== ''
+        );
+        
+        // Render the tree starting with the valid root's children
+        for (const child of validChildren) {
             this.renderTreeItem(treeRoot, child, countTextSpan);
         }
         
         // Add an info message if no items are available
-        if (this.rootNode.children.length === 0) {
+        if (validChildren.length === 0) {
             const emptyState = container.createDiv({
-                cls: 'nav-empty-state'
+                cls: 'nav-empty-state'  // This is already an Obsidian native class
             });
             
             emptyState.createSpan({
                 text: 'No files or folders found.',
-                cls: 'nav-empty-state-text'
+                cls: 'nav-empty-state-text'  // Also an Obsidian native class
             });
         }
     }
@@ -349,7 +367,6 @@ export class BrowserModal extends Modal {
             const collapseIconEl = selfEl.createDiv({ cls: 'tree-item-icon collapse-icon' });
             setIcon(collapseIconEl, 'right-triangle');
             
-            // When collapsed, add is-collapsed class to the icon element
             if (!this.expandedFolders.has(node.path)) {
                 collapseIconEl.addClass('is-collapsed');
             }
@@ -387,7 +404,7 @@ export class BrowserModal extends Modal {
             }
             
             // Add change handler
-            this.registerDomEvent(checkbox, 'change', () => {
+            this.plugin.registerDomEvent(checkbox, 'change', () => {
                 if (node.isDirectory) {
                     this.handleFolderSelection(node, checkbox.checked, itemEl);
                 } else {
@@ -420,7 +437,7 @@ export class BrowserModal extends Modal {
             }
             
             // Add click handler for expansion toggling
-            this.registerDomEvent(selfEl, 'click', (e: MouseEvent) => {
+            this.plugin.registerDomEvent(selfEl, 'click', (e: MouseEvent) => {
                 // Only process clicks that aren't on the checkbox
                 if (!(e.target instanceof HTMLElement) || 
                     !e.target.closest('.tree-item-checkbox-container') && 
@@ -466,7 +483,7 @@ export class BrowserModal extends Modal {
             });
             
             // Add keyboard handler for folder
-            this.registerDomEvent(selfEl, 'keydown', (e: KeyboardEvent) => {
+            this.plugin.registerDomEvent(selfEl, 'keydown', (e: KeyboardEvent) => {
                 this.handleItemKeyDown(e, node, selfEl, childrenEl);
             });
             
@@ -487,7 +504,7 @@ export class BrowserModal extends Modal {
             }
         } else {
             // Add keyboard handler for file
-            this.registerDomEvent(selfEl, 'keydown', (e: KeyboardEvent) => {
+            this.plugin.registerDomEvent(selfEl, 'keydown', (e: KeyboardEvent) => {
                 this.handleItemKeyDown(e, node, selfEl);
             });
         }
@@ -793,12 +810,15 @@ export class BrowserModal extends Modal {
         const folderCount = this.selectedFolders.length;
         
         // Add or remove the has-selection class based on selection state
-        const selCountEl = countEl.closest('.yaml-selected-count');
+        // Change this line
+        const selCountEl = countEl.closest('.selection-counter');  // Changed from '.yaml-selected-count'
         if (selCountEl instanceof HTMLElement) {
-            if (fileCount > 0 || folderCount > 0) {
-                selCountEl.addClass('has-selection');
-            } else {
+            if (fileCount === 0 && folderCount === 0) {
+                selCountEl.addClass('has-no-selection');
                 selCountEl.removeClass('has-selection');
+            } else {
+                selCountEl.removeClass('has-no-selection');
+                selCountEl.addClass('has-selection');
             }
         }
         
@@ -1002,12 +1022,6 @@ export class BrowserModal extends Modal {
     }
 
     onClose() {
-        // Remove all registered event listeners
-        for (const { el, type, callback } of this.eventListeners) {
-            el.removeEventListener(type, callback);
-        }
-        this.eventListeners = [];
-        
         const { contentEl } = this;
         contentEl.empty();
     }

@@ -44,6 +44,26 @@ export class PropertyTypeService {
      */
     getValuePropertyType(propertyName: string, propertyValue: any): ObsidianPropertyType {
         try {
+            // First check if the property has a defined type in Obsidian's type registry
+            const propKey = propertyName.toLowerCase(); // Keys in metadataTypeManager are lowercase
+            
+            // Access Obsidian's internal type registry with proper type assertion
+            const metadataManager = (this.app as any).metadataTypeManager;
+            if (metadataManager) {
+                // Check property-specific type first
+                const propType = metadataManager.properties?.[propKey]?.type;
+                if (propType) {
+                    return propType as ObsidianPropertyType;
+                }
+                
+                // Check global type definitions as fallback
+                const globalType = metadataManager.types?.[propKey]?.type;
+                if (globalType) {
+                    return globalType as ObsidianPropertyType;
+                }
+            }
+            
+            // Fall back to detection if no type is defined in Obsidian
             return this.detectPropertyType(propertyValue);
         } catch (error) {
             console.error("Error detecting property type:", error);
@@ -61,6 +81,26 @@ export class PropertyTypeService {
      */
     getFilePropertyType(file: TFile, propertyName: string): ObsidianPropertyType | null {
         try {
+            // First check if the property has a defined type in Obsidian's type registry
+            const propKey = propertyName.toLowerCase();
+            
+            // Access Obsidian's internal type registry with proper type assertion
+            const metadataManager = (this.app as any).metadataTypeManager;
+            if (metadataManager) {
+                // Check property-specific type first
+                const propType = metadataManager.properties?.[propKey]?.type;
+                if (propType) {
+                    return propType as ObsidianPropertyType;
+                }
+                
+                // Check global type definitions as fallback
+                const globalType = metadataManager.types?.[propKey]?.type;
+                if (globalType) {
+                    return globalType as ObsidianPropertyType;
+                }
+            }
+            
+            // Fall back to the existing detection method
             const fileCache = this.app.metadataCache.getFileCache(file);
             if (!fileCache || !fileCache.frontmatter) {
                 return null;
@@ -79,6 +119,7 @@ export class PropertyTypeService {
             return null;
         }
     }
+    
 
     /**
      * Detect property type based on value analysis

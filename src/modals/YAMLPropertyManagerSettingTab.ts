@@ -7,6 +7,7 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
     plugin: YAMLPropertyManagerPlugin;
     private expandedPaths: Set<string> = new Set();
     private rootNode: TreeNode;
+    private settingsSaveTimeout: NodeJS.Timeout | null = null;
 
     constructor(app: App, plugin: YAMLPropertyManagerPlugin) {
         super(app, plugin);
@@ -24,10 +25,10 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
         
         try {
             // Save the current scroll position of the container
-            const container = nodeElement.closest('.yaml-template-paths');
+            const container = nodeElement.closest('#template-paths-container');
             const scrollPosition = container ? container.scrollTop : 0;
             
-            // Start animation
+            // Start animation - use animation class that comes with Obsidian
             nodeElement.addClass('is-removing');
             
             // Wait for animation
@@ -66,7 +67,7 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
             // Save settings
             await this.plugin.saveSettings();
             
-            // Remove node from DOM - this is a targeted removal, much smoother than full refresh
+            // Remove node from DOM
             nodeElement.remove();
             
             // Refresh display ONLY if there are no template paths left
@@ -76,10 +77,8 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
                 // Instead of full refresh, just update the container
                 if (templatePathsContainer) {
                     templatePathsContainer.empty();
-                    templatePathsContainer.createEl('p', {
-                        text: 'No template paths configured. Add template files or directories below.',
-                        cls: 'yaml-settings-description'
-                    });
+                    new Setting(templatePathsContainer)
+                        .setDesc('No template paths configured. Add template files or directories below.');
                 }
             }
             
@@ -99,37 +98,28 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
     }
 
     display(): void {
-        // Save the current scroll position if a template paths container exists
-        const existingContainer = document.querySelector('.yaml-template-paths');
-        const savedScrollPosition = existingContainer ? (existingContainer as HTMLElement).scrollTop : 0;
-        
         const { containerEl } = this;
         containerEl.empty();
-        
-        // Apply settings-specific classes
-        containerEl.addClass('yaml-settings-tab');
         
         // Template Paths Section - Using Setting component for heading
         new Setting(containerEl)
             .setName('Template Paths')
             .setHeading();
         
-        const templatePathsContainer = containerEl.createDiv({ cls: 'yaml-template-paths' });
+        // Create a container for template paths using Obsidian's native classes
+        const templatePathsContainer = containerEl.createDiv({
+            cls: 'nav-folder-container',
+            attr: { id: 'template-paths-container' }
+        });
         
         // Display existing template paths in a hierarchical structure
         if (this.plugin.settings.templatePaths.length === 0) {
-            templatePathsContainer.createEl('p', {
-                text: 'No template paths configured. Add template files or directories below.',
-                cls: 'yaml-settings-description'
-            });
+            // Create an empty message using Obsidian's Setting component
+            new Setting(templatePathsContainer)
+                .setDesc('No template paths configured. Add template files or directories below.');
         } else {
             // Generate a tree structure of the templates
             this.renderTemplatePathsHierarchy(templatePathsContainer);
-            
-            // Restore the scroll position
-            setTimeout(() => {
-                templatePathsContainer.scrollTop = savedScrollPosition;
-            }, 50);
         }
         
         // Single button to add templates - using Obsidian's native Setting API
@@ -143,7 +133,8 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
                     .setCta()
                     .onClick(() => {
                         new BrowserModal(
-                            this.app, 
+                            this.app,
+                            this.plugin,
                             async (result) => {
                             // Process selected files and folders
                             let countAdded = 0;
@@ -244,34 +235,33 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
         
         // Max recent templates - With proper method chaining
         new Setting(containerEl)
-            .setName('Max Recent Templates')
-            .setDesc('Maximum number of recent templates to remember')
-            .addSlider(slider => slider
-                .setLimits(1, 10, 1)
-                .setValue(this.plugin.settings.maxRecentTemplates)
-                .setDynamicTooltip()
-                .onChange(async (value) => {
-                    this.plugin.settings.maxRecentTemplates = value;
-                    // Trim the list if needed
-                    if (this.plugin.settings.recentTemplates.length > value) {
-                        this.plugin.settings.recentTemplates = 
-                            this.plugin.settings.recentTemplates.slice(0, value);
-                    }
-                    await this.plugin.saveSettings();
-                })
-            );
+        .setName('Max Recent Templates')
+        .setDesc('Maximum number of recent templates to remember')
+        .addSlider(slider => slider
+            .setLimits(1, 10, 1)
+            .setValue(this.plugin.settings.maxRecentTemplates)
+            .setDynamicTooltip()
+            .onChange((value) => {
+                this.plugin.settings.maxRecentTemplates = value;
+                if (this.plugin.settings.recentTemplates.length > value) {
+                    this.plugin.settings.recentTemplates = 
+                        this.plugin.settings.recentTemplates.slice(0, value);
+                }
+                this.debouncedSaveSettings(300);
+            })
+        );
         
         // Clear recent templates
         new Setting(containerEl)
-            .setName('Recent Templates')
-            .setDesc('Clear the list of recently used templates')
-            .addButton(button => button
-                .setButtonText('Clear Recent Templates')
-                .onClick(async () => {
-                    this.plugin.settings.recentTemplates = [];
-                    await this.plugin.saveSettings();
-                    new Notice('Recent templates cleared');
-                }));
+        .setName('Recent Templates')
+        .setDesc('Clear the list of recently used templates')
+        .addButton(button => button
+            .setButtonText('Clear Recent Templates')
+            .onClick(async () => {
+                this.plugin.settings.recentTemplates = [];
+                await this.plugin.saveSettings();
+                new Notice('Recent templates cleared');
+            }));
 
         // Troubleshooting Section
         new Setting(containerEl)
@@ -332,27 +322,6 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
                     setTimeout(() => cancelButton.buttonEl.focus(), 50);
                 })
             );
-            
-        // Initialize scrollable status check
-        setTimeout(() => {
-            this.checkScrollableStatus();
-        }, 100);
-    }
-
-    // Check if the container is scrollable and add appropriate class
-    private checkScrollableStatus() {
-        const container = document.querySelector('.yaml-template-paths');
-        if (container) {
-            // Check if the container is scrollable
-            const isScrollable = container.scrollHeight > container.clientHeight;
-            
-            // Add or remove the is-scrollable class accordingly
-            if (isScrollable) {
-                container.classList.add('is-scrollable');
-            } else {
-                container.classList.remove('is-scrollable');
-            }
-        }
     }
 
     // Render template paths as a hierarchy
@@ -454,10 +423,10 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
             });
         };
         
-        // Apply deduplication to the root node (KEEP YOUR EXISTING CODE HERE)
+        // Apply deduplication to the root node
         deduplicateNodes(this.rootNode);
         
-        // Create a tree container
+        // Create a tree container using Obsidian's native classes
         const treeRoot = container.createDiv({ cls: 'tree-item nav-folder mod-root' });
         
         // Render the tree starting with the root's children
@@ -476,11 +445,6 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
                 cls: 'nav-empty-state-text'
             });
         }
-        
-        // Check scrollable status after rendering
-        setTimeout(() => {
-            this.checkScrollableStatus();
-        }, 50);
     }
 
     private renderTreeItem(parentEl: HTMLElement, node: TreeNode, level: number) {
@@ -706,12 +670,24 @@ export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
         }
         return null;
     }
-    
 
+    private debouncedSaveSettings(delay: number = 500): void {
+        // Clear any existing timeout
+        if (this.settingsSaveTimeout) {
+            clearTimeout(this.settingsSaveTimeout);
+        }
+        
+        // Schedule a new save operation
+        this.settingsSaveTimeout = setTimeout(() => {
+            this.plugin.saveSettings();
+            this.settingsSaveTimeout = null;
+        }, delay);
+    }
+    
     // Helper to save expanded paths to settings
     private saveExpandedPathsToSettings(): void {
         this.plugin.settings.expandedTemplatePaths = Array.from(this.expandedPaths);
-        this.plugin.saveSettings();
+        this.debouncedSaveSettings(300); // 300ms debounce for UI interactions
     }
 
     private registerDomEventWithCleanup(element: HTMLElement, type: string, callback: (event: any) => void): void {

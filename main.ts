@@ -57,8 +57,6 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
     }
 
     onunload(): void {
-        this.debug('Unloading YAML Property Manager plugin');
-        
         try {
             // Clear data structures to prevent memory leaks
             this.propertyCache.clear();
@@ -71,8 +69,6 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
         } catch (error) {
             console.error("Error during plugin cleanup:", error);
         }
-        
-        this.debug('YAML Property Manager plugin unloaded');
     }
 
     //#endregion
@@ -181,7 +177,8 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             name: 'Apply Template to Multiple Files',
             callback: () => {
                 const browser = new BrowserModal(
-                    this.app, 
+                    this.app,
+                    this,
                     (result: FileSelectionResult) => {
                         if (result.files && result.files.length > 0) {
                             this.selectedFiles = [...result.files];
@@ -523,9 +520,6 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
 
     // Navigation method to move between modals
     navigateToModal(currentModal: Modal, targetModalType: ModalType, ...args: any[]): void {
-        // Log navigation attempt
-        this.debug(`Navigating from current modal to ${targetModalType}`);
-        
         // Close current modal
         currentModal.close();
         
@@ -543,48 +537,37 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             case 'batchSelect':
                 this.openBatchSelectModal(args);
                 break;
-            default:
-                this.debug(`Unknown modal type: ${targetModalType}`);
         }
     }
 
     // Helper methods for modal navigation
     private openMainModal(): void {
-        this.debug("Opening main modal");
         new PropertyManagerModal(this.app, this).open();
     }
 
-    private openBulkEditModal(args: any[]): void {
-        this.debug("Handling bulkEdit navigation");
-        
+    private openBulkEditModal(args: any[]): void {        
         // If files are explicitly provided, use them
         if (Array.isArray(args[0]) && args[0].length > 0) {
-            this.debug(`Navigating to bulk edit with ${args[0].length} explicitly provided files`);
             this.selectedFiles = args[0];
         }
         
         // Check if we have files selected
         if (this.selectedFiles.length === 0) {
-            this.debug('No files selected for bulk edit');
             new Notice('Please select files first');
             this.openMainModal();
             return;
         }
         
-        this.debug(`Opening bulk edit with ${this.selectedFiles.length} files`);
         new BulkPropertyEditorModal(this.app, this, [...this.selectedFiles]).open();
     }
 
-    private openTemplateModal(args: any[]): void {
-        this.debug("Handling template modal navigation");
-        
+    private openTemplateModal(args: any[]): void {        
         // If files are provided as an argument, use them
         if (this.selectedFiles.length === 0 && Array.isArray(args[0]) && args[0].length > 0) {
             this.selectedFiles = args[0];
         }
         
         if (this.selectedFiles.length > 0) {
-            this.debug(`Opening template modal with ${this.selectedFiles.length} files`);
             new TemplateApplicationModal(this.app, this, [...this.selectedFiles]).open();
         } else {
             new Notice('Please select files first');
@@ -598,10 +581,10 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             
             // Create browser modal with proper icon buttons
             const browser = new BrowserModal(
-                this.app, 
+                this.app,
+                this,
                 (result: FileSelectionResult) => {
                     if (result.files && result.files.length > 0) {
-                        this.debug(`Batch selection returned ${result.files.length} files`);
                         this.selectedFiles = [...result.files];
                         callback(result.files);
                     }
@@ -657,11 +640,6 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             this.logError('Error reloading plugin:', error);
             new Notice('Failed to reload plugin: ' + error.message);
         }
-    }
-
-    // Debug logging helper
-    public debug(message: string, ...data: any[]): void {
-        console.log(`[YAML Property Manager] ${message}`, ...data);
     }
 
     // Error logging helper
