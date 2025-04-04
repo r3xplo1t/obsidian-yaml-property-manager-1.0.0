@@ -37,7 +37,8 @@ export { PropertyTypeService } from './PropertyTypeService';
 export { 
     formatYamlValue, 
     formatInputValue, 
-    formatValuePreview 
+    formatValuePreview, 
+    parseValueLinks 
 } from './propertyFormatters';
 
 // -------- UI Components --------

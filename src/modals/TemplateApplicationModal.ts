@@ -1,6 +1,6 @@
-import { App, Modal, Notice, TFile, Setting, FuzzySuggestModal, FuzzyMatch, setIcon, ToggleComponent, DropdownComponent } from 'obsidian';
+import { App, Modal, Notice, TFile, Setting, FuzzySuggestModal, FuzzyMatch, setIcon, ToggleComponent, DropdownComponent, MarkdownRenderer } from 'obsidian';
 import YAMLPropertyManagerPlugin from '../../main';
-import { formatValuePreview } from '../propertyFormatters';
+import { formatValuePreview, parseValueLinks } from '../propertyFormatters';
 import type { PropertyWithType } from '../PropertyTypeService';
 
 export class TemplateApplicationModal extends Modal {
@@ -17,6 +17,7 @@ export class TemplateApplicationModal extends Modal {
     private selectAllToggle: ToggleComponent | null = null;
     private allPropertiesSelected: boolean = false;
     private allValuesOverridden: boolean = false;
+    private eventRefs: Array<() => void> = [];
     
     // Updated to store dropdowns instead of toggles
     private propertyToggles: Array<{
@@ -33,6 +34,7 @@ export class TemplateApplicationModal extends Modal {
     async onOpen() {
         const { contentEl } = this;
         contentEl.empty();
+        this.eventRefs = [];
     
         // Main header
         new Setting(contentEl)
@@ -242,7 +244,7 @@ export class TemplateApplicationModal extends Modal {
                 .setHeading();
             
             // Create property items
-            this.createpropertySettings(propertyKeys, properties, contentEl);
+            await this.createpropertySettings(propertyKeys, properties, contentEl);
         }
     
         // Update button state
@@ -359,91 +361,186 @@ export class TemplateApplicationModal extends Modal {
         this.updateApplyButtonState();
     }
 
+    // Helper function to check if a string value looks like a link (remains the same)
+    private isPotentialLink(value: any): boolean {
+        if (typeof value !== 'string') {
+            return false;
+        }
+        const trimmedValue = value.trim();
+        // Basic checks for common link types
+        return (trimmedValue.startsWith('[[') && trimmedValue.endsWith(']]')) || // [[Wikilink]]
+               (trimmedValue.startsWith('[') && trimmedValue.includes('](')) || // [Markdown](link)
+               trimmedValue.startsWith('https://') ||
+               trimmedValue.startsWith('http://') ||
+               trimmedValue.startsWith('obsidian://'); // Obsidian URI
+    }
+
     // Create property items for each property
     private createpropertySettings(propertyKeys: string[], properties: any, container: HTMLElement) {
         // Clear existing property toggles
         this.propertyToggles = [];
-        
+
         for (const key of propertyKeys) {
-            const value = properties[key];
-            
+            const originalValue = properties[key]; // Get the original value early
+
             // Create a property item with Obsidian Setting
             const propertySetting = new Setting(container)
                 .setName(key);
-            
-            // Call setDesc ensures the description element (descEl) is created.
-            // We use a non-breaking space '&nbsp;' or similar just as a placeholder.
-            // We will clear this immediately after.
-            propertySetting.setDesc('\u00A0'); // Use Unicode non-breaking space or just ' '
 
-            // Access the description element (descEl) created by setDesc()
-            const descEl = propertySetting.descEl;
-
-            // Clear the placeholder content set by setDesc()
-            descEl.empty();
-
-            // --- Add our custom Type/Value divs directly into descEl ---
-
-            // Get type and value display information (as before)
-            const internalType = this.plugin.getInternalPropertyType(key, value);
+            // Get type information based on the original value
+            const internalType = this.plugin.getInternalPropertyType(key, originalValue);
             const typeDisplayName = this.plugin.propertyTypeService.getPropertyTypeDisplayName(internalType);
-            const valuePreview = formatValuePreview(value, internalType);
-            const isEmptyValue = value === null || value === undefined || value === '' ||
-                            (Array.isArray(value) && value.length === 0) ||
-                            (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0);
 
-            // Create element for Type line inside the description element
-            descEl.createDiv({
-                cls: 'property-detail property-detail-type', // Use classes for styling
-                text: `Type: ${typeDisplayName}`
-            });
+            // --- Layout Logic ---
+            const descEl = propertySetting.descEl; // Get the description container
+            descEl.empty(); // Clear default description content
 
-            // Create element for Value line inside the description element
-            descEl.createDiv({
-                cls: 'property-detail property-detail-value', // Use classes for styling
-                text: `Value: ${isEmptyValue ? 'No value' : valuePreview}`
-            });
+            // Line 1: Type Information
+            descEl.createDiv({ text: `Type: ${typeDisplayName}`, cls: 'property-type-line' });
 
-            // Create a dropdown instead of toggles
+            // Line 2: Value Information Container (Always visible)
+            const valueLine = descEl.createDiv({ cls: 'property-value-line' });
+            valueLine.createSpan({ text: 'Value: ' }); // "Value: " prefix
+
+            // --- Conditional Value Display ---
+            const isEmptyValue = originalValue === null || originalValue === undefined || originalValue === '' ||
+                               (Array.isArray(originalValue) && originalValue.length === 0) ||
+                               (typeof originalValue === 'object' && !Array.isArray(originalValue) && originalValue !== null && Object.keys(originalValue).length === 0);
+
+            if (Array.isArray(originalValue) && originalValue.length > 1) {
+                // --- Array Handling ---
+                // Collapsed View Container
+                const collapsedArrayView = valueLine.createSpan({ cls: 'array-property-collapsed-view' });
+                const firstItemOriginal = originalValue[0];
+                const firstItemDisplay = formatValuePreview(firstItemOriginal, internalType);
+                const firstItemLinkEl = collapsedArrayView.createSpan({ text: firstItemDisplay, cls: 'clickable-link-item' });
+
+                // Attach click listener to the first item span (with existence check)
+                this.plugin.registerDomEvent(firstItemLinkEl, 'click', (e) => {
+                    e.stopPropagation();
+                    const linkTarget = firstItemOriginal; // Use original value
+
+                    if (typeof linkTarget === 'string' && (linkTarget.startsWith('https://') || linkTarget.startsWith('http://'))) {
+                        window.open(linkTarget, '_blank'); // Open external links directly
+                    } else if (typeof linkTarget === 'string') {
+                        const sourcePath = ""; // Vault root context
+                        const targetFile = this.app.metadataCache.getFirstLinkpathDest(linkTarget, sourcePath);
+
+                        if (targetFile instanceof TFile) { // Check if TFile exists
+                            this.app.workspace.openLinkText(linkTarget, sourcePath)
+                                .catch(err => { console.error(`Error opening existing link: ${linkTarget}`, err); new Notice(`Could not open link: ${linkTarget}`); });
+                        } else {
+                            new Notice("File is not in your vault"); // Show notice if file doesn't exist
+                        }
+                    } else {
+                         console.warn("Clicked link target is not a string:", linkTarget);
+                    }
+                });
+
+                // (Rest of collapsed view creation remains the same)
+                const remainingCount = originalValue.length - 1;
+                if (remainingCount > 0) {
+                    const itemText = remainingCount === 1 ? 'item' : 'items';
+                    collapsedArrayView.appendText(`, ${remainingCount} more ${itemText}`);
+                }
+                const expandLink = collapsedArrayView.createSpan({ text: ' (Expand)', cls: 'array-property-toggle-link' });
+
+                // Expanded View Container
+                const expandedViewContainer = descEl.createDiv({ cls: 'array-property-expanded-container is-hidden' });
+                // Render individual clickable items in expanded view (with existence check)
+                originalValue.forEach((item, index) => {
+                    const displayText = formatValuePreview(item, internalType);
+                    const linkEl = expandedViewContainer.createSpan({ text: displayText, cls: 'clickable-link-item' });
+                    // Attach click listener to each item span (with existence check)
+                    this.plugin.registerDomEvent(linkEl, 'click', () => {
+                        const linkTarget = item; // Use original item value
+
+                        if (typeof linkTarget === 'string' && (linkTarget.startsWith('https://') || linkTarget.startsWith('http://'))) {
+                           window.open(linkTarget, '_blank'); // Open external links directly
+                        } else if (typeof linkTarget === 'string') {
+                            const sourcePath = ""; // Vault root context
+                            const targetFile = this.app.metadataCache.getFirstLinkpathDest(linkTarget, sourcePath);
+
+                            if (targetFile instanceof TFile) { // Check if TFile exists
+                               this.app.workspace.openLinkText(linkTarget, sourcePath)
+                                   .catch(err => { console.error(`Error opening existing link: ${linkTarget}`, err); new Notice(`Could not open link: ${linkTarget}`); });
+                            } else {
+                                new Notice("File is not in your vault"); // Show notice if file doesn't exist
+                            }
+                        } else {
+                             console.warn("Clicked link target is not a string:", linkTarget);
+                        }
+                    });
+                    if (index < originalValue.length - 1) expandedViewContainer.appendText(', ');
+                });
+                const collapseLink = expandedViewContainer.createSpan({ text: ' (Collapse)', cls: 'array-property-toggle-link' });
+
+                // Event Listeners for Expand/Collapse (remain the same)
+                this.plugin.registerDomEvent(expandLink, 'click', () => {
+                    collapsedArrayView.addClass('is-hidden'); expandedViewContainer.removeClass('is-hidden'); valueLine.removeClass('is-hidden');
+                });
+                this.plugin.registerDomEvent(collapseLink, 'click', () => {
+                    collapsedArrayView.removeClass('is-hidden'); expandedViewContainer.addClass('is-hidden');
+                });
+                // --- End Array Handling ---
+
+            } else {
+                // --- Single Value Handling (Non-Array or Short Array) ---
+                const valuePreview = formatValuePreview(originalValue, internalType);
+
+                if (!isEmptyValue && this.isPotentialLink(originalValue)) {
+                    // Value is a link - make it clickable (with existence check)
+                    const linkEl = valueLine.createSpan({ text: valuePreview, cls: 'clickable-link-item' });
+                    this.plugin.registerDomEvent(linkEl, 'click', (e) => {
+                         e.stopPropagation();
+                         const linkTarget = originalValue; // Use original value
+
+                         if (typeof linkTarget === 'string' && (linkTarget.startsWith('https://') || linkTarget.startsWith('http://'))) {
+                            window.open(linkTarget, '_blank'); // Open external links directly
+                         } else if (typeof linkTarget === 'string') {
+                            const sourcePath = ""; // Vault root context
+                            const targetFile = this.app.metadataCache.getFirstLinkpathDest(linkTarget, sourcePath);
+
+                            if (targetFile instanceof TFile) { // Check if TFile exists
+                                this.app.workspace.openLinkText(linkTarget, sourcePath)
+                                    .catch(err => { console.error(`Error opening existing link: ${linkTarget}`, err); new Notice(`Could not open link: ${linkTarget}`); });
+                             } else {
+                                 new Notice("File is not in your vault"); // Show notice if file doesn't exist
+                             }
+                         } else {
+                              console.warn("Clicked link target is not a string:", linkTarget);
+                         }
+                    });
+                } else {
+                    // Value is not a link or is empty - display as plain text
+                    valueLine.createSpan({ text: isEmptyValue ? 'No value' : valuePreview });
+                }
+                // --- End Single Value Handling ---
+            }
+            // --- End Conditional Value Display ---
+
+            // Dropdown for include/exclude/override (remains the same)
             propertySetting.addDropdown(dropdown => {
                 dropdown
                     .addOption('exclude', 'Exclude property')
-                    .addOption('include', 'Include property') 
+                    .addOption('include', 'Include property')
                     .addOption('include-override', 'Include with value')
                     .setValue('exclude') // Default to exclude
                     .onChange(value => {
-                        // Handle selection change
-                        if (value === 'exclude') {
-                            // Exclude the property
+                         if (value === 'exclude') {
                             this.selectedProperties = this.selectedProperties.filter(p => p !== key);
                             this.overrideValueProperties = this.overrideValueProperties.filter(p => p !== key);
                         } else if (value === 'include') {
-                            // Include property but preserve value
-                            if (!this.selectedProperties.includes(key)) {
-                                this.selectedProperties.push(key);
-                            }
+                            if (!this.selectedProperties.includes(key)) this.selectedProperties.push(key);
                             this.overrideValueProperties = this.overrideValueProperties.filter(p => p !== key);
                         } else if (value === 'include-override') {
-                            // Include property and override value
-                            if (!this.selectedProperties.includes(key)) {
-                                this.selectedProperties.push(key);
-                            }
-                            if (!this.overrideValueProperties.includes(key)) {
-                                this.overrideValueProperties.push(key);
-                            }
+                            if (!this.selectedProperties.includes(key)) this.selectedProperties.push(key);
+                            if (!this.overrideValueProperties.includes(key)) this.overrideValueProperties.push(key);
                         }
-                        
-                        // Update master state and apply button
                         this.updateMasterTogglesState();
                         this.updateApplyButtonState();
                     });
-                
-                // Store reference to dropdown
-                this.propertyToggles.push({
-                    key: key,
-                    dropdown: dropdown
-                });
-                
+                this.propertyToggles.push({ key: key, dropdown: dropdown });
                 return dropdown;
             });
         }
@@ -676,6 +773,11 @@ export class TemplateApplicationModal extends Modal {
     }
 
     onClose() {
+        // Remove all registered event listeners
+        this.eventRefs.forEach(removeListener => removeListener());
+        this.eventRefs = [];
+        
+        // Existing cleanup code
         const { contentEl } = this;
         contentEl.empty();
     }

@@ -110,9 +110,10 @@ export function formatInputValue(value: any): string {
 
 /**
  * Format a value for preview display
- * Creates a compact representation suitable for UI previews
- * 
+ * Creates a compact representation suitable for UI previews, stripping [[...]] brackets.
+ *
  * @param value - The value to format
+ * @param propertyType - Optional property type hint (used for date/datetime)
  * @returns Formatted string for preview
  */
 export function formatValuePreview(value: any, propertyType?: string): string {
@@ -120,57 +121,59 @@ export function formatValuePreview(value: any, propertyType?: string): string {
         return 'null';
     }
 
-    if (Array.isArray(value)) {
-        if (value.length === 0) return '[]';
+    if (typeof value === 'string') {
+        let displayValue = value;
 
-        // Use the updated formatShortValue which cleans the items
-        const itemStrings = value.map(item => formatShortValue(item));
-
-        let previewString = itemStrings.join(', ');
-
-        const maxLength = 60; // Adjust as needed
-        if (previewString.length > maxLength) {
-            let trimIndex = previewString.lastIndexOf(',', maxLength - 4);
-            if (trimIndex === -1 || trimIndex < maxLength / 2) {
-                trimIndex = maxLength - 3;
-            }
-            previewString = previewString.substring(0, trimIndex) + '...';
+        if (displayValue.startsWith('[[') && displayValue.endsWith(']]')) {
+            displayValue = displayValue.substring(2, displayValue.length - 2).trim();
         }
-        return previewString;
+
+        // Handle special property types like date/datetime (no change here)
+        if (propertyType) {
+            if (propertyType === 'date' || propertyType === 'datetime') {
+                // Return date/datetime strings directly without further modification/truncation
+                return displayValue;
+            }
+        }
+
+        // Truncate long strings (apply after stripping brackets)
+        if (displayValue.length > 30) {
+            return `${displayValue.substring(0, 27)}...`;
+        }
+
+        // Return the potentially modified string value
+        return displayValue;
     }
 
-    // Handling for non-array types remains the same...
-    if (typeof value === 'string') {
-        if (propertyType === 'date' || propertyType === 'datetime') {
-            return value;
-        }
-        const stringMaxLength = 30;
-        if (value.length > stringMaxLength) {
-            // Check if it's a wikilink before truncating display string
-             if (value.startsWith('[[') && value.endsWith(']]')) {
-                 let cleanValue = value.substring(2, value.length - 2);
-                 const pipeIndex = cleanValue.indexOf('|');
-                 if (pipeIndex !== -1) {
-                     cleanValue = cleanValue.substring(pipeIndex + 1);
-                 }
-                 // Truncate the cleaned value if needed
-                 return cleanValue.length > stringMaxLength ? `${cleanValue.substring(0, stringMaxLength - 3)}...` : cleanValue;
+    if (Array.isArray(value)) {
+        if (value.length === 0) return '[]';
+        // Check if array contains complex items (arrays or objects)
+        const hasComplexItems = value.some(item => Array.isArray(item) || (typeof item === 'object' && item !== null));
+        if (hasComplexItems) {
+             return `[Array: ${value.length} items]`; // Keep simple preview for complex arrays
+        } else {
+            // For simple arrays, attempt to join and preview
+            const joined = value.map(item => formatValuePreview(item)).join(', ');
+             if (joined.length > 30) {
+                 return `[${value.length} items]...`; // Truncate joined preview
              }
-            // Standard string truncation
-            return `${value.substring(0, stringMaxLength - 3)}...`;
+             return `[${joined}]`; // Show simple array content
         }
-        // Display non-array strings directly (might still contain [[..]] if not truncated)
-        // Or apply cleaning here too if desired for single strings:
-        // if (value.startsWith('[[') && value.endsWith(']]')) { ... clean it ... }
-        return value;
     }
 
     if (typeof value === 'object') {
-        return '{Object}';
+        // Handle potential null objects explicitly if needed, though initial check covers null
+        if (value === null) return 'null';
+        // Basic object preview
+        const keys = Object.keys(value);
+        if (keys.length === 0) return '{}';
+        return `{${keys.slice(0, 2).join(', ')}${keys.length > 2 ? ', ...' : ''}}`; // Preview first few keys
     }
 
+    // For booleans, numbers, etc.
     return String(value);
 }
+
 
 /**
  * Format a value for very short display contexts
@@ -252,4 +255,76 @@ export function detectStringValueType(value: string): string {
     }
     
     return "text";
+}
+
+/**
+ * Parse a string value to detect if it contains a link
+ * Supports wiki-links, markdown links, and raw URLs
+ * 
+ * @param value - The string value to analyze
+ * @returns Object with link information
+ */
+export function parseValueLinks(value: string): {
+    isLink: boolean, 
+    type?: 'wiki' | 'markdown' | 'url',
+    path?: string, 
+    displayText: string
+} {
+    // Check for wiki-links [[Link]] or [[Link|Alias]]
+    if (value.startsWith('[[') && value.endsWith(']]')) {
+        const linkText = value.substring(2, value.length - 2);
+        const pipeIndex = linkText.indexOf('|');
+        
+        if (pipeIndex !== -1) {
+            return {
+                isLink: true,
+                type: 'wiki',
+                path: linkText.substring(0, pipeIndex),
+                displayText: linkText.substring(pipeIndex + 1)
+            };
+        } else {
+            return {
+                isLink: true,
+                type: 'wiki',
+                path: linkText,
+                displayText: linkText
+            };
+        }
+    }
+    
+    // Check for markdown links [Text](URL)
+    const markdownLinkRegex = /^\[([^\]]+)\]\(([^)]+)\)$/;
+    const markdownMatch = markdownLinkRegex.exec(value);
+    if (markdownMatch) {
+        const displayText = markdownMatch[1];
+        const url = markdownMatch[2];
+        
+        // Determine if it's an internal or external link
+        const isExternal = url.startsWith('http://') || url.startsWith('https://');
+        
+        return {
+            isLink: true,
+            type: isExternal ? 'url' : 'markdown', 
+            path: url,
+            displayText: displayText
+        };
+    }
+    
+    // Check for plain URLs
+    const urlRegex = /^(https?:\/\/[^\s]+)$/;
+    const urlMatch = urlRegex.exec(value);
+    if (urlMatch) {
+        return {
+            isLink: true,
+            type: 'url',
+            path: urlMatch[1],
+            displayText: urlMatch[1]
+        };
+    }
+    
+    // Not a link
+    return {
+        isLink: false,
+        displayText: value
+    };
 }

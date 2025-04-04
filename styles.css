@@ -149,18 +149,83 @@
 }
 
 /* ===========================================
+   TEMPLATE APPLICATION MODAL - PROPERTY DISPLAY
+   =========================================== */
+
+/* Style for the Type line */
+.property-type-line {
+  display: block; /* Ensure it takes its own line */
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  margin-bottom: var(--size-4-1); /* Space below Type line */
+}
+
+/* Style for the Value line */
+.property-value-line {
+  display: block; /* Ensure it takes its own line */
+}
+
+/* Container for the interactive array parts (inline within Value line) */
+.array-property-container {
+  display: inline-block; /* Keep inline with "Value: " prefix */
+}
+
+/* Collapsed view elements */
+.array-property-collapsed {
+  /* Styles if needed, often inherits fine */
+}
+
+/* Styling for the expand/collapse links */
+.array-property-toggle-link {
+  cursor: pointer;
+  color: var(--interactive-accent);
+  font-size: var(--font-ui-smaller);
+  margin-left: var(--size-4-1);
+}
+
+.array-property-toggle-link:hover {
+  color: var(--interactive-accent-hover);
+  text-decoration: underline;
+}
+
+/* NEW: Container specifically for the expanded text content */
+/* This will be shown/hidden */
+.array-property-expanded-container {
+  display: block; /* Takes full width, appears below Type/Value */
+  margin-top: var(--size-4-1); /* Add some space above */
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+}
+
+/* Utility class to hide elements */
+.is-hidden {
+  display: none !important;
+}
+
+/* ===========================================
    BROWSER MODAL
    =========================================== */
 
+/* Style for the individual clickable items in expanded array view */
+.clickable-link-item {
+  color: var(--text-accent); /* Standard link color */
+  cursor: pointer;          /* Indicate interactivity */
+}
+
+.clickable-link-item:hover {
+  color: var(--text-accent-hover); /* Hover color */
+  text-decoration: underline;       /* Underline on hover */
+}
+
 /* File tree container */
 .file-tree-container {
-    margin: var(--size-4-2) 0;
-    max-height: 400px;
-    min-height: 300px;
-    overflow-y: auto;
-    border: 1px solid var(--background-modifier-border);
-    border-radius: var(--radius-m);
-    padding: var(--size-4-2);
+  margin: var(--size-4-2) 0;
+  max-height: 400px;
+  min-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding: var(--size-4-2);
 }
 
 /* Selection counter */
