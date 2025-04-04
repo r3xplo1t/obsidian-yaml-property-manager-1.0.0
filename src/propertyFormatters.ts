@@ -120,34 +120,55 @@ export function formatValuePreview(value: any, propertyType?: string): string {
         return 'null';
     }
 
-    if (typeof value === 'string') {
-        // Handle special property types
-        if (propertyType) {
-            // For date/datetime types, don't add quotes
-            if (propertyType === 'date' || propertyType === 'datetime') {
-                return value;
-            }
-        }
-        
-        // Truncate long strings
-        if (value.length > 30) {
-            return `${value.substring(0, 27)}...`;
-        }
-        
-        // Return string values without quotes unless they need escaping
-        return value;
-    }
-    
     if (Array.isArray(value)) {
         if (value.length === 0) return '[]';
-        return `[Array: ${value.length} items]`;
+
+        // Use the updated formatShortValue which cleans the items
+        const itemStrings = value.map(item => formatShortValue(item));
+
+        let previewString = itemStrings.join(', ');
+
+        const maxLength = 60; // Adjust as needed
+        if (previewString.length > maxLength) {
+            let trimIndex = previewString.lastIndexOf(',', maxLength - 4);
+            if (trimIndex === -1 || trimIndex < maxLength / 2) {
+                trimIndex = maxLength - 3;
+            }
+            previewString = previewString.substring(0, trimIndex) + '...';
+        }
+        return previewString;
     }
-    
+
+    // Handling for non-array types remains the same...
+    if (typeof value === 'string') {
+        if (propertyType === 'date' || propertyType === 'datetime') {
+            return value;
+        }
+        const stringMaxLength = 30;
+        if (value.length > stringMaxLength) {
+            // Check if it's a wikilink before truncating display string
+             if (value.startsWith('[[') && value.endsWith(']]')) {
+                 let cleanValue = value.substring(2, value.length - 2);
+                 const pipeIndex = cleanValue.indexOf('|');
+                 if (pipeIndex !== -1) {
+                     cleanValue = cleanValue.substring(pipeIndex + 1);
+                 }
+                 // Truncate the cleaned value if needed
+                 return cleanValue.length > stringMaxLength ? `${cleanValue.substring(0, stringMaxLength - 3)}...` : cleanValue;
+             }
+            // Standard string truncation
+            return `${value.substring(0, stringMaxLength - 3)}...`;
+        }
+        // Display non-array strings directly (might still contain [[..]] if not truncated)
+        // Or apply cleaning here too if desired for single strings:
+        // if (value.startsWith('[[') && value.endsWith(']]')) { ... clean it ... }
+        return value;
+    }
+
     if (typeof value === 'object') {
         return '{Object}';
     }
-    
-    // For booleans, numbers, etc.
+
     return String(value);
 }
 
@@ -163,22 +184,40 @@ function formatShortValue(value: any): string {
     if (value === null || value === undefined) {
         return 'null';
     }
-    
+
     if (typeof value === 'string') {
-        if (value.length > 8) {
-            return `"${value.substring(0, 6)}..."`;
+        let cleanValue = value;
+
+        // Check if it looks like a wikilink [[Link]] or [[Link|Alias]]
+        if (cleanValue.startsWith('[[') && cleanValue.endsWith(']]')) {
+            // Remove the brackets
+            cleanValue = cleanValue.substring(2, cleanValue.length - 2);
+            // Check for alias |
+            const pipeIndex = cleanValue.indexOf('|');
+            if (pipeIndex !== -1) {
+                // Use only the alias part (after the pipe)
+                cleanValue = cleanValue.substring(pipeIndex + 1);
+            }
         }
-        return `"${value}"`;
+
+        // Truncate if necessary (AFTER cleaning)
+        if (cleanValue.length > 15) { // Shorter limit for items within a list preview
+            return `${cleanValue.substring(0, 13)}...`;
+        }
+        // Return the cleaned value directly, without adding quotes
+        return cleanValue;
     }
-    
+
     if (Array.isArray(value)) {
-        return `[Array:${value.length}]`;
+        // More concise array preview for nested arrays
+        return `[${value.length}]`;
     }
-    
+
     if (typeof value === 'object') {
         return '{...}';
     }
-    
+
+    // For numbers, booleans, etc., just convert to string
     return String(value);
 }
 

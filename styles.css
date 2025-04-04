@@ -8,15 +8,6 @@
   100% { transform: rotate(360deg); }
 }
 
-/* Modal normalization - needed to prevent Obsidian overrides */
-.modal > .yaml-window {
-  padding: 20px;
-  margin: 0;
-  border: none;
-  box-shadow: none;
-  background: transparent;
-}
-
 /* Buttons container */
 .modal > .modal-button-container {
   bottom: 0;
@@ -29,13 +20,13 @@
 }
 
 /* SVG Icons - Additional support while keeping emoji compatibility */
-.yaml-template-node__icon svg {
+.template-node__icon svg {
   width: 18px;
   height: 18px;
   color: var(--text-muted);
 }
 
-.yaml-template-node__header:hover .yaml-template-node__icon svg {
+.template-node__header:hover .template-node__icon svg {
   color: var(--text-normal);
 }
 
@@ -55,9 +46,9 @@
   position: relative;
   border-radius: var(--radius-s);
   color: var(--nav-item-color);
-  font-size: var(--nav-item-size);
   line-height: var(--line-height-tight);
   cursor: var(--cursor);
+  font-size: var(--nav-item-size);
 }
 
 /* The SVG triangle icon itself */
@@ -244,20 +235,48 @@
     color: rgba(var(--text-accent))
 }
 
+/* Center the checkbox within its container */
+.tree-item-checkbox-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Add a consistent width to ensure proper alignment */
+  width: 24px;
+  height: 100%;
+}
+
+.tree-item-checkbox {
+  margin: 0; /* Remove default input margins that might affect centering */
+  /* Optional: Add a slight transition for smoother user experience */
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
 .tree-item-checkbox:indeterminate {
-    background-color: var(--checkbox-color);
-    border-color: var(--checkbox-color);
+  background-color: var(--checkbox-color);
+  border-color: var(--checkbox-color);
+  position: relative;
 }
 
 .tree-item-checkbox:indeterminate::after {
   content: "";
-  width: calc(var(--checkbox-size) * 0.5);
-  height: 2px;
-  background-color: var(--checkbox-marker-color);
+  /* Ensure the element is pixel-aligned */
   position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  width: 8px;
+  height: 1.5px;
+  background-color: var(--checkbox-marker-color);
+  
+  /* Force pixel-perfect rendering by using integer values */
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  margin: auto;
+  
+  /* Additional properties to prevent rendering inconsistencies */
+  will-change: transform;
+  transform: translateZ(0);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 .tree-item-checkbox:hover {

@@ -387,11 +387,12 @@ export class BrowserModal extends Modal {
             // Create custom checkbox element (using actual checkbox for accessibility)
             const checkbox = checkboxContainer.createEl('input', {
                 type: 'checkbox',
-                cls: 'tree-item-checkbox',
+                cls: 'tree-item-checkbox custom-styled-checkbox', // Add a new class
                 attr: {
                     'checked': isSelected ? 'checked' : '',
                     'aria-label': `Select ${node.name}`,
-                    'tabindex': '-1' // Make it not focusable directly, focus goes to the tree item
+                    'tabindex': '-1',
+                    'data-indeterminate': isIndeterminate ? 'true' : 'false' // Add data attribute
                 }
             }) as HTMLInputElement;
             
@@ -529,7 +530,7 @@ export class BrowserModal extends Modal {
             
             // Check if this completes the parent folder selection
             if (node.path.includes('/')) {
-                this.updateParentFoldersOnSelection(node.path);
+                this.updateParentFoldersState(node.path);
             }
         } else {
             // Deselect folder and all children
@@ -568,9 +569,6 @@ export class BrowserModal extends Modal {
             if (!this.selectedFiles.some(f => f.path === node.path)) {
                 this.selectedFiles.push(file);
                 itemEl.addClass('is-selected');
-                
-                // Check if this completes the parent folder selection
-                this.updateParentFoldersOnSelection(node.path);
                 
                 // Ensure all parent folder states are correct
                 this.ensureAllFolderSelections();
@@ -688,7 +686,7 @@ export class BrowserModal extends Modal {
                     
                     // Lazy load children if needed
                     if (childrenEl.childElementCount === 0 && node.children.length > 0) {
-                        const selectionText = this.contentEl.querySelector('.yaml-selection-text');
+                        const selectionText = this.contentEl.querySelector('.selection-text');
                         if (selectionText instanceof HTMLElement) {
                             for (const child of node.children) {
                                 this.renderTreeItem(childrenEl, child, selectionText);
@@ -810,8 +808,7 @@ export class BrowserModal extends Modal {
         const folderCount = this.selectedFolders.length;
         
         // Add or remove the has-selection class based on selection state
-        // Change this line
-        const selCountEl = countEl.closest('.selection-counter');  // Changed from '.yaml-selected-count'
+        const selCountEl = countEl.closest('.selection-counter');  // Changed from '.selected-count'
         if (selCountEl instanceof HTMLElement) {
             if (fileCount === 0 && folderCount === 0) {
                 selCountEl.addClass('has-no-selection');
@@ -970,55 +967,23 @@ export class BrowserModal extends Modal {
         
         if (!parentFolder) return;
         
-        // Check if parent folder is currently selected
+        // Check parent folder selection state
+        const hasAllChildrenSelected = this.areAllChildrenSelected(parentFolder);
         const isParentSelected = this.selectedFolders.some(f => f.path === parentPath);
         
-        // If parent is selected but has partially selected children, update to indeterminate
-        if (isParentSelected) {
-            const hasAllChildrenSelected = this.areAllChildrenSelected(parentFolder);
-            
-            if (!hasAllChildrenSelected) {
-                // Remove from selected folders to make it indeterminate
-                this.selectedFolders = this.selectedFolders.filter(f => f.path !== parentPath);
-                
-                // Continue up the tree
-                this.updateParentFoldersState(parentPath);
-            }
-        } else {
-            // Even if parent isn't selected, we need to update visual state
-            // of all ancestors when a deep change occurs
-            this.updateParentFoldersState(parentPath);
-        }
-    }
-    
-    updateParentFoldersOnSelection(path: string) {
-        // Skip for root files
-        if (!path.includes('/')) return;
-        
-        // Get the parent folder path
-        const parentPath = path.substring(0, path.lastIndexOf('/'));
-        const parentFolder = this.app.vault.getFolderByPath(parentPath);
-        
-        if (!parentFolder) return;
-        
-        // Check if parent folder is currently selected
-        const isParentSelected = this.selectedFolders.some(f => f.path === parentPath);
-        
-        if (!isParentSelected) {
-            // Check if all children are now selected
-            const allChildrenSelected = this.areAllChildrenSelected(parentFolder);
-            
-            if (allChildrenSelected) {
-                // Add the parent to selected folders
-                if (!this.selectedFolders.some(f => f.path === parentPath)) {
-                    this.selectedFolders.push(parentFolder);
-                    this.folderSettings.set(parentPath, true);
-                }
-                
-                // Continue up the tree
-                this.updateParentFoldersOnSelection(parentPath);
+        if (isParentSelected && !hasAllChildrenSelected) {
+            // Remove from selected folders to make it indeterminate
+            this.selectedFolders = this.selectedFolders.filter(f => f.path !== parentPath);
+        } else if (!isParentSelected && hasAllChildrenSelected) {
+            // Add to selected folders
+            if (!this.selectedFolders.some(f => f.path === parentPath)) {
+                this.selectedFolders.push(parentFolder);
+                this.folderSettings.set(parentPath, true);
             }
         }
+        
+        // Continue up the tree
+        this.updateParentFoldersState(parentPath);
     }
 
     onClose() {

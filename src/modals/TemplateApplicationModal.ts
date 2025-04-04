@@ -371,19 +371,39 @@ export class TemplateApplicationModal extends Modal {
             const propertySetting = new Setting(container)
                 .setName(key);
             
-            // Get type and value display information
+            // Call setDesc ensures the description element (descEl) is created.
+            // We use a non-breaking space '&nbsp;' or similar just as a placeholder.
+            // We will clear this immediately after.
+            propertySetting.setDesc('\u00A0'); // Use Unicode non-breaking space or just ' '
+
+            // Access the description element (descEl) created by setDesc()
+            const descEl = propertySetting.descEl;
+
+            // Clear the placeholder content set by setDesc()
+            descEl.empty();
+
+            // --- Add our custom Type/Value divs directly into descEl ---
+
+            // Get type and value display information (as before)
             const internalType = this.plugin.getInternalPropertyType(key, value);
             const typeDisplayName = this.plugin.propertyTypeService.getPropertyTypeDisplayName(internalType);
             const valuePreview = formatValuePreview(value, internalType);
-            const isEmptyValue = value === null || value === undefined || value === '' || 
-                                (Array.isArray(value) && value.length === 0) || 
-                                (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0);
-            
-            // Set description to show type and value info
-            let descText = `Type: ${typeDisplayName}  •  Value: `;
-            descText += isEmptyValue ? 'No value' : valuePreview;
-            propertySetting.setDesc(descText);
-            
+            const isEmptyValue = value === null || value === undefined || value === '' ||
+                            (Array.isArray(value) && value.length === 0) ||
+                            (typeof value === 'object' && !Array.isArray(value) && Object.keys(value).length === 0);
+
+            // Create element for Type line inside the description element
+            descEl.createDiv({
+                cls: 'property-detail property-detail-type', // Use classes for styling
+                text: `Type: ${typeDisplayName}`
+            });
+
+            // Create element for Value line inside the description element
+            descEl.createDiv({
+                cls: 'property-detail property-detail-value', // Use classes for styling
+                text: `Value: ${isEmptyValue ? 'No value' : valuePreview}`
+            });
+
             // Create a dropdown instead of toggles
             propertySetting.addDropdown(dropdown => {
                 dropdown
