@@ -612,6 +612,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             case "date": return "date";
             case "datetime": return "datetime";
             case "list": return "list";
+            case "multitext": return "list"; // Convert multitext to list
             default: return "text";
         }
     }

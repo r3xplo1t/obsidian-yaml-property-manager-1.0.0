@@ -5,7 +5,7 @@ import { App, TFile } from 'obsidian';
  */
 export type ObsidianPropertyType = 
     'text' | 'number' | 'checkbox' | 
-    'date' | 'datetime' | 'list';
+    'date' | 'datetime' | 'list' | 'multitext';
 
 /**
  * Property definition structure
