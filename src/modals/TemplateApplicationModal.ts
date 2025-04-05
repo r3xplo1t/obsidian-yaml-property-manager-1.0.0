@@ -31,6 +31,55 @@ export class TemplateApplicationModal extends Modal {
         this.targetFiles = targetFiles;
     }
 
+    /**
+     * Handles clicks on potential links within property values.
+     * Opens external links in a new browser tab/window and internal links
+     * in a new Obsidian window, preserving the current modal's state.
+     *
+     * @param linkTarget The string value that might contain a link.
+     * @param event The mouse event that triggered the handler.
+     */
+    private handleLinkClick(linkTarget: string, event: MouseEvent): void {
+        event.stopPropagation(); // Prevent triggering other actions if nested
+
+        if (typeof linkTarget !== 'string') {
+            console.warn("handleLinkClick called with non-string target:", linkTarget);
+            return;
+        }
+
+        // Check for external links first
+        if (linkTarget.startsWith('https://') || linkTarget.startsWith('http://')) {
+            window.open(linkTarget, '_blank'); // Use '_blank' for safety
+            return;
+        }
+
+        // Attempt to parse Obsidian-style links (wikilinks, markdown links)
+        const linkInfo = parseValueLinks(linkTarget);
+        const sourcePath = ""; // Use vault root as the context for resolving links
+
+        // Use the parsed path if available, otherwise fallback to the original target
+        const pathToFile = linkInfo.path || linkTarget;
+
+        try {
+            const targetFile = this.app.metadataCache.getFirstLinkpathDest(pathToFile, sourcePath);
+
+            if (targetFile instanceof TFile) {
+                // File exists in the vault, open it in a new window leaf
+                const leaf = this.app.workspace.getLeaf('window');
+                leaf.openFile(targetFile).catch(err => {
+                    console.error(`Error opening link in new window: ${pathToFile}`, err);
+                    new Notice(`Could not open link: ${pathToFile}`);
+                });
+            } else {
+                // File not found in the vault
+                new Notice(`File not found: ${pathToFile}`);
+            }
+        } catch (error) {
+            console.error(`Error processing link: ${linkTarget}`, error);
+            new Notice(`Could not process link: ${linkTarget}`);
+        }
+    }
+
     async onOpen() {
         const { contentEl } = this;
         contentEl.empty();
@@ -423,14 +472,41 @@ export class TemplateApplicationModal extends Modal {
                     if (typeof linkTarget === 'string' && (linkTarget.startsWith('https://') || linkTarget.startsWith('http://'))) {
                         window.open(linkTarget, '_blank'); // Open external links directly
                     } else if (typeof linkTarget === 'string') {
+                        // Parse the link to handle wiki-links and other formats
+                        const linkInfo = parseValueLinks(linkTarget);
                         const sourcePath = ""; // Vault root context
-                        const targetFile = this.app.metadataCache.getFirstLinkpathDest(linkTarget, sourcePath);
-
-                        if (targetFile instanceof TFile) { // Check if TFile exists
-                            this.app.workspace.openLinkText(linkTarget, sourcePath)
-                                .catch(err => { console.error(`Error opening existing link: ${linkTarget}`, err); new Notice(`Could not open link: ${linkTarget}`); });
+                        
+                        if (linkInfo.isLink) {
+                            // Use the parsed path for wiki-links and markdown links
+                            const linkPath = linkInfo.path || linkTarget;
+                            const targetFile = this.app.metadataCache.getFirstLinkpathDest(linkPath, sourcePath);
+                            
+                            if (targetFile instanceof TFile) { // Check if TFile exists
+                                // Get a new window leaf and open the file in it
+                                const leaf = this.app.workspace.getLeaf('window');
+                                leaf.openFile(targetFile)
+                                    .catch(err => { 
+                                        console.error(`Error opening link in separate window: ${linkPath}`, err); 
+                                        new Notice(`Could not open link: ${linkPath}`); 
+                                    });
+                            } else {
+                                new Notice(`File not found: ${linkPath}`); // Show notice if file doesn't exist
+                            }
                         } else {
-                            new Notice("File is not in your vault"); // Show notice if file doesn't exist
+                            // Not a recognized link format
+                            const targetFile = this.app.metadataCache.getFirstLinkpathDest(linkTarget, sourcePath);
+                            
+                            if (targetFile instanceof TFile) { // Check if TFile exists
+                                // Get a new window leaf and open the file in it
+                                const leaf = this.app.workspace.getLeaf('window');
+                                leaf.openFile(targetFile)
+                                    .catch(err => { 
+                                        console.error(`Error opening link in separate window: ${linkTarget}`, err); 
+                                        new Notice(`Could not open link: ${linkTarget}`); 
+                                    });
+                            } else {
+                                new Notice("File is not in your vault"); // Show notice if file doesn't exist
+                            }
                         }
                     } else {
                          console.warn("Clicked link target is not a string:", linkTarget);
@@ -452,24 +528,8 @@ export class TemplateApplicationModal extends Modal {
                     const displayText = formatValuePreview(item, internalType);
                     const linkEl = expandedViewContainer.createSpan({ text: displayText, cls: 'clickable-link-item' });
                     // Attach click listener to each item span (with existence check)
-                    this.plugin.registerDomEvent(linkEl, 'click', () => {
-                        const linkTarget = item; // Use original item value
-
-                        if (typeof linkTarget === 'string' && (linkTarget.startsWith('https://') || linkTarget.startsWith('http://'))) {
-                           window.open(linkTarget, '_blank'); // Open external links directly
-                        } else if (typeof linkTarget === 'string') {
-                            const sourcePath = ""; // Vault root context
-                            const targetFile = this.app.metadataCache.getFirstLinkpathDest(linkTarget, sourcePath);
-
-                            if (targetFile instanceof TFile) { // Check if TFile exists
-                               this.app.workspace.openLinkText(linkTarget, sourcePath)
-                                   .catch(err => { console.error(`Error opening existing link: ${linkTarget}`, err); new Notice(`Could not open link: ${linkTarget}`); });
-                            } else {
-                                new Notice("File is not in your vault"); // Show notice if file doesn't exist
-                            }
-                        } else {
-                             console.warn("Clicked link target is not a string:", linkTarget);
-                        }
+                    this.plugin.registerDomEvent(linkEl, 'click', (e) => {
+                        this.handleLinkClick(item, e); // Use the new helper method
                     });
                     if (index < originalValue.length - 1) expandedViewContainer.appendText(', ');
                 });
@@ -492,24 +552,7 @@ export class TemplateApplicationModal extends Modal {
                     // Value is a link - make it clickable (with existence check)
                     const linkEl = valueLine.createSpan({ text: valuePreview, cls: 'clickable-link-item' });
                     this.plugin.registerDomEvent(linkEl, 'click', (e) => {
-                         e.stopPropagation();
-                         const linkTarget = originalValue; // Use original value
-
-                         if (typeof linkTarget === 'string' && (linkTarget.startsWith('https://') || linkTarget.startsWith('http://'))) {
-                            window.open(linkTarget, '_blank'); // Open external links directly
-                         } else if (typeof linkTarget === 'string') {
-                            const sourcePath = ""; // Vault root context
-                            const targetFile = this.app.metadataCache.getFirstLinkpathDest(linkTarget, sourcePath);
-
-                            if (targetFile instanceof TFile) { // Check if TFile exists
-                                this.app.workspace.openLinkText(linkTarget, sourcePath)
-                                    .catch(err => { console.error(`Error opening existing link: ${linkTarget}`, err); new Notice(`Could not open link: ${linkTarget}`); });
-                             } else {
-                                 new Notice("File is not in your vault"); // Show notice if file doesn't exist
-                             }
-                         } else {
-                              console.warn("Clicked link target is not a string:", linkTarget);
-                         }
+                        this.handleLinkClick(originalValue, e); // Use the new helper method
                     });
                 } else {
                     // Value is not a link or is empty - display as plain text
@@ -648,6 +691,10 @@ export class TemplateApplicationModal extends Modal {
             return 0;
         }
     }
+    
+    //#endregion
+
+    //#region Navigation and UI
 
     private renderSelectAllControls(containerEl: HTMLElement): void {
         // Create the "Select All Properties" toggle
