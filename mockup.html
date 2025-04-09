@@ -1,0 +1,1456 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Bulk Editor Mockup (v4)</title>
+<style>
+  /* --- General Styles --- */
+  body {
+    font-family: sans-serif; /* Basic font */
+    padding: 15px;
+    background-color: #f0f0f0; /* Light gray background */
+  }
+  .modal-container {
+    background-color: #ffffff; /* White modal background */
+    padding: 20px;
+    border-radius: 8px; /* Rounded corners */
+    max-width: 600px; /* Limit width */
+    margin: auto; /* Center */
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1); /* Subtle shadow */
+  }
+  .modal-header h2 {
+    margin-top: 0;
+    font-size: 1.4em;
+    border-bottom: 1px solid #eee; /* Separator line */
+    padding-bottom: 10px;
+  }
+  .file-info {
+    color: #555; /* Muted text color */
+    margin-bottom: 15px;
+    font-size: 0.9em;
+  }
+
+  /* --- Section Header Style (Global Options, Properties List) --- */
+  .section-header {
+      font-size: 1.1em;
+      font-weight: bold;
+      margin-top: 15px;
+      margin-bottom: 5px;
+      color: #333;
+      padding-bottom: 5px;
+      border-bottom: 1px solid #eee;
+  }
+  .controls-section .section-header { margin-top: 5px; } /* Less top margin for first header */
+  #propertiesListHeader { margin-top: 15px; margin-bottom: 5px; border-bottom: 1px solid #eee; padding-bottom: 5px;}
+
+
+  /* --- Setting Item Layout (Used for Global Options & Nested Stats/Options) --- */
+  .setting-item {
+      display: flex;
+      padding: 10px 0;
+      border-bottom: 1px solid #eee; /* Separator for global options */
+      align-items: center; /* Vertically center content */
+  }
+  /* Specific style for the Expand/Collapse toggle now under Properties List */
+  #expandCollapseAllContainer.setting-item {
+      padding-top: 5px; /* Less padding above */
+      padding-bottom: 5px; /* Less padding below */
+      border-top: none; /* Remove top border if needed */
+      border-bottom: 1px solid #eee; /* Keep bottom border */
+      margin-bottom: 10px; /* Add space before the list */
+  }
+  .property-content .setting-item { /* Styles for nested settings (stats/options/exclude) */
+      border-bottom: none; /* No border for nested */
+      padding: 4px 0; /* Reduced padding for nested items */
+  }
+  /* Reduce padding further for common action toggles inside file item */
+   .file-item-content .setting-item {
+       padding: 2px 0;
+       border-top: 1px solid #f0f0f0; /* Separator for file item options */
+   }
+   .file-item-content .setting-item:first-of-type {
+       border-top: none; /* No top border for the first setting item */
+       margin-top: 5px; /* Add some space after details */
+   }
+   /* Style for the exclude toggle moved into the header */
+   .file-header-exclude-toggle.setting-item {
+        padding: 0; /* Remove padding */
+        border: none; /* Remove border */
+        margin-right: 5px; /* Space before view icon */
+        flex-shrink: 0; /* Prevent shrinking */
+   }
+   .file-header-exclude-toggle .setting-item-info,
+   .file-header-exclude-toggle .setting-item-description {
+        display: none; /* Hide text parts */
+   }
+    .file-header-exclude-toggle .setting-item-control {
+        min-width: auto; /* Allow control to shrink */
+    }
+    /* Visual feedback for excluded state */
+    .inconsistent-file-item.is-excluded .file-item-header,
+    .inconsistent-file-item.is-excluded .file-item-content {
+        opacity: 0.5;
+        background-color: #f5f5f5; /* Slightly grayed out */
+    }
+
+
+  .setting-item:last-child { border-bottom: none; } /* No border for last setting in a group */
+  .setting-item-info {
+      flex-grow: 1; /* Allow info section to take available space */
+      margin-right: 10px;
+  }
+  .setting-item-name {
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 3px;
+      font-size: 0.95em; /* Slightly smaller name for nested items */
+  }
+   /* Smaller name for common action toggles */
+  .file-item-content .setting-item-name {
+       font-size: 0.9em;
+       font-weight: normal;
+  }
+  .setting-item-description {
+      font-size: 0.85em;
+      color: #666;
+  }
+  /* Style for the note within the description */
+  .setting-description-note {
+      display: block; /* Put note on new line */
+      margin-top: 4px;
+      font-size: 0.95em; /* Slightly smaller */
+      color: #555; /* Slightly darker than description */
+  }
+  .setting-item-control {
+      flex-shrink: 0; /* Prevent control area from shrinking */
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      justify-content: flex-end; /* Align controls to the right */
+      min-width: 80px; /* Ensure some space for controls */
+      text-align: right;
+  }
+  /* Styling for controls within setting items */
+  .setting-item-control select,
+  .setting-item-control input[type="text"],
+  .setting-item-control input[type="number"], /* Add number input styling */
+  .setting-item-control input[type="date"],   /* Add date input styling */
+  .setting-item-control input[type="datetime-local"] /* Add datetime input styling */
+  {
+      padding: 5px;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      font-size: 0.9em;
+      min-width: 120px; /* Ensure dropdown/input is wide enough */
+  }
+  /* Specific styling for override input to handle potential type changes */
+  .override-value-input {
+      /* Keep base styles */
+      min-width: 150px; /* Slightly wider */
+  }
+
+
+  /* --- Stat Detail Styles (Nested within description) --- */
+  .stat-detail {
+      display: block; /* Put on new line */
+      margin-top: 4px;
+      font-size: 0.95em;
+      color: #444;
+  }
+  .value-display-container {
+      margin-top: 4px;
+      display: block; /* Container for value display */
+  }
+  .clickable-link-item { /* Style for clickable links in values */
+      color: #4a88e0;
+      cursor: pointer;
+      text-decoration: underline;
+      display: inline;
+  }
+  .clickable-link-item:hover { color: #3a6eb0; }
+
+   /* --- Array Display Styles --- */
+  .array-property-collapsed-view, .array-property-expanded-container {
+      display: inline; /* Default display */
+  }
+  .array-property-expanded-container {
+      display: none; /* Hide expanded view by default */
+      word-break: break-word; /* Allow long items to wrap */
+      white-space: normal;
+  }
+  .stat-detail.is-value-expanded .array-property-collapsed-view { display: none; } /* Hide collapsed when expanded */
+  .stat-detail.is-value-expanded .array-property-expanded-container { display: inline; } /* Show expanded */
+  .array-property-expanded-container .clickable-link-item { /* Style links within expanded array */
+       margin: 0 2px; padding: 1px 3px; border-radius: 3px; text-decoration: underline;
+  }
+  .array-property-expanded-container .clickable-link-item:hover { background-color: #eee; }
+  .array-property-toggle-link { /* Style for Expand/Collapse links */
+      margin-left: 5px; color: #4a88e0; cursor: pointer;
+      font-size: 0.9em; text-decoration: underline; white-space: nowrap;
+  }
+  .array-property-toggle-link:hover { color: #3a6eb0; }
+
+  /* --- Multiline Value Style --- */
+  .multiline-value {
+      white-space: pre-wrap; /* Respect newlines and wrap */
+      display: block;
+      margin-top: 4px;
+      margin-left: 0;
+      font-family: monospace; /* Use monospace for code/preformatted */
+      background-color: #f9f9f9;
+      padding: 5px;
+      border: 1px solid #eee;
+      border-radius: 3px;
+  }
+
+  /* --- General Toggle Switch Style --- */
+  .setting-toggle, .edit-enable-toggle {
+      appearance: none;
+      width: 32px; height: 18px;
+      background-color: #ccc; /* Off state */
+      border-radius: 9px;
+      position: relative;
+      cursor: pointer;
+      transition: background-color 0.2s ease-in-out;
+      outline: none;
+  }
+  .setting-toggle::before, .edit-enable-toggle::before { /* The circle handle */
+      content: ''; position: absolute;
+      width: 14px; height: 14px;
+      border-radius: 50%;
+      background-color: white;
+      top: 2px; left: 2px;
+      transition: transform 0.2s ease-in-out;
+  }
+  .setting-toggle:checked, .edit-enable-toggle:checked {
+      background-color: #4a88e0; /* On state */
+  }
+  .setting-toggle:checked::before, .edit-enable-toggle:checked::before {
+      transform: translateX(14px); /* Move handle when checked */
+  }
+
+  /* --- Property List Styles --- */
+  .properties-list-container {
+      /* Moved styles from .properties-list here */
+      border: 1px solid #ddd;
+      border-radius: 5px;
+      background-color: #fafafa;
+      padding: 10px;
+      margin-bottom: 20px;
+  }
+  .properties-list {
+      /* Removed padding, border, background, border-radius */
+      min-height: 100px; max-height: 450px; /* Allow scrolling */
+      overflow-y: auto;
+      margin-bottom: 10px; /* Keep margin if needed below scroll area */
+  }
+
+  /* Individual Property Item Styles */
+  .bulk-property-item {
+      border: 1px solid #ccc; background-color: #fff; margin-bottom: 10px;
+      border-radius: 4px;
+  }
+  .bulk-property-item.dragging { opacity: 0.5; background-color: #e0e0e0; } /* Style when dragging */
+  .bulk-property-item.drag-over { border-top: 2px solid #4a88e0; } /* Drop indicator */
+
+  /* Property Item Header Styles */
+  .property-header {
+      display: flex; align-items: center; padding: 8px 10px;
+      background-color: #f8f8f8; border-bottom: 1px solid #eee;
+      border-top-left-radius: 3px; border-top-right-radius: 3px; cursor: pointer;
+      gap: 5px; /* Gap between header elements */
+      /* --- Sticky Header Styles --- */
+      position: sticky;
+      top: 0; /* Stick to the top of the scroll container (.properties-list) */
+      /* Increase z-index slightly to ensure it's above the filter row */
+      z-index: 2; /* --- CSS Change 3 Applied --- */
+      /* --- End Sticky Header Styles --- */
+  }
+  .bulk-property-item.is-collapsed .property-header { border-bottom: none; border-bottom-left-radius: 3px; border-bottom-right-radius: 3px; } /* Adjust border when collapsed */
+  .collapse-toggle { /* Arrow icon */
+      display: inline-block; padding: 0; margin: 0 5px 0 0; font-size: 0.8em;
+      line-height: 1; color: #555; user-select: none;
+      /* Removed transition and transform */
+      width: 1em; text-align: center; flex-shrink: 0;
+  }
+  .property-name {
+      font-weight: bold; flex-grow: 1; padding: 0 5px;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; /* Prevent long names breaking layout */
+  }
+  /* Container for Header Pills */
+  .header-stats-pills { display: flex; gap: 5px; margin-left: auto; flex-shrink: 0; }
+
+  /* Warning/Checkmark Icon Styling */
+  .stat-warning-icon { /* Now holds either ⚠ or ✓ */
+      display: none; /* Hide by default */
+      font-size: 1em;
+      line-height: 1;
+      font-weight: bold;
+      margin-left: 2px; /* Small space AFTER count */
+  }
+  /* Show icon only when warning or resolved */
+  .stat-value-pill.is-warning .stat-warning-icon,
+  .stat-value-pill.is-resolved .stat-warning-icon {
+       display: inline-block;
+  }
+  .stat-value-pill.is-warning .stat-warning-icon {
+      color: orange; /* Warning color */
+  }
+  .stat-value-pill.is-resolved .stat-warning-icon {
+      color: green; /* Resolved color */
+  }
+  /* End Warning/Checkmark Icon Styling */
+
+  .stat-value-pill { /* Style for the pills */
+      display: inline-flex; align-items: center; gap: 4px; background-color: #e0e0e0;
+      color: #333; padding: 2px 6px; border-radius: 10px; font-size: 0.8em;
+      line-height: 1.2; text-align: center; white-space: nowrap;
+  }
+  .pill-label { /* Label inside pill */
+      opacity: 0.7; margin-right: 3px; font-size: 0.9em; font-weight: bold;
+  }
+  .edit-enable-toggle-container { margin: 0; display: flex; align-items: center; flex-shrink: 0; }
+  .edit-enable-toggle-container:active, .edit-enable-toggle:active { pointer-events: auto; } /* Ensure toggle is clickable */
+  .drag-handle { /* Drag handle icon */
+      font-size: 1.2em; color: #aaa; cursor: grab;
+      padding-left: 5px; user-select: none; flex-shrink: 0;
+  }
+
+  /* Property Item Content Area Styles */
+  .property-content { padding: 10px 15px; }
+  /* Hide content when collapsed */
+  .bulk-property-item.is-collapsed .property-content { display: none; }
+
+  /* Sub-headers within Content Area (Statistics, Options, Inconsistent Files) */
+  .stats-header {
+      font-weight: bold; font-size: 1em; margin-bottom: 5px; /* Adjusted margin */
+      margin-top: 10px; padding-bottom: 5px;
+      border-bottom: 1px solid #eee;
+  }
+  .stats-header + .stats-header { /* Add spacing and separator between sections */
+       border-top: 1px solid #eee;
+       margin-top: 15px;
+       padding-top: 10px;
+  }
+  .stats-header:first-child { margin-top: 0; } /* No top margin if first element */
+
+  /* --- Inconsistent Files Section Styles --- */
+  
+  /* New container for the entire inconsistent files section */
+  .inconsistent-files-container {
+    position: relative; /* Create a positioning context for the sticky filter row */
+    border: 1px solid #eee;
+    border-radius: 3px;
+    background-color: #fdfdfd;
+    margin-top: 10px;
+  }
+
+  /* Updated styles for the filter/order row at the top of inconsistent files section */
+  .filter-order-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px; /* Slightly more padding for visibility */
+    /* Sticky positioning */
+    position: sticky;
+    /* Stick to the top of the inconsistent files section */
+    top: 0; /* This makes it stick to the top of its container */
+    background-color: #f8f8f8; /* Slightly different background to stand out */
+    z-index: 2; /* Increase z-index to ensure it stays above the file items */
+    border-bottom: 1px solid #ddd; /* More visible separator */
+    margin-bottom: 8px; /* Space before the exclude toggle */
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05); /* Subtle shadow for depth */
+  }
+
+  /* Labels within the filter row */
+  .filter-order-row label {
+    font-size: 0.9em;
+    font-weight: bold;
+    color: #444;
+    margin-right: 3px;
+    white-space: nowrap;
+  }
+  /* Select dropdowns within the filter row */
+  .filter-order-row select {
+    padding: 3px 5px;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    font-size: 0.85em;
+    flex-grow: 1;
+    min-width: 100px;
+  }
+
+  /* Styles for the container that NOW ONLY holds the 'Exclude All' toggle */
+  .inconsistent-files-controls { /* --- CSS Change 1 Applied --- */
+      display: flex; /* Revert to flex row for the single item */
+      margin-top: 0; /* Remove top margin */
+      margin-bottom: 8px; /* Keep space above list */
+      padding-left: 5px;
+      /* Explicitly remove column direction and gap if needed */
+      flex-direction: row;
+      gap: initial;
+      /* Existing styles for the setting-item within this container */
+      padding-top: 5px; /* Adjust padding */
+      padding-bottom: 5px; /* Adjust padding */
+  }
+  /* Remove redundant width/flex-basis rules now that it's a single row */
+  .inconsistent-files-controls .setting-item {
+      border: none;
+      flex-grow: 1;
+      margin-bottom: 0;
+      width: auto; /* Let flex handle width */
+      border-top: none; /* Remove inner border */
+      margin-top: 0; /* Remove inner margin */
+      padding: 0; /* Remove inner padding */
+  }
+  .inconsistent-files-controls .setting-item .setting-item-info {
+      flex-basis: auto; /* Reset basis */
+      margin-right: 5px;
+  }
+  .inconsistent-files-controls .setting-item .setting-item-control {
+      flex-basis: auto; /* Reset basis */
+      justify-content: flex-end;
+      min-width: auto;
+  }
+
+  .inconsistent-files-list {
+      padding-left: 10px;
+      /* UPDATED: Increased max-height */
+      max-height: 200px; /* Allow more visible items */
+      overflow-y: auto;
+      padding: 5px;
+  }
+  .inconsistent-files-list p { /* Style for 'No inconsistencies' message */
+      font-style: italic;
+      color: #777;
+      margin: 5px 0;
+      padding: 5px;
+      font-size: 0.9em;
+  }
+  .inconsistent-file-item {
+      border: 1px solid #ddd;
+      border-radius: 3px;
+      margin-bottom: 5px;
+      background-color: #fff;
+  }
+  .inconsistent-file-item:last-child {
+      margin-bottom: 0;
+  }
+  .file-item-header {
+      display: flex; /* Use flexbox */
+      align-items: center; /* Align items vertically */
+      gap: 5px; /* Space between elements */
+      padding: 4px 8px;
+      background-color: #f9f9f9;
+      border-bottom: 1px solid #eee;
+      font-size: 0.9em;
+      color: #444;
+      border-top-left-radius: 2px;
+      border-top-right-radius: 2px;
+  }
+  .file-view-icon { /* Style for the view icon */
+      width: 16px; /* Icon size */
+      height: 16px;
+      flex-shrink: 0; /* Prevent icon from shrinking */
+      opacity: 0.6;
+      cursor: pointer;
+      /* Removed margin-left */
+  }
+   .file-view-icon:hover {
+       opacity: 1;
+   }
+  .file-item-header > span:nth-of-type(1) { /* Target the file path span */
+      flex-grow: 1; /* Allow path to take available space */
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis; /* Add ellipsis for long paths */
+      margin-left: 3px; /* Small space after icon */
+  }
+  .file-item-header .header-stats-pills {
+      /* Pills already use flex, just ensure they don't shrink */
+      flex-shrink: 0;
+      margin-left: auto; /* Push pills to the right */
+  }
+  .file-item-content {
+      padding: 8px 8px 5px 8px; /* Adjusted padding */
+      font-size: 0.85em;
+      color: #666;
+  }
+  .file-item-details {
+      font-size: 0.9em;
+      color: #555;
+      margin-bottom: 5px;
+      padding: 2px 0;
+  }
+  .file-item-details code { /* Style for inline code/value display */
+      background-color: #eee;
+      padding: 1px 3px;
+      border-radius: 2px;
+      font-size: 0.95em;
+  }
+
+  /* --- End Inconsistent Files Section Styles --- */
+
+
+  /* Add Property Button Style */
+  .add-property-list-item { display: flex; align-items: center; padding: 8px 10px; background-color: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; text-align: center; color: #555; transition: background-color 0.2s ease, border-color 0.2s ease; margin-top: 5px; font-weight: bold; justify-content: center; }
+  .add-property-list-item:hover { background-color: #e5e5e5; border-color: #ccc; color: #222; }
+  .add-property-list-item span { margin-right: 8px; font-weight: bold; }
+
+  /* Modal Action Buttons */
+  .modal-button-container { display: flex; justify-content: flex-end; gap: 10px; padding-top: 15px; border-top: 1px solid #eee; margin-top: 20px; }
+  .modal-button-container button { padding: 8px 15px; border: 1px solid #ccc; border-radius: 4px; cursor: pointer; background-color: #f9f9f9; }
+  .modal-button-container button.mod-cta { background-color: #4a88e0; color: white; border-color: #4a88e0; } /* Primary button style */
+  .modal-button-container button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+</style>
+</head>
+<body>
+
+<div class="modal-container">
+  <div class="modal-header"> <h2>Bulk Property Editor</h2> </div>
+  <div class="file-info"> Editing properties across <strong>15 files</strong>. </div>
+
+  <div class="controls-section" id="controlsSection">
+       <div class="section-header">Global Options</div>
+        <div class="setting-item">
+            <div class="setting-item-info">
+                <div class="setting-item-name">Enable/Disable All Edits</div>
+                <div class="setting-item-description">Toggle to apply change for all properties below.</div>
+              </div>
+              <div class="setting-item-control">
+                  <input type="checkbox" id="enableDisableAllToggle" class="setting-toggle" checked title="Toggle All Edits">
+              </div>
+          </div>
+          <div class="setting-item">
+            <div class="setting-item-info">
+                <div class="setting-item-name">Action for Disabled Properties</div>
+                <div class="setting-item-description">
+                    Choose what happens to properties whose individual edit toggle is off.
+                    <br>
+                    <span class="setting-description-note">
+                        Note:<br>Option 'Add Empty if Missing' uses the already defined property type. If doesn't exist, defaults to 'Text' type.
+                    </span>
+                </div>
+            </div>
+            <div class="setting-item-control">
+                <select id="disabledActionSelect" title="Action for Disabled Properties">
+                    <option value="keep" selected>Keep Existing (Do Nothing if Missing)</option>
+                    <option value="remove">Remove Property</option>
+                    <option value="add_if_missing">Add Empty if Missing (Keep Existing)</option>
+                </select>
+            </div>
+          </div>
+          <div class="setting-item">
+           <div class="setting-item-info">
+               <div class="setting-item-name">Apply Custom Order</div>
+               <div class="setting-item-description">Apply the manually dragged order of properties below.</div>
+            </div>
+            <div class="setting-item-control">
+                <input type="checkbox" id="applyCustomOrderToggle" class="setting-toggle" title="Apply Custom Order on Save">
+            </div>
+        </div>
+  </div>
+
+  <div class="section-header" id="propertiesListHeader">Properties List</div>
+
+  <div class="setting-item" id="expandCollapseAllContainer">
+       <div class="setting-item-info">
+           <div class="setting-item-name">Expand/Collapse All</div>
+           <div class="setting-item-description">Toggle expansion state for all properties below.</div>
+        </div>
+        <div class="setting-item-control">
+            <input type="checkbox" id="expandCollapseAllToggle" class="setting-toggle" title="Toggle All Expansion">
+        </div>
+    </div>
+  <div class="properties-list-container">
+      <div class="properties-list" id="propertiesList">
+        <div class="bulk-property-item is-collapsed" id="prop-multilinetext">
+            <div class="property-header">
+                <span class="collapse-toggle">▶</span>
+                <span class="property-name">multilinetext</span>
+                <div class="header-stats-pills">
+                    <span class="stat-value-pill is-warning" title="Property Consistency" data-consistency-type="property"><span class="pill-label">Prop:</span><span>10/15</span><span class="stat-warning-icon">⚠</span></span>
+                    <span class="stat-value-pill is-warning" title="Type Consistency" data-consistency-type="type"><span class="pill-label">Type:</span><span>10/10</span><span class="stat-warning-icon">⚠</span></span>
+                    <span class="stat-value-pill is-warning" title="Value Consistency" data-consistency-type="value"><span class="pill-label">Value:</span><span>10/10</span><span class="stat-warning-icon">⚠</span></span>
+                </div>
+                <div class="edit-enable-toggle-container"><input type="checkbox" class="edit-enable-toggle" checked></div>
+                <span class="drag-handle" draggable="true">☰</span>
+            </div>
+            <div class="property-content">
+                <div class="stats-header">Statistics</div>
+                <div class="setting-item"><div class="setting-item-info"><div class="setting-item-name">Property Consistency</div><div class="setting-item-description">How many selected files contain this property.</div></div><div class="setting-item-control is-warning"><span class="stat-value-pill is-warning" data-consistency-type="property"><span class="pill-label">Prop:</span><span>10/15</span><span class="stat-warning-icon">⚠</span></span></div></div>
+                <div class="setting-item"><div class="setting-item-info"><div class="setting-item-name">Type Consistency</div><div class="setting-item-description">Consistency of the property type across files.<span class="stat-detail">Most consistent type: <span class="value-display-container">Text</span></span></div></div><div class="setting-item-control"><span class="stat-value-pill is-warning" data-consistency-type="type"><span class="pill-label">Type:</span><span>10/10</span><span class="stat-warning-icon">⚠</span></span></div></div>
+                <div class="setting-item value-consistency-stat"><div class="setting-item-info"><div class="setting-item-name">Value Consistency</div><div class="setting-item-description">Consistency of the property value across files.<span class="stat-detail">Most consistent value:<span class="value-display-container"><span class="multiline-value">This is a multiline text property
+with multiple lines
+that should be displayed properly</span></span></span></div></div><div class="setting-item-control"><span class="stat-value-pill is-warning" data-consistency-type="value"><span class="pill-label">Value:</span><span>10/10</span><span class="stat-warning-icon">⚠</span></span></div></div>
+
+                <div class="stats-header">Options</div>
+                <div class="setting-item">
+                    <div class="setting-item-info"> <div class="setting-item-name">Change Property Type</div> <div class="setting-item-description">Select a new type to apply to this property across all files.</div> </div>
+                    <div class="setting-item-control"> <select class="change-type-select" title="Change property type"> <option value="" selected disabled>(Keep Current)</option> <option value="text">Text</option> <option value="list">List</option> <option value="number">Number</option> <option value="checkbox">Checkbox</option> <option value="date">Date</option> <option value="datetime">Date & Time</option> </select> </div>
+                </div>
+                <div class="setting-item">
+                    <div class="setting-item-info">
+                        <div class="setting-item-name">Action if Edit Disabled</div>
+                        <div class="setting-item-description">Overrides global setting if the edit toggle above is off.</div>
+                    </div>
+                    <div class="setting-item-control">
+                        <select class="individual-disabled-action-select" title="Action if Edit Disabled">
+                            <option value="global" selected>Use Global Setting (Default)</option>
+                            <option value="keep">Keep Existing</option>
+                            <option value="remove">Remove Property</option>
+                            <option value="add_if_missing">Add Empty if Missing</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="setting-item">
+                    <div class="setting-item-info">
+                        <div class="setting-item-name">Override/Add Value</div>
+                        <div class="setting-item-description">
+                            Enter a value to set for this property in all selected files. Adds the property if missing.
+                            <span class="setting-description-note">Note: Input type will adapt based on 'Change Property Type' selection (mockup uses text). For lists, use comma separation.</span>
+                        </div>
+                    </div>
+                    <div class="setting-item-control"> <input type="text" class="override-value-input" placeholder="Enter value (comma-sep for lists)..."> </div>
+                </div>
+                <div class="setting-item">
+                    <div class="setting-item-info"> <div class="setting-item-name">Apply Order for This Property</div> <div class="setting-item-description">When enabled, the position of this property in the list will be preserved on apply.</div> </div>
+                    <div class="setting-item-control"> <input type="checkbox" class="setting-toggle apply-order-toggle" checked title="Apply order for this property"> </div>
+                </div>
+
+                <div class="stats-header">Inconsistent Files</div>
+                
+                <!-- New container that wraps the filter-order-row, controls, and list -->
+                <div class="inconsistent-files-container">
+                    <!-- Filter/Order Row (moved to top of container) -->
+                    <div class="filter-order-row">
+                        <label for="order-by-multilinetext">Order by:</label>
+                        <select id="order-by-multilinetext" class="inconsistent-order-by" title="Order inconsistent files">
+                            <option value="name-asc" selected>File Name (A-Z)</option>
+                            <option value="name-desc">File Name (Z-A)</option>
+                        </select>
+                        <label for="filter-by-multilinetext">Filter by:</label>
+                        <select id="filter-by-multilinetext" class="inconsistent-filter-by" title="Filter inconsistent files">
+                            <option value="all" selected>All</option>
+                            <option value="type">Type Mismatch</option>
+                            <option value="value">Value Mismatch</option>
+                            <option value="missing">Missing Property</option>
+                        </select>
+                    </div>
+                    
+                    <!-- Exclude All Files Toggle -->
+                    <div class="inconsistent-files-controls">
+                        <div class="setting-item">
+                            <div class="setting-item-info">
+                                <div class="setting-item-name">Exclude All Files</div>
+                                <div class="setting-item-description">Toggle exclusion for all files listed below.</div>
+                            </div>
+                            <div class="setting-item-control">
+                                <input type="checkbox" class="setting-toggle exclude-all-files-toggle" title="Toggle All File Exclusions">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- List of Inconsistent Files -->
+                    <div class="inconsistent-files-list">
+                        <div class="inconsistent-file-item">
+                            <div class="file-item-header">
+                                <div class="setting-item file-header-exclude-toggle">
+                                    <div class="setting-item-control">
+                                        <input type="checkbox" class="setting-toggle exclude-file-toggle" title="Exclude this file from changes for multilinetext">
+                                    </div>
+                                </div>
+                                <img src="https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/eye.svg" class="file-view-icon" title="View File" alt="View File Icon">
+                                <span>Path/To/FileWithDifferentType.md</span>
+                                <div class="header-stats-pills">
+                                    <span class="stat-value-pill is-warning" title="Type Mismatch" data-consistency-type="type"><span class="pill-label">Type</span><span class="stat-warning-icon">⚠</span></span>
+                                    <span class="stat-value-pill is-warning" title="Value Mismatch" data-consistency-type="value"><span class="pill-label">Value</span><span class="stat-warning-icon">⚠</span></span>
+                                </div>
+                            </div>
+                            <div class="file-item-content">
+                                <div class="file-item-details">Current Value: <code>123</code> (Type: Number)</div>
+                                <div class="setting-item">
+                                    <div class="setting-item-info">
+                                        <div class="setting-item-name">Set to common or override/add type</div>
+                                        <div class="setting-item-description">Applies the most common type or the type selected in 'Change Property Type' above.</div>
+                                    </div>
+                                    <div class="setting-item-control"><input type="checkbox" class="setting-toggle common-action-toggle" data-action-type="type" title="Set property type to common type or override/add type in this file"></div>
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-item-info">
+                                        <div class="setting-item-name">Set to common or override/add value</div>
+                                        <div class="setting-item-description">Applies the most common value or the value entered in 'Override/Add Value' above.</div>
+                                    </div>
+                                    <div class="setting-item-control"><input type="checkbox" class="setting-toggle common-action-toggle" data-action-type="value" title="Set property value to the common value or override/add value in this file"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="inconsistent-file-item">
+                            <div class="file-item-header">
+                                <div class="setting-item file-header-exclude-toggle">
+                                    <div class="setting-item-control">
+                                        <input type="checkbox" class="setting-toggle exclude-file-toggle" title="Exclude this file from changes for multilinetext">
+                                    </div>
+                                </div>
+                                <img src="https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/eye.svg" class="file-view-icon" title="View File" alt="View File Icon">
+                                <span>Another/Path/FileWithDifferentValue.md</span>
+                                <div class="header-stats-pills">
+                                    <span class="stat-value-pill is-warning" title="Value Mismatch" data-consistency-type="value"><span class="pill-label">Value</span><span class="stat-warning-icon">⚠</span></span>
+                                </div>
+                            </div>
+                            <div class="file-item-content">
+                                <div class="file-item-details">Current Value: <code>Some other text</code> (Type: Text)</div>
+                                <div class="setting-item">
+                                    <div class="setting-item-info">
+                                        <div class="setting-item-name">Set to common or override/add value</div>
+                                        <div class="setting-item-description">Applies the most common value or the value entered in 'Override/Add Value' above.</div>
+                                    </div>
+                                    <div class="setting-item-control"><input type="checkbox" class="setting-toggle common-action-toggle" data-action-type="value" title="Set property value to the common value or override/add value in this file"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="inconsistent-file-item">
+                            <div class="file-item-header">
+                                <div class="setting-item file-header-exclude-toggle">
+                                    <div class="setting-item-control">
+                                        <input type="checkbox" class="setting-toggle exclude-file-toggle" title="Exclude this file from changes for multilinetext">
+                                    </div>
+                                </div>
+                                <img src="https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/eye.svg" class="file-view-icon" title="View File" alt="View File Icon">
+                                <span>Missing/FileMissingProperty.md</span>
+                                <div class="header-stats-pills">
+                                    <span class="stat-value-pill is-warning" title="Property Missing" data-consistency-type="property"><span class="pill-label">Prop</span><span class="stat-warning-icon">⚠</span></span>
+                                </div>
+                            </div>
+                            <div class="file-item-content">
+                                <div class="file-item-details">Property Missing</div>
+                                <div class="setting-item">
+                                    <div class="setting-item-info">
+                                        <div class="setting-item-name">Add missing property</div>
+                                        <div class="setting-item-description">Adds this property to the file. Type/Value determined by other options.</div>
+                                    </div>
+                                    <div class="setting-item-control"><input type="checkbox" class="setting-toggle common-action-toggle" data-action-type="add" title="Add this missing property to the file"></div>
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-item-info">
+                                        <div class="setting-item-name">Set common or override/add value</div>
+                                        <div class="setting-item-description">Applies the most common value or the value entered in 'Override/Add Value' above. (Only if 'Add missing property' is checked).</div>
+                                    </div>
+                                    <div class="setting-item-control"><input type="checkbox" class="setting-toggle common-action-toggle" data-action-type="value" title="Set property value to the common value or override/add value in this file"></div>
+                                </div>
+                                <div class="setting-item">
+                                    <div class="setting-item-info">
+                                        <div class="setting-item-name">Set common or override/add type</div>
+                                        <div class="setting-item-description">Applies the most common type or the type selected in 'Change Property Type' above. (Only if 'Add missing property' is checked).</div>
+                                    </div>
+                                    <div class="setting-item-control"><input type="checkbox" class="setting-toggle common-action-toggle" data-action-type="type" title="Set property type to common type or override/add type in this file"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="bulk-property-item is-collapsed" id="prop-property_with_quotes">
+            <div class="property-header">
+                <span class="collapse-toggle">▶</span>
+                <span class="property-name">property_with_quotes</span>
+                <div class="header-stats-pills">
+                    <span class="stat-value-pill is-resolved" title="Property Consistency" data-consistency-type="property"><span class="pill-label">Prop:</span><span>15/15</span><span class="stat-warning-icon">✓</span></span>
+                    <span class="stat-value-pill is-resolved" title="Type Consistency" data-consistency-type="type"><span class="pill-label">Type:</span><span>15/15</span><span class="stat-warning-icon">✓</span></span>
+                    <span class="stat-value-pill is-resolved" title="Value Consistency" data-consistency-type="value"><span class="pill-label">Value:</span><span>15/15</span><span class="stat-warning-icon">✓</span></span>
+                </div>
+                <div class="edit-enable-toggle-container"><input type="checkbox" class="edit-enable-toggle" checked></div>
+                <span class="drag-handle" draggable="true">☰</span>
+            </div>
+            <div class="property-content">
+                 <div class="stats-header">Statistics</div>
+                 <div class="setting-item"><div class="setting-item-info"><div class="setting-item-name">Property Consistency</div><div class="setting-item-description">How many selected files contain this property.</div></div><div class="setting-item-control"><span class="stat-value-pill is-resolved" data-consistency-type="property"><span class="pill-label">Prop:</span><span>15/15</span><span class="stat-warning-icon">✓</span></span></div></div>
+                 <div class="setting-item"><div class="setting-item-info"><div class="setting-item-name">Type Consistency</div><div class="setting-item-description">Consistency of the property type across files.<span class="stat-detail">Most consistent type: <span class="value-display-container">Text</span></span></div></div><div class="setting-item-control"><span class="stat-value-pill is-resolved" data-consistency-type="type"><span class="pill-label">Type:</span><span>15/15</span><span class="stat-warning-icon">✓</span></span></div></div>
+                 <div class="setting-item value-consistency-stat"><div class="setting-item-info"><div class="setting-item-name">Value Consistency</div><div class="setting-item-description">Consistency of the property value across files.<span class="stat-detail">Most consistent value: <span class="value-display-container">"Quoted text"</span></span></div></div><div class="setting-item-control"><span class="stat-value-pill is-resolved" data-consistency-type="value"><span class="pill-label">Value:</span><span>15/15</span><span class="stat-warning-icon">✓</span></span></div></div>
+
+                 <div class="stats-header">Options</div>
+                 <div class="setting-item">
+                     <div class="setting-item-info"> <div class="setting-item-name">Change Property Type</div> <div class="setting-item-description">Select a new type to apply to this property across all files.</div> </div>
+                     <div class="setting-item-control"> <select class="change-type-select" title="Change property type"> <option value="" selected disabled>(Keep Current)</option> <option value="text">Text</option> <option value="list">List</option> <option value="number">Number</option> <option value="checkbox">Checkbox</option> <option value="date">Date</option> <option value="datetime">Date & Time</option> </select> </div>
+                 </div>
+                 <div class="setting-item">
+                    <div class="setting-item-info">
+                        <div class="setting-item-name">Action if Edit Disabled</div>
+                        <div class="setting-item-description">Overrides global setting if the edit toggle above is off.</div>
+                    </div>
+                    <div class="setting-item-control">
+                        <select class="individual-disabled-action-select" title="Action if Edit Disabled">
+                            <option value="global" selected>Use Global Setting (Default)</option>
+                            <option value="keep">Keep Existing</option>
+                            <option value="remove">Remove Property</option>
+                            <option value="add_if_missing">Add Empty if Missing</option>
+                        </select>
+                    </div>
+                 </div>
+                 <div class="setting-item">
+                    <div class="setting-item-info">
+                        <div class="setting-item-name">Override/Add Value</div>
+                        <div class="setting-item-description">
+                            Enter a value to set for this property in all selected files. Adds the property if missing.
+                            <span class="setting-description-note">Note: Input type will adapt based on 'Change Property Type' selection (mockup uses text). For lists, use comma separation.</span>
+                        </div>
+                    </div>
+                    <div class="setting-item-control"> <input type="text" class="override-value-input" placeholder="Enter value (comma-sep for lists)..."> </div>
+                 </div>
+                 <div class="setting-item">
+                     <div class="setting-item-info"> <div class="setting-item-name">Apply Order for This Property</div> <div class="setting-item-description">When enabled, the position of this property in the list will be preserved on apply.</div> </div>
+                     <div class="setting-item-control"> <input type="checkbox" class="setting-toggle apply-order-toggle" checked title="Apply order for this property"> </div>
+                 </div>
+
+                 <div class="stats-header">Inconsistent Files</div>
+                 
+                 <!-- New container that wraps the filter-order-row, controls, and list -->
+                 <div class="inconsistent-files-container">
+                     <!-- Filter/Order Row (moved to top of container) -->
+                     <div class="filter-order-row">
+                         <label for="order-by-property_with_quotes">Order by:</label>
+                         <select id="order-by-property_with_quotes" class="inconsistent-order-by" title="Order inconsistent files">
+                             <option value="name-asc" selected>File Name (A-Z)</option>
+                             <option value="name-desc">File Name (Z-A)</option>
+                         </select>
+                         <label for="filter-by-property_with_quotes">Filter by:</label>
+                         <select id="filter-by-property_with_quotes" class="inconsistent-filter-by" title="Filter inconsistent files">
+                             <option value="all" selected>All</option>
+                             <option value="type">Type Mismatch</option>
+                             <option value="value">Value Mismatch</option>
+                             <option value="missing">Missing Property</option>
+                         </select>
+                     </div>
+                     
+                     <!-- Exclude All Files Toggle -->
+                     <div class="inconsistent-files-controls">
+                         <div class="setting-item">
+                             <div class="setting-item-info">
+                                 <div class="setting-item-name">Exclude All Files</div>
+                                 <div class="setting-item-description">Toggle exclusion for all files listed below.</div>
+                             </div>
+                             <div class="setting-item-control">
+                                 <input type="checkbox" class="setting-toggle exclude-all-files-toggle" title="Toggle All File Exclusions">
+                             </div>
+                         </div>
+                     </div>
+                     
+                     <!-- List of Inconsistent Files -->
+                     <div class="inconsistent-files-list">
+                         <!-- No inconsistent files shown in this example -->
+                         <p>No inconsistencies found.</p>
+                     </div>
+                 </div>
+            </div>
+        </div>
+      </div>
+
+      <div class="add-property-list-item" id="addPropertyBtn"> <span>+</span> Add New Property </div>
+  </div>
+
+  <div class="modal-button-container"> <button type="button" class="mod-cta">Apply Changes</button> <button type="button">Cancel</button> </div>
+
+</div>
+
+<script>
+ // --- JS for Bulk Editor Mockup ---
+
+ // --- DOM Element References ---
+ const propertiesList = document.getElementById('propertiesList');
+ const controlsSection = document.getElementById('controlsSection');
+ const addPropertyBtn = document.getElementById('addPropertyBtn');
+ const expandCollapseAllToggle = document.getElementById('expandCollapseAllToggle');
+ const enableDisableAllToggle = document.getElementById('enableDisableAllToggle');
+ const applyCustomOrderToggle = document.getElementById('applyCustomOrderToggle');
+ const disabledActionSelect = document.getElementById('disabledActionSelect');
+ let draggedItem = null; // For drag and drop functionality
+
+ // --- Initial Setup ---
+ // Attach initial event listeners to property items
+ updateItemEventListeners();
+ // Set the state of the master enable/disable toggle based on individual toggles
+ updateMasterEnableToggleState();
+ // Set the initial state for the master collapse toggle based on the first property item
+ const firstPropItem = propertiesList?.querySelector('.bulk-property-item');
+ if (expandCollapseAllToggle && firstPropItem) {
+    expandCollapseAllToggle.checked = !firstPropItem.classList.contains('is-collapsed');
+ }
+ // Initial update for global pill icons based on file item states and exclude toggles
+ document.querySelectorAll('.bulk-property-item').forEach(item => {
+     // Set initial state for the property's "Exclude All Files" toggle
+     updatePropertyExcludeAllToggleState(item);
+     // Calculate and display initial header pill counts
+     updateGlobalPillIcons(item);
+ });
+
+
+ // --- Event Listeners ---
+
+ // Listener for the master Expand/Collapse All toggle
+ expandCollapseAllToggle?.addEventListener('change', (e) => {
+    const shouldExpand = e.target.checked;
+    // Iterate through each property item and apply the state
+    propertiesList.querySelectorAll('.bulk-property-item').forEach(item => {
+        const collapseToggle = item.querySelector('.collapse-toggle');
+        if (shouldExpand) {
+            item.classList.remove('is-collapsed');
+            if(collapseToggle) collapseToggle.textContent = '▼'; // Update icon to down arrow
+        } else {
+            item.classList.add('is-collapsed');
+            if(collapseToggle) collapseToggle.textContent = '▶'; // Update icon to right arrow
+        }
+        // Update ARIA attribute for accessibility
+        const header = item.querySelector('.property-header');
+        if(header) header.setAttribute('aria-expanded', shouldExpand.toString());
+    });
+ });
+
+ // Listener for the master Enable/Disable All Edits toggle
+ enableDisableAllToggle?.addEventListener('change', (e) => {
+    const shouldEnable = e.target.checked;
+    // Iterate through each property item's edit toggle and set its state
+    propertiesList.querySelectorAll('.edit-enable-toggle').forEach(toggle => {
+        if(toggle instanceof HTMLInputElement) toggle.checked = shouldEnable;
+    });
+ });
+
+ // Listener for the Apply Custom Order toggle
+ applyCustomOrderToggle?.addEventListener('change', (e) => {
+    console.log("Apply custom order:", e.target.checked);
+    // Placeholder for logic related to applying custom order
+ });
+
+ // Listener for the global Action for Disabled Properties dropdown
+ disabledActionSelect?.addEventListener('change', (e) => {
+    console.log("Global disabled action:", e.target.value);
+    // Placeholder for logic related to the global action for disabled properties
+ });
+
+ // Event delegation for controls within the properties list
+ propertiesList.addEventListener('change', (e) => {
+    const target = e.target;
+
+    // Handle changes in individual property options
+    if (target.classList.contains('individual-disabled-action-select')) {
+        const propItem = target.closest('.bulk-property-item');
+        const propName = propItem?.querySelector('.property-name')?.textContent || 'unknown';
+        console.log(`Individual disabled action for ${propName}:`, target.value);
+    } else if (target.classList.contains('change-type-select')) {
+        const propItem = target.closest('.bulk-property-item');
+        const propName = propItem?.querySelector('.property-name')?.textContent || 'unknown';
+        console.log(`Change type for ${propName}:`, target.value);
+        // NOTE: In a real implementation, update the 'override-value-input' type here.
+    } else if (target.classList.contains('apply-order-toggle')) {
+         const propItem = target.closest('.bulk-property-item');
+         const propName = propItem?.querySelector('.property-name')?.textContent || 'unknown';
+         console.log(`Apply order for ${propName}:`, target.checked);
+     }
+     // Handle changes in inconsistent file controls
+     else if (target.classList.contains('inconsistent-order-by')) {
+        const propItem = target.closest('.bulk-property-item');
+        const propName = propItem?.querySelector('.property-name')?.textContent || 'unknown';
+        console.log(`Order inconsistent files for ${propName} by:`, target.value);
+        // Placeholder: Add logic to reorder the inconsistent file list
+    } else if (target.classList.contains('inconsistent-filter-by')) {
+        const propItem = target.closest('.bulk-property-item');
+        const propName = propItem?.querySelector('.property-name')?.textContent || 'unknown';
+        console.log(`Filter inconsistent files for ${propName} by:`, target.value);
+        // Placeholder: Add logic to filter the inconsistent file list
+    }
+     // UPDATED: Handle changes in the NEW "Exclude All Files" toggle
+     else if (target.classList.contains('exclude-all-files-toggle')) {
+        const propItem = target.closest('.bulk-property-item');
+        const inconsistentFilesList = propItem?.querySelector('.inconsistent-files-list');
+        if (inconsistentFilesList) {
+            const shouldExcludeAll = target.checked;
+            inconsistentFilesList.querySelectorAll('.exclude-file-toggle').forEach(fileToggle => {
+                if (fileToggle instanceof HTMLInputElement) {
+                    fileToggle.checked = shouldExcludeAll;
+                     // Manually trigger change event on each file toggle to update its state and global pills
+                    fileToggle.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            });
+            // Update global pills after toggling all
+             if (propItem) updateGlobalPillIcons(propItem);
+        }
+    }
+    // UPDATED: Handle changes in file-specific toggles (exclude and common actions)
+    else if (target.classList.contains('exclude-file-toggle')) {
+        const fileItem = target.closest('.inconsistent-file-item');
+        const propItem = target.closest('.bulk-property-item'); // Get parent property item
+        const fileName = fileItem?.querySelector('.file-item-header span')?.textContent || 'unknown file';
+        // console.log(`Exclude toggle for ${fileName}:`, target.checked); // Reduced console noise
+        // Add/remove visual class for exclusion feedback
+        if (fileItem) {
+            fileItem.classList.toggle('is-excluded', target.checked);
+            // Update the master exclude toggle for this property
+            updatePropertyExcludeAllToggleState(propItem);
+            // Update the global header pills
+            if (propItem) updateGlobalPillIcons(propItem);
+        }
+    } else if (target.classList.contains('common-action-toggle')) {
+         const fileItem = target.closest('.inconsistent-file-item');
+         const propItem = target.closest('.bulk-property-item'); // Get parent property item
+         const fileName = fileItem?.querySelector('.file-item-header span')?.textContent || 'unknown file';
+         const actionName = target.closest('.setting-item')?.querySelector('.setting-item-name')?.textContent || 'unknown action';
+         // console.log(`Action toggle "${actionName}" for ${fileName}:`, target.checked); // Reduced console noise
+         // Update the pill icons in the file item header based on the toggle state
+         updateFileItemPillIcon(target);
+         // Update the global header pills AFTER updating file item pills
+         if (propItem) updateGlobalPillIcons(propItem);
+     }
+ });
+
+ // Listener for input changes (e.g., override value)
+ propertiesList.addEventListener('input', (e) => {
+     if (e.target.classList.contains('override-value-input')) {
+         const propItem = e.target.closest('.bulk-property-item');
+         const propName = propItem?.querySelector('.property-name')?.textContent || 'unknown';
+         // Use debouncing in a real implementation if needed
+         // console.log(`Override value for ${propName}:`, e.target.value);
+     }
+ });
+
+ // Event delegation for clicks within the properties list
+ propertiesList.addEventListener('click', (e) => {
+     const target = e.target;
+     // Handle clicks on the "View File" icon
+     if (target.classList.contains('file-view-icon')) {
+         const fileItem = target.closest('.inconsistent-file-item');
+         const fileName = fileItem?.querySelector('.file-item-header span')?.textContent || 'unknown file';
+         console.log(`View icon clicked for file: ${fileName}`);
+         // Placeholder: Add actual file opening logic here
+     }
+     // Handle clicks on array expand/collapse links
+     else if (target.classList.contains('array-property-toggle-link') || target.closest('.array-property-toggle-link')) {
+         e.stopPropagation(); // Prevent header click
+         const linkElement = target.closest('.array-property-toggle-link');
+         const detailContainer = linkElement.closest('.stat-detail');
+         const action = linkElement.dataset.action; // Assumes data-action="expand" or data-action="collapse" is set
+
+         if (detailContainer) {
+             const collapsedView = detailContainer.querySelector('.array-property-collapsed-view');
+             const expandedView = detailContainer.querySelector('.array-property-expanded-container');
+
+             if (action === 'expand' && collapsedView && expandedView) {
+                 collapsedView.style.display = 'none';
+                 expandedView.style.display = 'inline';
+                 detailContainer.classList.add('is-value-expanded');
+             } else if (action === 'collapse' && collapsedView && expandedView) {
+                 collapsedView.style.display = 'inline';
+                 expandedView.style.display = 'none';
+                 detailContainer.classList.remove('is-value-expanded');
+             }
+         }
+     }
+     // Handle clicks on clickable link items within values
+     else if (target.classList.contains('clickable-link-item')) {
+         e.stopPropagation(); // Prevent header click
+         console.log("Link clicked (mock):", target.textContent);
+         // Placeholder: Add actual link handling logic here
+     }
+ });
+
+ // Listener for the "Add New Property" button
+ addPropertyBtn?.addEventListener('click', () => {
+     console.log("Add New Property clicked!");
+     // NOTE: In a real implementation, dynamically create and append a new property item here.
+ });
+
+ // --- Event Handler Functions ---
+
+ // Attaches necessary listeners to all property items (useful after adding/reordering)
+ function updateItemEventListeners() {
+    propertiesList.querySelectorAll('.bulk-property-item').forEach(item => {
+        // Drag handle listeners
+        const handle = item.querySelector('.drag-handle');
+        if (handle) {
+            handle.removeEventListener('dragstart', handleDragStart); // Prevent duplicates
+            handle.removeEventListener('dragend', handleDragEnd);
+            handle.addEventListener('dragstart', handleDragStart);
+            handle.addEventListener('dragend', handleDragEnd);
+        }
+        // Header click listener for expand/collapse
+        const header = item.querySelector('.property-header');
+        if (header) {
+            header.removeEventListener('click', handleHeaderClick); // Prevent duplicates
+            header.addEventListener('click', handleHeaderClick);
+        }
+        // Individual edit toggle click listener
+        const toggle = item.querySelector('.edit-enable-toggle');
+        if(toggle) {
+            toggle.removeEventListener('click', handleToggleClick); // Prevent duplicates
+            toggle.addEventListener('click', handleToggleClick);
+        }
+         // Add listeners for inconsistent file section toggles if they exist
+        const excludeAllToggle = item.querySelector('.exclude-all-files-toggle');
+        if (excludeAllToggle) {
+            // Listener already added via event delegation on propertiesList
+        }
+        item.querySelectorAll('.exclude-file-toggle, .common-action-toggle').forEach(fileActionToggle => {
+             // Listener already added via event delegation on propertiesList
+        });
+    });
+ }
+
+ // Handles the start of a drag operation
+ function handleDragStart(e) {
+    // Ensure drag starts from the handle
+    if (!e.target.classList.contains('drag-handle')) { return; }
+    draggedItem = e.target.closest('.bulk-property-item');
+    if (!draggedItem) return;
+    // Add dragging class after a short delay for visual feedback
+    setTimeout(() => { if (draggedItem) draggedItem.classList.add('dragging'); }, 0);
+ }
+
+ // Handles the end of a drag operation (cleanup)
+ function handleDragEnd() {
+    if (draggedItem) draggedItem.classList.remove('dragging');
+    draggedItem = null;
+    // Remove drop indicator from all elements
+    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+ }
+
+ // Handles clicks on the property item header for expand/collapse
+ function handleHeaderClick(e) {
+    // Prevent toggling if the click was on an interactive element within the header
+    if (e.target.classList.contains('drag-handle') ||
+        e.target.closest('.edit-enable-toggle-container') ||
+        e.target.closest('.header-stats-pills') ||
+        e.target.classList.contains('stat-value-pill') ||
+        e.target.classList.contains('pill-label') ||
+        e.target.classList.contains('stat-warning-icon')
+       ) {
+        return; // Ignore clicks on these specific elements
+    }
+
+    const item = e.currentTarget.closest('.bulk-property-item');
+    if (item) {
+        // Toggle the collapsed state class
+        item.classList.toggle('is-collapsed');
+        const isCollapsed = item.classList.contains('is-collapsed');
+        // Update ARIA attribute for accessibility
+        e.currentTarget.setAttribute('aria-expanded', (!isCollapsed).toString());
+        // Update the visual indicator (arrow text)
+        const collapseToggle = item.querySelector('.collapse-toggle');
+        if(collapseToggle) collapseToggle.textContent = isCollapsed ? '▶' : '▼';
+        // Update the master collapse toggle's state if necessary
+        updateMasterCollapseToggleState();
+    }
+ }
+
+ // Handles clicks on individual edit toggles
+ function handleToggleClick(e) {
+    e.stopPropagation(); // Prevent the header click event from firing
+    // Update the master enable/disable toggle based on the new state
+    updateMasterEnableToggleState();
+ }
+
+ // Updates the master enable/disable toggle based on all individual toggles
+ function updateMasterEnableToggleState() {
+    if (!enableDisableAllToggle) return; // Exit if master toggle doesn't exist
+    const allToggles = propertiesList.querySelectorAll('.edit-enable-toggle');
+    if (allToggles.length === 0) {
+        enableDisableAllToggle.checked = false; // No items, so disable master
+        return;
+    }
+    let allChecked = true;
+    // Check if all individual toggles are checked
+    allToggles.forEach(toggle => {
+        if (toggle instanceof HTMLInputElement && !toggle.checked) {
+            allChecked = false;
+        }
+    });
+    // Set the master toggle state
+    enableDisableAllToggle.checked = allChecked;
+ }
+
+ // Updates the master expand/collapse toggle based on all property items
+ function updateMasterCollapseToggleState() {
+    if (!expandCollapseAllToggle) return; // Exit if master toggle doesn't exist
+    const allPropItems = propertiesList.querySelectorAll('.bulk-property-item');
+    if (allPropItems.length === 0) {
+        expandCollapseAllToggle.checked = false; // Default for empty list
+        return;
+    }
+    let allExpanded = true;
+    // Check if all items are expanded
+    allPropItems.forEach(item => {
+        if (item.classList.contains('is-collapsed')) {
+            allExpanded = false;
+        }
+    });
+    // Set the master toggle state
+    expandCollapseAllToggle.checked = allExpanded;
+ }
+
+  // UPDATED: Updates the property-specific "Exclude All Files" toggle
+ function updatePropertyExcludeAllToggleState(propertyItemElement) {
+    if (!propertyItemElement) return;
+    const excludeAllToggle = propertyItemElement.querySelector('.exclude-all-files-toggle');
+    if (!excludeAllToggle) return;
+
+    const fileToggles = propertyItemElement.querySelectorAll('.exclude-file-toggle');
+    if (fileToggles.length === 0) {
+        excludeAllToggle.checked = false; // No files, default to unchecked
+        return;
+    }
+    let allFilesExcluded = true;
+    fileToggles.forEach(toggle => {
+        if (toggle instanceof HTMLInputElement && !toggle.checked) {
+            allFilesExcluded = false;
+        }
+    });
+    excludeAllToggle.checked = allFilesExcluded;
+ }
+
+
+ // Helper function to update the state (icon and classes) of a consistency pill
+ function updatePillState(pillElement, isResolved, defaultIcon = '⚠') {
+    if (!pillElement) return; // Exit if pill element not found
+    const iconElement = pillElement.querySelector('.stat-warning-icon');
+    if (!iconElement) return; // Exit if icon element not found
+
+    if (isResolved) {
+        // Set to resolved state (checkmark)
+        iconElement.textContent = '✓';
+        pillElement.classList.remove('is-warning');
+        pillElement.classList.add('is-resolved');
+    } else {
+        // Set to warning state (warning symbol)
+        iconElement.textContent = defaultIcon;
+        pillElement.classList.remove('is-resolved');
+        pillElement.classList.add('is-warning'); // Assume warning if not resolved
+    }
+ }
+
+ // UPDATED: Updates the pill icons in an inconsistent file item's header based on toggle states
+ function updateFileItemPillIcon(toggleElement) {
+     const inconsistentFileItem = toggleElement.closest('.inconsistent-file-item');
+     if (!inconsistentFileItem) return;
+     const fileItemHeader = inconsistentFileItem.querySelector('.file-item-header');
+     if (!fileItemHeader) return;
+
+     const actionType = toggleElement.dataset.actionType; // 'type', 'value', or 'add'
+     const isChecked = toggleElement.checked;
+      // Check if this file shows a property missing warning initially
+     const isMissingProperty = fileItemHeader.querySelector('.stat-value-pill[data-consistency-type="property"] .stat-warning-icon')?.textContent === '⚠';
+
+     // Get related toggles
+     const typeToggle = inconsistentFileItem.querySelector('.common-action-toggle[data-action-type="type"]');
+     const valueToggle = inconsistentFileItem.querySelector('.common-action-toggle[data-action-type="value"]');
+     const addToggle = inconsistentFileItem.querySelector('.common-action-toggle[data-action-type="add"]');
+
+     // Handle the 'Add missing property' toggle interaction
+     if (actionType === 'add') {
+         const propPill = fileItemHeader.querySelector(`.stat-value-pill[data-consistency-type="property"]`);
+         const typePill = fileItemHeader.querySelector(`.stat-value-pill[data-consistency-type="type"]`);
+         const valuePill = fileItemHeader.querySelector(`.stat-value-pill[data-consistency-type="value"]`);
+
+         // Prop pill: Resolved if 'Add' is checked
+         updatePillState(propPill, isChecked, '⚠');
+
+         // Update Type/Value pills: Resolved only if 'Add' AND the respective toggle is checked
+         updatePillState(typePill, typeToggle?.checked && isChecked, '⚠');
+         updatePillState(valuePill, valueToggle?.checked && isChecked, '⚠');
+
+     } else if (actionType === 'type' || actionType === 'value') {
+         // Handle Type and Value toggles
+         const targetPill = fileItemHeader.querySelector(`.stat-value-pill[data-consistency-type="${actionType}"]`);
+         // Requirement met if property exists OR if 'Add' toggle is checked
+         const isAddRequirementMet = !isMissingProperty || addToggle?.checked;
+
+         // Pill is resolved only if the action is checked AND the add requirement is met
+         updatePillState(targetPill, isChecked && isAddRequirementMet, '⚠');
+     }
+    // Note: updateGlobalPillIcons is called in the event listener after this function runs
+ }
+
+ // UPDATED: Updates the main property header pills based on the aggregated state of file item toggles AND EXCLUSIONS
+ function updateGlobalPillIcons(propertyItemElement) {
+     if (!propertyItemElement) return;
+     const propertyHeader = propertyItemElement.querySelector('.property-header');
+     const inconsistentFilesList = propertyItemElement.querySelector('.inconsistent-files-list');
+     if (!propertyHeader || !inconsistentFilesList) return;
+
+     const fileItems = inconsistentFilesList.querySelectorAll('.inconsistent-file-item');
+     const totalFiles = parseInt(document.querySelector('.file-info strong')?.textContent || '0', 10);
+
+     // --- Calculate effective file count (excluding excluded files) ---
+     let excludedCount = 0;
+     fileItems.forEach(item => {
+         if (item.querySelector('.exclude-file-toggle')?.checked) {
+             excludedCount++;
+         }
+     });
+      // Find files *not* in the inconsistent list (implicitly consistent and NOT excluded)
+     const inconsistentFilePaths = new Set();
+      let inconsistentAndExcluded = 0;
+     fileItems.forEach(item => {
+        const path = item.querySelector('.file-item-header span')?.textContent || '';
+        if (path) inconsistentFilePaths.add(path);
+        if(item.querySelector('.exclude-file-toggle')?.checked){
+             inconsistentAndExcluded++;
+        }
+     });
+
+     // Mocking: Assume we know all paths (replace with actual file list from plugin)
+      const allSelectedFilePaths = Array.from({length: totalFiles}, (_, i) => {
+         if (i < 5) return `Path/To/FileWithDifferentType.md`; // Example paths from HTML
+         if (i < 10) return `Another/Path/FileWithDifferentValue.md`;
+         if (i < 13) return `Missing/FileMissingProperty.md`;
+         return `Consistent/Path/File${i}.md`;
+      });
+
+     let consistentAndIncludedCount = 0;
+     allSelectedFilePaths.forEach(path => {
+        const inconsistentItem = Array.from(fileItems).find(item => item.querySelector('.file-item-header span')?.textContent === path);
+        if (!inconsistentItem) { // It's a consistent file
+             // If we were tracking exclusions for consistent files, check here
+             consistentAndIncludedCount++;
+        } else { // It's an inconsistent file
+             if (!inconsistentItem.querySelector('.exclude-file-toggle')?.checked) {
+                 // Count it if it's not excluded (will be handled further below)
+             }
+        }
+     });
+
+     const effectiveTotalFiles = totalFiles - excludedCount;
+
+     // Helper function to check if a file item is excluded
+     const isFileExcluded = (item) => item.querySelector('.exclude-file-toggle')?.checked;
+
+     // --- Check Property Consistency ---
+     let unresolvedPropCount = 0;
+     fileItems.forEach(item => {
+        if (!isFileExcluded(item)) {
+            const isMissing = item.querySelector('.stat-value-pill[data-consistency-type="property"] .stat-warning-icon')?.textContent === '⚠';
+            const addToggleChecked = item.querySelector('.common-action-toggle[data-action-type="add"]')?.checked;
+            if (isMissing && !addToggleChecked) {
+                unresolvedPropCount++;
+            }
+        }
+     });
+     const propPill = propertyHeader.querySelector('.stat-value-pill[data-consistency-type="property"]');
+     const resolvedPropCount = effectiveTotalFiles - unresolvedPropCount;
+     const propIsGloballyResolved = resolvedPropCount === effectiveTotalFiles && effectiveTotalFiles > 0;
+     updatePillState(propPill, propIsGloballyResolved, '⚠');
+     propPill.querySelector('span:not(.pill-label):not(.stat-warning-icon)').textContent = `${resolvedPropCount}/${effectiveTotalFiles}`;
+
+     // --- Check Type Consistency ---
+     let unresolvedTypeCount = 0;
+     fileItems.forEach(item => {
+         if (!isFileExcluded(item)) {
+             const typePillIcon = item.querySelector('.stat-value-pill[data-consistency-type="type"] .stat-warning-icon');
+             const typeToggle = item.querySelector('.common-action-toggle[data-action-type="type"]');
+             const addToggle = item.querySelector('.common-action-toggle[data-action-type="add"]');
+             const isMissing = item.querySelector('.stat-value-pill[data-consistency-type="property"] .stat-warning-icon')?.textContent === '⚠';
+             const addRequirementMet = !isMissing || addToggle?.checked;
+
+             if (typePillIcon?.textContent === '⚠' && (!typeToggle?.checked || !addRequirementMet)) {
+                 unresolvedTypeCount++;
+             }
+         }
+     });
+     const typePill = propertyHeader.querySelector('.stat-value-pill[data-consistency-type="type"]');
+     const resolvedTypeCount = effectiveTotalFiles - unresolvedTypeCount; // Count resolved based on effective total
+     const typeIsGloballyResolved = resolvedTypeCount === effectiveTotalFiles && effectiveTotalFiles > 0;
+     updatePillState(typePill, typeIsGloballyResolved, '⚠');
+     typePill.querySelector('span:not(.pill-label):not(.stat-warning-icon)').textContent = `${resolvedTypeCount}/${effectiveTotalFiles}`;
+
+     // --- Check Value Consistency ---
+     let unresolvedValueCount = 0;
+     fileItems.forEach(item => {
+         if (!isFileExcluded(item)) {
+             const valuePillIcon = item.querySelector('.stat-value-pill[data-consistency-type="value"] .stat-warning-icon');
+             const valueToggle = item.querySelector('.common-action-toggle[data-action-type="value"]');
+             const addToggle = item.querySelector('.common-action-toggle[data-action-type="add"]');
+             const isMissing = item.querySelector('.stat-value-pill[data-consistency-type="property"] .stat-warning-icon')?.textContent === '⚠';
+             const addRequirementMet = !isMissing || addToggle?.checked;
+
+             if (valuePillIcon?.textContent === '⚠' && (!valueToggle?.checked || !addRequirementMet)) {
+                unresolvedValueCount++;
+             }
+         }
+     });
+     const valuePill = propertyHeader.querySelector('.stat-value-pill[data-consistency-type="value"]');
+     const resolvedValueCount = effectiveTotalFiles - unresolvedValueCount;
+     const valueIsGloballyResolved = resolvedValueCount === effectiveTotalFiles && effectiveTotalFiles > 0;
+     updatePillState(valuePill, valueIsGloballyResolved, '⚠');
+     valuePill.querySelector('span:not(.pill-label):not(.stat-warning-icon)').textContent = `${resolvedValueCount}/${effectiveTotalFiles}`;
+ }
+
+
+ // --- Drag and Drop Logic ---
+
+ // Handles drag over the properties list container
+ propertiesList.addEventListener('dragover', (e) => {
+    e.preventDefault(); // Necessary to allow dropping
+    // Find the element the dragged item should be inserted before
+    const afterElement = getDragAfterElement(propertiesList, e.clientY);
+    const currentDragging = document.querySelector('.dragging');
+    // Clear previous drop indicators
+    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    // Add drop indicator to the element we're hovering over
+    if (afterElement) {
+        if (currentDragging !== afterElement) { // Don't highlight the item being dragged
+             afterElement.classList.add('drag-over');
+        }
+    } else {
+        // If dragging to the end, could potentially highlight the container or last item
+    }
+ });
+
+ // Handles drag leaving the properties list container
+ propertiesList.addEventListener('dragleave', (e) => {
+    // Remove drop indicator if the mouse leaves the container bounds
+    if (!propertiesList.contains(e.relatedTarget)) {
+        document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    }
+ });
+
+ // Handles the drop event
+ propertiesList.addEventListener('drop', (e) => {
+    e.preventDefault(); // Prevent default drop behavior
+    // Clear drop indicators
+    document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over'));
+    if (!draggedItem) return; // Exit if no item was being dragged
+
+    // Determine where to insert the dropped item
+    const afterElement = getDragAfterElement(propertiesList, e.clientY);
+    if (afterElement == null) {
+        // If no element is found, append to the end
+        propertiesList.appendChild(draggedItem);
+    } else {
+        // Otherwise, insert before the found element
+        propertiesList.insertBefore(draggedItem, afterElement);
+    }
+    // Clean up dragging state
+    if (draggedItem) draggedItem.classList.remove('dragging');
+    draggedItem = null;
+ });
+
+ // Helper function to determine which element to insert before during drag-and-drop
+ function getDragAfterElement(container, y) {
+    // Get all draggable items except the one currently being dragged
+    const draggableElements = [...container.querySelectorAll('.bulk-property-item:not(.dragging)')];
+
+    // Find the element whose vertical center is closest below the mouse position
+    return draggableElements.reduce((closest, child) => {
+        const box = child.getBoundingClientRect(); // Get element dimensions and position
+        const offset = y - box.top - box.height / 2; // Calculate vertical distance from center
+        // If offset is negative (mouse is above center) and closer than the previous closest
+        if (offset < 0 && offset > closest.offset) {
+            return { offset: offset, element: child }; // This element is the new closest
+        } else {
+            return closest; // Keep the previous closest
+        }
+    }, { offset: Number.NEGATIVE_INFINITY }).element; // Start with infinitely far away
+ }
+
+</script>
+
+</body>
+</html>

@@ -3,7 +3,7 @@ import YAMLPropertyManagerPlugin from '../../main';
 import { BrowserModal } from './BrowserModal';
 import { TreeNode } from '../interfaces';
 
-export class YAMLPropertyManagerSettingTab extends PluginSettingTab {
+export class SettingTab extends PluginSettingTab {
     plugin: YAMLPropertyManagerPlugin;
     private expandedPaths: Set<string> = new Set();
     private rootNode: TreeNode;

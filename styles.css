@@ -1,44 +1,57 @@
 /* ===================================================
-   YAML Property Manager - Main CSS
+   YAML Property Manager - Plugin Styles
    =================================================== */
 
-/* Only keeping absolutely essential shared styles */
+/* == General / Shared Utilities == */
+
+/* Basic keyframe animation (potentially used for loading indicators) */
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
 
-/* Buttons container */
+/* Utility class to hide elements (confirm usage in TS/HTML) */
+/* .is-hidden { */
+/* display: none !important; */
+/* } */
+
+/* == Modal Styles == */
+
+/* General container for bottom buttons in modals */
 .modal > .modal-button-container {
-  bottom: 0;
   display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-  padding: 12px 20px;
+  /* CHANGE THIS LINE back to flex-end */
+  justify-content: flex-end; /* Pushes buttons right */
+  /* Keep other properties like align-items, gap, padding etc. as they were */
+  align-items: center;
+  gap: var(--size-4-2);
+  padding: var(--size-4-3) var(--size-4-5);
   border-top: 1px solid var(--background-modifier-border);
-  box-sizing: border-box;
+  margin-top: var(--size-4-4);
 }
 
-/* SVG Icons - Additional support while keeping emoji compatibility */
-.template-node__icon svg {
-  width: 18px;
-  height: 18px;
-  color: var(--text-muted);
+/* == Tree View Component Styles (Used by Settings Tab & Browser Modal) == */
+/* Styles for hierarchical tree structures used in Settings and Browser */
+
+/* Base container for tree structures */
+.file-tree-container, /* Used in Browser Modal */
+.nav-folder-container /* Used in Settings Tab */ {
+  margin: var(--size-4-2) 0;
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding: var(--size-4-2);
 }
 
-.template-node__header:hover .template-node__icon svg {
-  color: var(--text-normal);
-}
-
-/* ----- Tree Structure Components ----- */
-/* Base tree item styling */
+/* Individual tree item wrapper */
 .tree-item {
   position: relative;
   display: flex;
   flex-direction: column;
 }
 
-/* Basic tree item styling - applies to files and folders */
+/* The visible, interactive part of a tree item (row) */
 .tree-item-self {
   display: flex;
   align-items: center;
@@ -47,21 +60,30 @@
   border-radius: var(--radius-s);
   color: var(--nav-item-color);
   line-height: var(--line-height-tight);
-  cursor: var(--cursor);
+  cursor: var(--cursor); /* Original cursor value */
   font-size: var(--nav-item-size);
+}
+
+/* Collapse icon container */
+.tree-item-icon.collapse-icon {
+  /* Container for the collapse icon (triangle) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 /* The SVG triangle icon itself */
 .tree-item-icon.collapse-icon svg.svg-icon {
   color: var(--nav-collapse-icon-color);
   stroke-width: var(--icon-s-stroke-width);
-  width: var(--size-4-3);
+  width: var(--size-4-3); /* Original size variable */
   height: var(--size-4-3);
   transition: transform 100ms ease-in-out;
 }
 
 /* Rotation for the collapsed state */
 .tree-item-icon.collapse-icon.is-collapsed svg.svg-icon {
+  /* Applying rotation using multiple browser prefixes for compatibility */
   transform: rotate(calc(var(--direction, 1) * -1 * 90deg));
   -webkit-transform: rotate(calc(var(--direction, 1) * -1 * 90deg));
   -moz-transform: rotate(calc(var(--direction, 1) * -1 * 90deg));
@@ -69,40 +91,42 @@
   -o-transform: rotate(calc(var(--direction, 1) * -1 * 90deg));
 }
 
-/* Hover state */
+/* Hover state for the item row */
 .tree-item-self:hover {
   background-color: var(--nav-item-background-hover);
   color: var(--nav-item-color-hover);
 }
 
-/* The text content container */
+/* Text content container within the row */
 .tree-item-inner {
-  flex: 1;
-  min-width: 0;
+  flex: 1; /* Allow text to take available space */
+  min-width: 0; /* Prevent overflow issues */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* The actions container (delete button) */
+/* Container for icons/buttons on the far right (e.g., delete in settings) */
 .tree-item-flair-outer {
   display: flex;
   align-items: center;
-  margin-inline-start: var(--size-4-2);
+  margin-inline-start: var(--size-4-2); /* Space before the flair */
 }
 
-/* Children container */
+/* Container for child items */
 .tree-item-children {
-  padding-inline-start: var(--size-4-3);
-  border-inline-start: 1px solid var(--nav-indentation-guide-color);
+  padding-inline-start: var(--size-4-3); /* Indentation space */
+  border-inline-start: 1px solid var(--nav-indentation-guide-color); /* Vertical guide line */
+  /* Note: Alignment might depend on parent padding/margins */
 }
 
-/* Nested levels styling */
+/* Specific padding for nested folder items (adjusts indentation) */
+/* This selector relies on specific Obsidian classes */
 .tree-item-children .nav-folder > .tree-item-self.mod-collapsible {
-  padding-inline-start: var(--size-4-6);
+  padding-inline-start: var(--size-4-6); /* Increased padding for nesting */
 }
 
-/* Animation for removing nodes */
+/* Animation for removing nodes in the Settings Tab tree */
 .is-removing {
   opacity: 0;
   transform: translateY(-4px);
@@ -110,313 +134,7 @@
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-/* Proper focus visibility for keyboard navigation */
-.tree-item-self:focus-visible, .clickable-icon:focus-visible {
-  outline: 2px solid var(--interactive-accent);
-  outline-offset: -2px;
-  border-radius: var(--radius-s);
-}
-
-/* Only show focus styles when using keyboard, not mouse */
-.tree-item-self:focus:not(:focus-visible), .clickable-icon:focus:not(:focus-visible) {
-  outline: none;
-}
-
-/* Enhanced visual feedback for interactive elements */
-.tree-item-self:focus-visible {
-  background-color: var(--background-modifier-hover);
-}
-
-.clickable-icon:focus-visible {
-  background-color: var(--background-modifier-hover);
-}
-
-/* ----- Color Scheme & Contrast Adjustments ----- */
-/* High contrast mode support */
-@media (prefers-contrast: more) {
-  .tree-item-self:focus-visible, .clickable-icon:focus-visible {
-    outline-width: 3px;
-    outline-offset: -3px;
-  }
-  
-  .tree-item-icon.collapse-icon svg.svg-icon {
-    stroke-width: 3px;
-  }
-  
-  .tree-item-children {
-    border-inline-start-width: 2px;
-  }
-}
-
-/* ===========================================
-   TEMPLATE APPLICATION MODAL - PROPERTY DISPLAY
-   =========================================== */
-
-/* Style for the Type line */
-.property-type-line {
-  display: block; /* Ensure it takes its own line */
-  color: var(--text-muted);
-  font-size: var(--font-ui-smaller);
-  margin-bottom: var(--size-4-1); /* Space below Type line */
-}
-
-/* Style for the Value line */
-.property-value-line {
-  display: block; /* Ensure it takes its own line */
-}
-
-/* Container for the interactive array parts (inline within Value line) */
-.array-property-container {
-  display: inline-block; /* Keep inline with "Value: " prefix */
-}
-
-/* Collapsed view elements */
-.array-property-collapsed {
-  /* Styles if needed, often inherits fine */
-}
-
-/* Styling for the expand/collapse links */
-.array-property-toggle-link {
-  cursor: pointer;
-  color: var(--interactive-accent);
-  font-size: var(--font-ui-smaller);
-  margin-left: var(--size-4-1);
-}
-
-.array-property-toggle-link:hover {
-  color: var(--interactive-accent-hover);
-  text-decoration: underline;
-}
-
-/* NEW: Container specifically for the expanded text content */
-/* This will be shown/hidden */
-.array-property-expanded-container {
-  display: block; /* Takes full width, appears below Type/Value */
-  margin-top: var(--size-4-1); /* Add some space above */
-  font-size: var(--font-ui-smaller);
-  color: var(--text-muted);
-}
-
-/* Utility class to hide elements */
-.is-hidden {
-  display: none !important;
-}
-
-/* ===========================================
-   BROWSER MODAL
-   =========================================== */
-
-/* Style for the individual clickable items in expanded array view */
-.clickable-link-item {
-  color: var(--text-accent); /* Standard link color */
-  cursor: pointer;          /* Indicate interactivity */
-}
-
-.clickable-link-item:hover {
-  color: var(--text-accent-hover); /* Hover color */
-  text-decoration: underline;       /* Underline on hover */
-}
-
-/* File tree container */
-.file-tree-container {
-  margin: var(--size-4-2) 0;
-  max-height: 400px;
-  min-height: 300px;
-  overflow-y: auto;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: var(--radius-m);
-  padding: var(--size-4-2);
-}
-
-/* Selection counter */
-.selection-counter {
-  display: flex;
-  align-items: center;
-  width: 100%;
-  padding: var(--size-4-2) var(--size-4-3);
-  background-color: var(--background-primary);
-  border-radius: var(--radius-s);
-  box-shadow: var(--input-shadow);
-  margin-bottom: var(--size-4-2);
-  transition: background-color 0.3s ease, box-shadow 0.3s ease;
-}
-
-/* Optional: enhance the container when items are selected */
-.selection-counter.has-selection {
-  background-color: rgba(var(--interactive-accent-rgb), 0.05);
-}
-
-/* Base state for the selection text */
-.selection-text {
-  font-size: var(--font-ui-small);
-  color: var(--text-faint);
-  transition: color 0.3s ease;
-  -webkit-transition: color 0.3s ease;
-  -moz-transition: color 0.3s ease;
-  -ms-transition: color 0.3s ease;
-  -o-transition: color 0.3s ease;
-}
-
-/* State when items are selected */
-.has-selection .selection-text {
-    color: var(--text-muted);
-    font-size: var(--font-ui-smaller);
-}
-
-/* Tree styling */
-.tree-item-self {
-    display: flex;
-    align-items: center;
-    transition: background-color 0.15s ease;
-    border-radius: var(--radius-s);
-    cursor: pointer;
-}
-
-.tree-item-self:hover {
-    background-color: var(--background-modifier-hover);
-}
-
-.tree-item-self:active {
-    transform: translateY(1px);
-    transition: transform 0.05s ease;
-}
-
-/* Selection styling */
-.is-selected > .tree-item-self {
-    background-color: rgba(var(--interactive-accent-rgb), 0.1);
-    transition: background-color 0.2s ease;
-}
-
-.is-selected > .tree-item-self:hover {
-    background-color: rgba(var(--interactive-accent-rgb), 0.15);
-}
-
-.initially-selected > .tree-item-self {
-    color: var(--text-accent);
-}
-
-/* Indeterminate state styling */
-.is-partially-selected > .tree-item-self {
-    color: rgba(var(--text-accent))
-}
-
-/* Center the checkbox within its container */
-.tree-item-checkbox-container {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  /* Add a consistent width to ensure proper alignment */
-  width: 24px;
-  height: 100%;
-}
-
-.tree-item-checkbox {
-  margin: 0; /* Remove default input margins that might affect centering */
-  /* Optional: Add a slight transition for smoother user experience */
-  transition: background-color 0.15s ease, border-color 0.15s ease;
-}
-
-.tree-item-checkbox:indeterminate {
-  background-color: var(--checkbox-color);
-  border-color: var(--checkbox-color);
-  position: relative;
-}
-
-.tree-item-checkbox:indeterminate::after {
-  content: "";
-  /* Ensure the element is pixel-aligned */
-  position: absolute;
-  width: 8px;
-  height: 1.5px;
-  background-color: var(--checkbox-marker-color);
-  
-  /* Force pixel-perfect rendering by using integer values */
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  margin: auto;
-  
-  /* Additional properties to prevent rendering inconsistencies */
-  will-change: transform;
-  transform: translateZ(0);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-.tree-item-checkbox:hover {
-  border-color: var(--checkbox-border-color-hover);
-}
-
-.tree-item-checkbox:focus {
-  outline: none;
-  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.3);
-}
-
-@keyframes fade-in-up {
-    0% {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-    100% {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
-
-/* Focus styles for accessibility */
-.tree-item-self:focus-visible {
-    outline: 2px solid var(--interactive-accent);
-    outline-offset: -2px;
-}
-
-/* RTL Support */
-.tree-item-children {
-    padding-inline-start: var(--size-4-3);
-    border-inline-start: 1px solid var(--nav-indentation-guide-color);
-}
-
-/* Inner content styling */
-.tree-item-inner {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    overflow: hidden;
-}
-
-.tree-item-inner-text {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* Folder collapse arrow styling */
-.collapse-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-inline-end: var(--size-4-1);
-  color: var(--nav-collapse-icon-color);
-  transition: transform 100ms ease-in-out;
-}
-
-.collapse-icon svg.svg-icon {
-  color: var(--nav-collapse-icon-color);
-  stroke-width: var(--icon-s-stroke-width);
-  width: var(--size-4-3);
-  height: var(--size-4-3);
-  transition: transform 100ms ease-in-out;
-}
-
-.collapse-icon.is-collapsed svg.svg-icon {
-  transform: rotate(calc(var(--direction, 1) * -90deg));
-  -webkit-transform: rotate(calc(var(--direction, 1) * -90deg));
-  -moz-transform: rotate(calc(var(--direction, 1) * -90deg));
-  -ms-transform: rotate(calc(var(--direction, 1) * -90deg));
-  -o-transform: rotate(calc(var(--direction, 1) * -90deg));
-}
-
-/* Empty state styling */
+/* Message shown in empty tree containers */
 .nav-empty-state {
     padding: var(--size-4-4);
     text-align: center;
@@ -427,11 +145,366 @@
     font-size: var(--font-ui-small);
 }
 
-/* Reduced motion support */
+/* Center the 'No templates configured' message text */
+#template-paths-container .setting-item-description {
+  width: 100%;
+  padding: 0; /* Remove specific padding added previously */
+  /* You might need to adjust line-height if it looks off without padding */
+  /* line-height: var(--line-height-normal); */
+}
+
+/* Remove default padding/border ONLY from the setting-item holding the empty message */
+/* This targets a .setting-item that is a DIRECT child of the container */
+#template-paths-container > .setting-item {
+  padding: 0 !important; /* Override default theme padding */
+  margin: 0 !important; /* Override default theme margin */
+  border: none !important; /* Remove default border if present */
+  /* Add some margin just to the description itself if needed after removing item padding */
+  /* For example: */
+  /* margin-block-start: var(--size-4-2); */
+  /* margin-block-end: var(--size-4-2); */
+}
+
+/* Style for the static warning text within setting descriptions */
+.setting-warning-text {
+  display: block; /* Put the warning on its own line */
+  color: var(--text-error); /* Use standard error/warning text color */
+  font-size: var(--font-ui-smaller); /* Make it slightly smaller */
+  margin-top: var(--size-4-1); /* Add a small space above the warning */
+  /* If inside .setting-item-description, padding might be inherited, adjust if needed */
+  /* padding-left: 0; */
+}
+
+/* == Browser Modal Specific Styles == */
+/* Styles unique to the file/folder browser */
+
+/* Selection counter display */
+.selection-counter {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--size-4-2) var(--size-4-3);
+  background-color: var(--background-primary); /* Original background */
+  border-radius: var(--radius-s);
+  box-shadow: var(--input-shadow); /* Original shadow */
+  margin-bottom: var(--size-4-2);
+  transition: background-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.selection-counter.has-selection {
+  background-color: rgba(var(--interactive-accent-rgb), 0.05); /* Original subtle accent background */
+}
+
+.selection-text {
+  font-size: var(--font-ui-small);
+  color: var(--text-faint);
+  transition: color 0.3s ease;
+  /* Including original vendor prefixes for transition */
+  -webkit-transition: color 0.3s ease;
+  -moz-transition: color 0.3s ease;
+  -ms-transition: color 0.3s ease;
+  -o-transition: color 0.3s ease;
+}
+
+.has-selection .selection-text {
+    color: var(--text-muted);
+    font-size: var(--font-ui-smaller); /* Original size change on selection */
+}
+
+/* Visual indication for selected items in the browser tree */
+.is-selected > .tree-item-self {
+    background-color: rgba(var(--interactive-accent-rgb), 0.1); /* Original selection color */
+    transition: background-color 0.2s ease;
+}
+
+.is-selected > .tree-item-self:hover {
+    background-color: rgba(var(--interactive-accent-rgb), 0.15); /* Original slightly darker hover */
+}
+
+/* Indication for items that were selected when the modal opened */
+.initially-selected > .tree-item-self {
+    color: var(--text-accent); /* Original style */
+}
+
+/* Indication for folders with some, but not all, children selected */
+.is-partially-selected > .tree-item-self {
+    color: var(--text-accent); /* Original style for partial selection */
+    /* Note: No distinct background was previously defined */
+}
+
+/* Container for the checkbox in the browser modal tree */
+.tree-item-checkbox-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px; /* Original fixed width */
+  height: 100%; /* Take full height of the row */
+  margin-inline-start: auto; /* Push to the right */
+}
+
+/* Checkbox element itself */
+.tree-item-checkbox {
+  margin: 0; /* Remove default input margins */
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+/* Visual style for indeterminate (partially selected folder) checkbox state */
+.tree-item-checkbox:indeterminate {
+  background-color: var(--checkbox-color); /* Original style */
+  border-color: var(--checkbox-color);
+  position: relative;
+}
+
+.tree-item-checkbox:indeterminate::after {
+  /* Styling for the dash inside the indeterminate checkbox */
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 1.5px;
+  background-color: var(--checkbox-marker-color);
+  left: 0; right: 0; top: 0; bottom: 0; /* Center the dash */
+  margin: auto;
+  /* Anti-aliasing helpers (original prefixes included) */
+  will-change: transform;
+  transform: translateZ(0);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Hover state for the checkbox */
+.tree-item-checkbox:hover {
+  border-color: var(--checkbox-border-color-hover); /* Standard hover */
+}
+
+/* Focus state for the checkbox */
+.tree-item-checkbox:focus {
+  outline: none; /* Default outline removed, relying on focus-visible */
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.3); /* Original focus shadow */
+}
+
+/* Animation used in browser modal (ensure this class is used in TS if needed) */
+@keyframes fade-in-up {
+    0% { opacity: 0; transform: translateY(10px); }
+    100% { opacity: 1; transform: translateY(0); }
+}
+
+
+/* == Template Application Modal Styles == */
+/* Styles for displaying properties in the template application modal */
+
+/* Line showing the property type */
+.property-type-line {
+  display: block; /* Ensure it takes its own line */
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  margin-bottom: var(--size-4-1); /* Space below Type line */
+}
+
+/* Line showing the property value */
+.property-value-line {
+  display: block; /* Ensure it takes its own line */
+}
+
+/* Container for the interactive array parts (expand/collapse link) */
+.array-property-container {
+  display: inline-block; /* Keep inline with "Value: " prefix */
+}
+
+/* Styling for the expand/collapse link for arrays */
+.array-property-toggle-link { /* Base styles for the whole link container */
+  cursor: pointer;
+  color: var(--interactive-accent); /* Original accent color */
+  font-size: var(--font-ui-smaller);
+  margin-left: var(--size-4-1);
+  border-radius: var(--radius-s);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.array-property-toggle-link:hover { /* Hover styles for the whole container */
+  color: var(--interactive-accent-hover); /* Original hover color */
+  background-color: var(--background-modifier-hover);
+}
+
+/* Apply underline ONLY to the inner text span on container hover */
+.array-property-toggle-link:hover .underline-target {
+  text-decoration: underline;
+}
+
+/* Container for the expanded list of array items */
+.array-property-expanded-container {
+  display: block; /* Takes full width, appears below Type/Value */
+  margin-top: var(--size-4-1); /* Space above */
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  /* Animation applied dynamically */
+  animation: fade-in-down 0.2s ease-out;
+}
+
+/* Utility class to hide elements (used for expand/collapse) */
+.is-hidden {
+  display: none !important;
+}
+
+/* Styling for clickable links within property values */
+/* Note: .property-value-link was the original class name */
+.property-value-link,
+.clickable-link-item { /* Including both for potential usage */
+  color: var(--text-accent); /* Standard link color */
+  cursor: pointer;          /* Indicate interactivity */
+  position: relative;       /* For positioning the icon */
+  display: inline-flex;     /* For better layout with icon */
+  align-items: center;      /* Center items vertically */
+  gap: 2px;                 /* Space between text and icon */
+  border-radius: var(--radius-s);
+  padding: 0 2px; /* Original padding */
+}
+
+.property-value-link:hover,
+.clickable-link-item:hover {
+  color: var(--text-accent-hover); /* Hover color */
+  text-decoration: underline;      /* Underline on hover */
+  background-color: var(--background-modifier-hover); /* Original background on hover */
+}
+
+/* Focus state for clickable links */
+.property-value-link:focus-visible,
+.clickable-link-item:focus-visible {
+  outline: 2px solid var(--text-accent); /* Original outline */
+  outline-offset: 2px; /* Original offset */
+}
+
+/* Optional icon next to property value links (if used in TS) */
+.property-link-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.8em; /* Original size */
+  color: var(--text-accent);
+  opacity: 0.8; /* Original opacity */
+}
+
+.property-value-link:hover .property-link-icon,
+.clickable-link-item:hover .property-link-icon {
+  opacity: 1;
+}
+
+/* Style for plain text values (non-links) */
+.property-value-text {
+  color: var(--text-normal); /* Default text color */
+}
+
+/* Styling for individual items within an expanded array view */
+.array-property-expanded-container .property-value-link,
+.array-property-expanded-container .clickable-link-item {
+  margin: 0 2px; /* Original margin */
+  padding: 2px 4px; /* Original padding */
+  border-radius: var(--radius-s);
+}
+
+/* Keyframe animation used by array expansion */
+@keyframes fade-in-down {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+
+/* == Template Suggest Modal Styles == */
+/* Styles for the fuzzy suggestion modal used for template selection */
+
+/* FIX: Align icon and text horizontally for the special trigger item */
+.template-suggestion-trigger .suggestion-content {
+  display: flex;        /* Arrange icon and text horizontally */
+  align-items: center;  /* Vertically center them */
+  gap: var(--size-4-2); /* Add standard small gap */
+}
+
+/* Style the icon within the trigger item */
+.template-suggestion-trigger .suggestion-icon svg {
+  /* Assuming standard Obsidian icon classes are used */
+  width: var(--icon-m); /* Standard icon size */
+  height: var(--icon-m);
+  color: var(--icon-color);
+}
+
+/* Style the text within the trigger item */
+.template-suggestion-trigger .suggestion-title.is-trigger {
+  /* Specific styles for the trigger text if needed */
+  color: var(--text-muted);
+}
+
+
+/* == Accessibility & Theming == */
+/* Styles related to focus, high contrast, and reduced motion */
+
+/* Consistent focus indicator for keyboard navigation */
+/* Consolidating original rules for focus visibility */
+.tree-item-self:focus-visible,
+.clickable-icon:focus-visible,
+.property-value-link:focus-visible, /* Added from template app styles */
+.clickable-link-item:focus-visible, /* Added from template app styles */
+.tree-item-checkbox:focus-visible /* Added from browser modal styles */ {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: -2px; /* Kept original offset */
+  border-radius: var(--radius-s); /* Common radius */
+}
+
+/* Enhanced visual feedback for focus (original rule) */
+.tree-item-self:focus-visible {
+  background-color: var(--background-modifier-hover);
+}
+
+.clickable-icon:focus-visible {
+  background-color: var(--background-modifier-hover);
+}
+
+/* Hide default outline when focus is not triggered by keyboard */
+.tree-item-self:focus:not(:focus-visible),
+.clickable-icon:focus:not(:focus-visible),
+.property-value-link:focus:not(:focus-visible), /* Added */
+.clickable-link-item:focus:not(:focus-visible), /* Added */
+.tree-item-checkbox:focus:not(:focus-visible) /* Added */ {
+  outline: none;
+  box-shadow: none; /* Remove original focus shadow if not keyboard */
+}
+
+
+/* High contrast mode adjustments */
+@media (prefers-contrast: more) {
+  /* Make focus outline thicker in high contrast */
+  .tree-item-self:focus-visible,
+  .clickable-icon:focus-visible,
+  .property-value-link:focus-visible, /* Added */
+  .clickable-link-item:focus-visible, /* Added */
+  .tree-item-checkbox:focus-visible /* Added */ {
+    outline-width: 3px;
+    outline-offset: -3px; /* Kept original offset */
+  }
+
+  /* Make tree icons bolder */
+  .tree-item-icon.collapse-icon svg.svg-icon {
+    stroke-width: 3px;
+  }
+
+  /* Make tree guide line thicker */
+  .tree-item-children {
+    border-inline-start-width: 2px;
+  }
+}
+
+/* Respect user preference for reduced motion */
 @media (prefers-reduced-motion: reduce) {
-    .tree-item-self,
-    .is-selected > .tree-item-self,
-    .collapse-icon {
-        transition: none;
-    }
+  /* Disable transitions and animations */
+  .tree-item-self,
+  .is-selected > .tree-item-self, /* Added from browser styles */
+  .tree-item-icon.collapse-icon svg.svg-icon,
+  .is-removing,
+  .array-property-expanded-container,
+  .selection-counter, /* Added from browser styles */
+  .selection-text, /* Added from browser styles */
+  .clickable-link-item, /* Added from template app styles */
+  .property-value-link, /* Added from template app styles */
+  .collapse-icon /* Added from browser styles */ {
+    transition: none !important;
+    animation: none !important;
+  }
 }

@@ -1,10 +1,10 @@
 import { App, Modal, Notice, MarkdownView, TFile, Setting, ButtonComponent } from 'obsidian';
 import YAMLPropertyManagerPlugin from '../../main';
-import { TemplateApplicationModal } from './TemplateApplicationModal';
+import { TemplateApplication } from './TemplateApplication';
 import { BrowserModal } from './BrowserModal';
-import { BulkPropertyEditorModal } from './BulkPropertyEditorModal';
+import { BulkEditor } from './BulkEditor';
 
-export class PropertyManagerModal extends Modal {
+export class PropertyManagerMenu extends Modal {
     plugin: YAMLPropertyManagerPlugin;
     applyTemplateButtonComponent: ButtonComponent | null = null;
     bulkEditButtonComponent: ButtonComponent | null = null;
@@ -339,7 +339,6 @@ export class PropertyManagerModal extends Modal {
     private log(message: string, level: 'info' | 'error' = 'info') {
         const prefix = '[YAML Property Manager]';
         if (level === 'info') {
-            console.log(`${prefix} ${message}`);
         } else {
             console.error(`${prefix} ${message}`);
         }

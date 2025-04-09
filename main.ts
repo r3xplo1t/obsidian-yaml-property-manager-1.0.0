@@ -10,11 +10,11 @@ import {
     PropertyTypeService,
     
     // Modals
-    PropertyManagerModal,
-    TemplateApplicationModal,
+    PropertyManagerMenu,
+    TemplateApplication,
     BrowserModal,
-    BulkPropertyEditorModal,
-    YAMLPropertyManagerSettingTab
+    BulkEditor,
+    SettingTab
 } from './src';
 
 // Import types with explicit type imports
@@ -53,7 +53,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
         });
 
         this.registerCommands();
-        this.addSettingTab(new YAMLPropertyManagerSettingTab(this.app, this));
+        this.addSettingTab(new SettingTab(this.app, this));
     }
 
     onunload(): void {
@@ -152,7 +152,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             id: 'open-property-manager',
             name: 'Open Property Manager',
             callback: () => {
-                new PropertyManagerModal(this.app, this).open();
+                new PropertyManagerMenu(this.app, this).open();
             }
         });
 
@@ -164,7 +164,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                 const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
                 if (activeView) {
                     if (!checking) {
-                        new TemplateApplicationModal(this.app, this, activeView.file ? [activeView.file] : []).open();
+                        new TemplateApplication(this.app, this, activeView.file ? [activeView.file] : []).open();
                     }
                     return true;
                 }
@@ -182,7 +182,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                     (result: FileSelectionResult) => {
                         if (result.files && result.files.length > 0) {
                             this.selectedFiles = [...result.files];
-                            new TemplateApplicationModal(this.app, this, this.selectedFiles).open();
+                            new TemplateApplication(this.app, this, this.selectedFiles).open();
                         }
                     },
                     {
@@ -542,7 +542,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
 
     // Helper methods for modal navigation
     private openMainModal(): void {
-        new PropertyManagerModal(this.app, this).open();
+        new PropertyManagerMenu(this.app, this).open();
     }
 
     private openBulkEditModal(args: any[]): void {        
@@ -558,7 +558,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             return;
         }
         
-        new BulkPropertyEditorModal(this.app, this, [...this.selectedFiles]).open();
+        new BulkEditor(this.app, this, [...this.selectedFiles]).open();
     }
 
     private openTemplateModal(args: any[]): void {        
@@ -568,7 +568,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
         }
         
         if (this.selectedFiles.length > 0) {
-            new TemplateApplicationModal(this.app, this, [...this.selectedFiles]).open();
+            new TemplateApplication(this.app, this, [...this.selectedFiles]).open();
         } else {
             new Notice('Please select files first');
             this.openMainModal();

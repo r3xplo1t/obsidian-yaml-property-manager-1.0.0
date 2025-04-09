@@ -2,7 +2,7 @@ import { App, Modal, TFile, Setting, ButtonComponent } from 'obsidian';
 import YAMLPropertyManagerPlugin from '../../main';
 import type { PropertyWithType } from '../PropertyTypeService';
 
-export class BulkPropertyEditorModal extends Modal {
+export class BulkEditor extends Modal {
     plugin: YAMLPropertyManagerPlugin;
     files: TFile[];
 

@@ -43,8 +43,8 @@ export {
 
 // -------- UI Components --------
 // Main plugin modals
-export { PropertyManagerModal } from './modals/PropertyManagerModal';
-export { TemplateApplicationModal } from './modals/TemplateApplicationModal';
+export { PropertyManagerMenu } from './modals/PropertyManagerMenu';
+export { TemplateApplication } from './modals/TemplateApplication';
 export { BrowserModal } from './modals/BrowserModal';
-export { BulkPropertyEditorModal } from './modals/BulkPropertyEditorModal';
-export { YAMLPropertyManagerSettingTab } from './modals/YAMLPropertyManagerSettingTab';
+export { BulkEditor } from './modals/BulkEditor';
+export { SettingTab } from './modals/SettingsTab';

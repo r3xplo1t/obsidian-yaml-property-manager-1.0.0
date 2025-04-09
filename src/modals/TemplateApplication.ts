@@ -3,7 +3,7 @@ import YAMLPropertyManagerPlugin from '../../main';
 import { formatValuePreview, parseValueLinks } from '../propertyFormatters';
 import type { PropertyWithType } from '../PropertyTypeService';
 
-export class TemplateApplicationModal extends Modal {
+export class TemplateApplication extends Modal {
     plugin: YAMLPropertyManagerPlugin;
     targetFiles: TFile[];
     selectedTemplate: TFile | null = null;
@@ -33,14 +33,20 @@ export class TemplateApplicationModal extends Modal {
 
     /**
      * Handles clicks on potential links within property values.
-     * Opens external links in a new browser tab/window and internal links
-     * in a new Obsidian window, preserving the current modal's state.
+     * Supports various link formats and properties containing links.
      *
-     * @param linkTarget The string value that might contain a link.
+     * @param linkTarget The value that might contain a link.
      * @param event The mouse event that triggered the handler.
      */
-    private handleLinkClick(linkTarget: string, event: MouseEvent): void {
+    private handleLinkClick(linkTarget: any, event: MouseEvent): void {
         event.stopPropagation(); // Prevent triggering other actions if nested
+
+        // Handle array with a single element
+        if (Array.isArray(linkTarget) && linkTarget.length === 1) {
+            // Extract the single element and process it
+            this.handleLinkClick(linkTarget[0], event);
+            return;
+        }
 
         if (typeof linkTarget !== 'string') {
             console.warn("handleLinkClick called with non-string target:", linkTarget);
@@ -57,28 +63,51 @@ export class TemplateApplicationModal extends Modal {
         const linkInfo = parseValueLinks(linkTarget);
         const sourcePath = ""; // Use vault root as the context for resolving links
 
-        // Use the parsed path if available, otherwise fallback to the original target
-        const pathToFile = linkInfo.path || linkTarget;
+        // If this is a valid link with a path, use that path
+        if (linkInfo.isLink && linkInfo.path) {
+            try {
+                const targetFile = this.app.metadataCache.getFirstLinkpathDest(linkInfo.path, sourcePath);
 
+                if (targetFile instanceof TFile) {
+                    // File exists in the vault, open it in a new window leaf
+                    const leaf = this.app.workspace.getLeaf('window');
+                    leaf.openFile(targetFile).catch(err => {
+                        console.error(`Error opening link in new window: ${linkInfo.path}`, err);
+                        new Notice(`Could not open link: ${linkInfo.path}`);
+                    });
+                } else {
+                    // File not found in the vault
+                    new Notice(`File not found: ${linkInfo.path}`);
+                }
+                return;
+            } catch (error) {
+                console.error(`Error processing link: ${linkTarget}`, error);
+                new Notice(`Could not process link: ${linkTarget}`);
+                return;
+            }
+        }
+
+        // Fallback - try to resolve the raw link target
         try {
-            const targetFile = this.app.metadataCache.getFirstLinkpathDest(pathToFile, sourcePath);
-
+            const targetFile = this.app.metadataCache.getFirstLinkpathDest(linkTarget, sourcePath);
             if (targetFile instanceof TFile) {
-                // File exists in the vault, open it in a new window leaf
+                // File exists in the vault, open it
                 const leaf = this.app.workspace.getLeaf('window');
                 leaf.openFile(targetFile).catch(err => {
-                    console.error(`Error opening link in new window: ${pathToFile}`, err);
-                    new Notice(`Could not open link: ${pathToFile}`);
+                    console.error(`Error opening link in new window: ${linkTarget}`, err);
+                    new Notice(`Could not open link: ${linkTarget}`);
                 });
             } else {
-                // File not found in the vault
-                new Notice(`File not found: ${pathToFile}`);
+                // Not found
+                new Notice(`File not found: ${linkTarget}`);
             }
         } catch (error) {
             console.error(`Error processing link: ${linkTarget}`, error);
             new Notice(`Could not process link: ${linkTarget}`);
         }
     }
+
+
 
     async onOpen() {
         const { contentEl } = this;
@@ -381,7 +410,7 @@ export class TemplateApplicationModal extends Modal {
             });
         
         // "Remove Properties" option
-        new Setting(container)
+        const removeSetting = new Setting(container)
             .setName('Remove properties not in template')
             .setDesc('Replace all YAML properties with only the selected template properties')
             .addToggle(toggle => {
@@ -397,6 +426,14 @@ export class TemplateApplicationModal extends Modal {
                     });
                 return removeToggle;
             });
+
+            if (removeSetting.descEl) { // Check if descEl exists
+                removeSetting.descEl.createEl('br'); // Add a line break element
+                removeSetting.descEl.createSpan({   // Add the warning text span
+                    text: 'Warning: This replaces the entire frontmatter. Existing properties not in the template will be deleted.',
+                    cls: 'setting-warning-text'       // Assign class for styling
+                });
+            }
     }
 
     // Handle case when no properties are found
@@ -410,18 +447,31 @@ export class TemplateApplicationModal extends Modal {
         this.updateApplyButtonState();
     }
 
-    // Helper function to check if a string value looks like a link (remains the same)
+    /**
+     * Checks if a value is actually a link that should be clickable
+     */
     private isPotentialLink(value: any): boolean {
+        // Handle arrays with single items
+        if (Array.isArray(value) && value.length === 1) {
+            return this.isPotentialLink(value[0]);
+        }
+        
+        // Only strings can be links
         if (typeof value !== 'string') {
             return false;
         }
+        
         const trimmedValue = value.trim();
-        // Basic checks for common link types
-        return (trimmedValue.startsWith('[[') && trimmedValue.endsWith(']]')) || // [[Wikilink]]
-               (trimmedValue.startsWith('[') && trimmedValue.includes('](')) || // [Markdown](link)
-               trimmedValue.startsWith('https://') ||
-               trimmedValue.startsWith('http://') ||
-               trimmedValue.startsWith('obsidian://'); // Obsidian URI
+        
+        // Only treat these specific formats as links
+        return (
+            // Wiki links
+            (trimmedValue.startsWith('[[') && trimmedValue.endsWith(']]')) ||
+            // URLs
+            trimmedValue.startsWith('https://') ||
+            trimmedValue.startsWith('http://') ||
+            trimmedValue.startsWith('obsidian://')
+        );
     }
 
     // Create property items for each property
@@ -451,112 +501,184 @@ export class TemplateApplicationModal extends Modal {
             const valueLine = descEl.createDiv({ cls: 'property-value-line' });
             valueLine.createSpan({ text: 'Value: ' }); // "Value: " prefix
 
+            const isMultilineText = (val: any): boolean => {
+                if (typeof val !== 'string') return false;
+                return val.includes('\n') || internalType === 'multitext';
+            };
+
             // --- Conditional Value Display ---
             const isEmptyValue = originalValue === null || originalValue === undefined || originalValue === '' ||
-                               (Array.isArray(originalValue) && originalValue.length === 0) ||
-                               (typeof originalValue === 'object' && !Array.isArray(originalValue) && originalValue !== null && Object.keys(originalValue).length === 0);
+            (Array.isArray(originalValue) && originalValue.length === 0) ||
+            (typeof originalValue === 'object' && !Array.isArray(originalValue) && originalValue !== null && Object.keys(originalValue).length === 0);
 
-            if (Array.isArray(originalValue) && originalValue.length > 1) {
-                // --- Array Handling ---
-                // Collapsed View Container
-                const collapsedArrayView = valueLine.createSpan({ cls: 'array-property-collapsed-view' });
-                const firstItemOriginal = originalValue[0];
-                const firstItemDisplay = formatValuePreview(firstItemOriginal, internalType);
-                const firstItemLinkEl = collapsedArrayView.createSpan({ text: firstItemDisplay, cls: 'clickable-link-item' });
+            // Check if this is multiline text that needs special handling
+            if (isMultilineText(originalValue)) {
+            // Create a label span
+            valueLine.createSpan({ text: isEmptyValue ? 'No value' : '' });
 
-                // Attach click listener to the first item span (with existence check)
+            // Create a separate div for multiline content below the label
+            const multilineContainer = descEl.createDiv({
+            attr: {
+            style: 'white-space: pre-line;', // Preserve line breaks
+            }
+            });
+
+            // Set the text content directly to preserve line breaks
+            multilineContainer.setText(String(originalValue));
+
+            } else if (Array.isArray(originalValue) && originalValue.length > 1) {
+            // --- Array Handling ---
+            // Collapsed View Container
+            const collapsedArrayView = valueLine.createSpan({ cls: 'array-property-collapsed-view' });
+            const firstItemOriginal = originalValue[0];
+            const firstItemDisplay = formatValuePreview(firstItemOriginal, internalType);
+
+            // Check if the first item is an actual link
+            if (this.isPotentialLink(firstItemOriginal)) {
+                // Create a clickable element for actual links
+                const firstItemLinkEl = collapsedArrayView.createSpan({ 
+                    text: firstItemDisplay, 
+                    cls: 'clickable-link-item' 
+                });
+                
+                // Attach click listener only to actual links
                 this.plugin.registerDomEvent(firstItemLinkEl, 'click', (e) => {
                     e.stopPropagation();
-                    const linkTarget = firstItemOriginal; // Use original value
-
-                    if (typeof linkTarget === 'string' && (linkTarget.startsWith('https://') || linkTarget.startsWith('http://'))) {
-                        window.open(linkTarget, '_blank'); // Open external links directly
-                    } else if (typeof linkTarget === 'string') {
-                        // Parse the link to handle wiki-links and other formats
-                        const linkInfo = parseValueLinks(linkTarget);
-                        const sourcePath = ""; // Vault root context
-                        
-                        if (linkInfo.isLink) {
-                            // Use the parsed path for wiki-links and markdown links
-                            const linkPath = linkInfo.path || linkTarget;
-                            const targetFile = this.app.metadataCache.getFirstLinkpathDest(linkPath, sourcePath);
-                            
-                            if (targetFile instanceof TFile) { // Check if TFile exists
-                                // Get a new window leaf and open the file in it
-                                const leaf = this.app.workspace.getLeaf('window');
-                                leaf.openFile(targetFile)
-                                    .catch(err => { 
-                                        console.error(`Error opening link in separate window: ${linkPath}`, err); 
-                                        new Notice(`Could not open link: ${linkPath}`); 
-                                    });
-                            } else {
-                                new Notice(`File not found: ${linkPath}`); // Show notice if file doesn't exist
-                            }
-                        } else {
-                            // Not a recognized link format
-                            const targetFile = this.app.metadataCache.getFirstLinkpathDest(linkTarget, sourcePath);
-                            
-                            if (targetFile instanceof TFile) { // Check if TFile exists
-                                // Get a new window leaf and open the file in it
-                                const leaf = this.app.workspace.getLeaf('window');
-                                leaf.openFile(targetFile)
-                                    .catch(err => { 
-                                        console.error(`Error opening link in separate window: ${linkTarget}`, err); 
-                                        new Notice(`Could not open link: ${linkTarget}`); 
-                                    });
-                            } else {
-                                new Notice("File is not in your vault"); // Show notice if file doesn't exist
-                            }
-                        }
-                    } else {
-                         console.warn("Clicked link target is not a string:", linkTarget);
-                    }
+                    this.handleLinkClick(firstItemOriginal, e);
                 });
-
-                // (Rest of collapsed view creation remains the same)
-                const remainingCount = originalValue.length - 1;
-                if (remainingCount > 0) {
-                    const itemText = remainingCount === 1 ? 'item' : 'items';
-                    collapsedArrayView.appendText(`, ${remainingCount} more ${itemText}`);
-                }
-                const expandLink = collapsedArrayView.createSpan({ text: ' (Expand)', cls: 'array-property-toggle-link' });
-
-                // Expanded View Container
-                const expandedViewContainer = descEl.createDiv({ cls: 'array-property-expanded-container is-hidden' });
-                // Render individual clickable items in expanded view (with existence check)
-                originalValue.forEach((item, index) => {
-                    const displayText = formatValuePreview(item, internalType);
-                    const linkEl = expandedViewContainer.createSpan({ text: displayText, cls: 'clickable-link-item' });
-                    // Attach click listener to each item span (with existence check)
-                    this.plugin.registerDomEvent(linkEl, 'click', (e) => {
-                        this.handleLinkClick(item, e); // Use the new helper method
-                    });
-                    if (index < originalValue.length - 1) expandedViewContainer.appendText(', ');
-                });
-                const collapseLink = expandedViewContainer.createSpan({ text: ' (Collapse)', cls: 'array-property-toggle-link' });
-
-                // Event Listeners for Expand/Collapse (remain the same)
-                this.plugin.registerDomEvent(expandLink, 'click', () => {
-                    collapsedArrayView.addClass('is-hidden'); expandedViewContainer.removeClass('is-hidden'); valueLine.removeClass('is-hidden');
-                });
-                this.plugin.registerDomEvent(collapseLink, 'click', () => {
-                    collapsedArrayView.removeClass('is-hidden'); expandedViewContainer.addClass('is-hidden');
-                });
-                // --- End Array Handling ---
-
             } else {
-                // --- Single Value Handling (Non-Array or Short Array) ---
-                const valuePreview = formatValuePreview(originalValue, internalType);
+                // Create a plain text element for regular items
+                collapsedArrayView.createSpan({ text: firstItemDisplay });
+            }
+            // (Rest of collapsed view creation remains the same)
+            // Get remaining count
+            const remainingCount = originalValue.length - 1;
 
-                if (!isEmptyValue && this.isPotentialLink(originalValue)) {
-                    // Value is a link - make it clickable (with existence check)
-                    const linkEl = valueLine.createSpan({ text: valuePreview, cls: 'clickable-link-item' });
+            // Create expand link with item count included
+            const itemText = remainingCount === 1 ? 'item' : 'items';
+            if (remainingCount > 0) {
+                // Create expand link with count information
+                const expandLinkContainer = collapsedArrayView.createSpan({ cls: 'array-property-toggle-link' }); // Main container span
+
+                // Add the opening parenthesis OUTSIDE the underline target
+                expandLinkContainer.appendText('(');
+
+                // Create the inner span containing ALL text to be underlined
+                const underlineTargetSpan = expandLinkContainer.createSpan({
+                    text: `Expand, ${remainingCount} more ${itemText}`, // Combine text here
+                    cls: 'underline-target' // New class for specific targeting
+                });
+
+                // Add the closing parenthesis OUTSIDE the underline target
+                expandLinkContainer.appendText(')');
+
+                // Attach expand click event TO THE CONTAINER
+                this.plugin.registerDomEvent(expandLinkContainer, 'click', () => {
+                    collapsedArrayView.addClass('is-hidden');
+                    expandedViewContainer.removeClass('is-hidden');
+                    valueLine.removeClass('is-hidden');
+                });
+            } else {
+                // Create expand link with count information
+                const expandLinkContainer = collapsedArrayView.createSpan({ cls: 'array-property-toggle-link' }); // Main container span
+
+                // Add the opening parenthesis OUTSIDE the underline target
+                expandLinkContainer.appendText('(');
+
+                // Create the inner span containing ALL text to be underlined
+                const underlineTargetSpan = expandLinkContainer.createSpan({
+                    text: `Expand, ${remainingCount} more ${itemText}`, // Combine text here
+                    cls: 'underline-target' // New class for specific targeting
+                });
+
+                // Add the closing parenthesis OUTSIDE the underline target
+                expandLinkContainer.appendText(')');
+
+                // Attach expand click event TO THE CONTAINER
+                this.plugin.registerDomEvent(expandLinkContainer, 'click', () => {
+                    collapsedArrayView.addClass('is-hidden');
+                    expandedViewContainer.removeClass('is-hidden');
+                    valueLine.removeClass('is-hidden');
+                });
+            }
+
+            // Expanded View Container
+            const expandedViewContainer = descEl.createDiv({ cls: 'array-property-expanded-container is-hidden' });
+            // Render individual items in expanded view
+            originalValue.forEach((item, index) => {
+                const displayText = formatValuePreview(item, internalType);
+                
+                // Only treat actual links as clickable
+                if (this.isPotentialLink(item)) {
+                    // This is an actual link - create clickable element
+                    const linkEl = expandedViewContainer.createSpan({ 
+                        text: displayText, 
+                        cls: 'clickable-link-item'
+                    });
+                    
+                    // Attach click listener only to actual links
                     this.plugin.registerDomEvent(linkEl, 'click', (e) => {
-                        this.handleLinkClick(originalValue, e); // Use the new helper method
+                        this.handleLinkClick(item, e);
                     });
                 } else {
-                    // Value is not a link or is empty - display as plain text
-                    valueLine.createSpan({ text: isEmptyValue ? 'No value' : valuePreview });
+                    // Regular item - create plain text (not clickable)
+                    expandedViewContainer.createSpan({ text: displayText });
+                }
+                
+                // Add comma separator between items
+                if (index < originalValue.length - 1) {
+                    expandedViewContainer.appendText(', ');
+                }
+            });
+            // Create collapse link with parentheses outside the underline target
+            const collapseLinkContainer = expandedViewContainer.createSpan({ cls: 'array-property-toggle-link' }); // Main container
+
+            collapseLinkContainer.appendText('('); // Add leading space and parenthesis
+
+            const collapseTextSpan = collapseLinkContainer.createSpan({ // Inner span for "Collapse"
+                text: 'Collapse',
+                cls: 'underline-target' // Reuse the same class as "Expand"
+            });
+
+            collapseLinkContainer.appendText(')'); // Add closing parenthesis
+
+            // Attach collapse click event TO THE CONTAINER
+            this.plugin.registerDomEvent(collapseLinkContainer, 'click', () => {
+                collapsedArrayView.removeClass('is-hidden');
+                expandedViewContainer.addClass('is-hidden');
+            });
+            // --- End Array Handling ---
+        } else {
+            // --- Single Value Handling (Non-Array or Short Array) ---
+                // Special handling for arrays with only one item
+                if (Array.isArray(originalValue) && originalValue.length === 1) {
+                    const singleItem = originalValue[0];
+                    const valuePreview = formatValuePreview(singleItem, internalType);
+                    
+                    if (!isEmptyValue && this.isPotentialLink(singleItem)) {
+                        // Single item is a link - make it clickable
+                        const linkEl = valueLine.createSpan({ text: valuePreview, cls: 'clickable-link-item' });
+                        this.plugin.registerDomEvent(linkEl, 'click', (e) => {
+                            this.handleLinkClick(singleItem, e);
+                        });
+                    } else {
+                        // Single item is not a link - display as plain text
+                        valueLine.createSpan({ text: isEmptyValue ? 'No value' : valuePreview });
+                    }
+                } else {
+                    // Regular single value (not an array)
+                    const valuePreview = formatValuePreview(originalValue, internalType);
+                    
+                    if (!isEmptyValue && this.isPotentialLink(originalValue)) {
+                        // Value is a link - make it clickable
+                        const linkEl = valueLine.createSpan({ text: valuePreview, cls: 'clickable-link-item' });
+                        this.plugin.registerDomEvent(linkEl, 'click', (e) => {
+                            this.handleLinkClick(originalValue, e);
+                        });
+                    } else {
+                        // Value is not a link or is empty - display as plain text
+                        valueLine.createSpan({ text: isEmptyValue ? 'No value' : valuePreview });
+                    }
                 }
                 // --- End Single Value Handling ---
             }
@@ -647,29 +769,57 @@ export class TemplateApplicationModal extends Modal {
                             Object.assign(finalPropertiesToApply, filteredPropertiesWithType);
                         }
 
-                        // --- Apply Value Preservation Logic ---
-                        for (const key of propertiesToApply) {
-                            // Check if the property exists in the properties we intend to apply
-                            if (finalPropertiesToApply[key]) {
-                                const shouldUseTemplateValue = overrideAllValues || overrideValueProperties.includes(key);
-                                if (!shouldUseTemplateValue && existingPropertiesWithType[key]) {
-                                    // Preserve existing value if override not checked and property exists
+                        // --- Apply Value Preservation / Override / Add Key Only Logic ---
+                        const finalKeys = Object.keys(finalPropertiesToApply);
+
+                        for (const key of finalKeys) {
+                            const isPropertyToApply = propertiesToApply.includes(key);
+                            
+                            if (!isPropertyToApply) {
+                                // If this key wasn't selected for application (meaning it's an existing property
+                                // preserved due to 'above' or 'below' positioning), keep its existing value.
+                                // Ensure it's actually in existingPropertiesWithType to avoid errors.
+                                if (existingPropertiesWithType[key]) {
                                     finalPropertiesToApply[key] = existingPropertiesWithType[key];
+                                } else {
+                                    // Should not happen with current positioning logic, but as a safeguard:
+                                    delete finalPropertiesToApply[key];
+                                }
+                                continue; 
+                            }
+
+                            // Now handle properties that *were* selected for application
+                            const isOverride = overrideAllValues || overrideValueProperties.includes(key);
+
+                            if (isOverride) {
+                                // 'Include with value' selected: Use the template value.
+                                // Ensure the template property exists before assigning.
+                                if (templatePropertiesWithType[key]) {
+                                    finalPropertiesToApply[key] = templatePropertiesWithType[key];
+                                } else {
+                                    // Template doesn't have this key? Should not happen if key is in propertiesToApply.
+                                    // Maybe delete or set to null? Setting null is safer.
+                                    finalPropertiesToApply[key] = { value: null, type: 'null' }; 
+                                }
+                            } else {
+                                // 'Include property' selected: Preserve existing or add as null.
+                                if (existingPropertiesWithType[key]) {
+                                    // Property exists in target file: Preserve its value.
+                                    finalPropertiesToApply[key] = existingPropertiesWithType[key];
+                                } else {
+                                    // Property does NOT exist in target file: Add key with null value.
+                                    finalPropertiesToApply[key] = { value: null, type: 'null' };
                                 }
                             }
                         }
 
                         // --- Update Frontmatter ---
-                        // Clear existing frontmatter before applying if 'remove' strategy is used
-                        if (this.propertyPositioning === 'remove') {
-                            Object.keys(frontmatter).forEach(key => delete frontmatter[key]);
-                        }
+                        // Clear existing frontmatter to potentially influence order
+                        Object.keys(frontmatter).forEach(fKey => delete frontmatter[fKey]);
 
-                        // Restore values and apply to frontmatter object
+                        // Restore values and apply to frontmatter object using Object.assign
                         const restoredProperties = this.plugin.propertyTypeService.restorePropertyValues(finalPropertiesToApply);
-                        for (const key in restoredProperties) {
-                            frontmatter[key] = restoredProperties[key];
-                        }
+                        Object.assign(frontmatter, restoredProperties);
                     });
 
                     // Clear cache for the modified file
@@ -742,7 +892,7 @@ export class TemplateApplicationModal extends Modal {
             });
         
         // Create the "Override All Values" toggle
-        new Setting(containerEl)
+        const overrideSetting = new Setting(containerEl)
             .setName('Override All Values')
             .setDesc('Override existing values with template values')
             .addToggle(toggle => {
@@ -775,10 +925,18 @@ export class TemplateApplicationModal extends Modal {
                                 );
                             }
                         });
-                    });
-                
+                    });                
                 return toggle;
             });
+
+            // Manipulate the description element AFTER the setting is created
+            if (overrideSetting.descEl) { // Check if descEl exists (it should)
+                overrideSetting.descEl.createEl('br'); // Add a line break element
+                overrideSetting.descEl.createSpan({   // Add the warning text span
+                    text: 'Caution: This can overwrite data in target files.',
+                    cls: 'setting-warning-text'       // Assign class for styling
+                });
+            }
     }
     
     // Updated to work with dropdowns

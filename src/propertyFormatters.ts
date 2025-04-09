@@ -17,12 +17,9 @@ export function formatYamlValue(value: any): string {
     
     if (typeof value === 'string') {
         // Check if string is multi-line
-        if (value.includes('\n')) {
-            // Split the string into lines
-            const lines = value.split('\n');
-            
-            // Use block scalar style with '|-' to preserve line breaks
-            return `|-\n  ${lines.map(line => line.trim() ? line : '').join('\n  ')}`;
+        // For multiline text, preserve line breaks
+        if (value === 'multitext' || value.includes('\n')) {
+            return value; // Return the original string with line breaks intact
         }
         
         // Always use quotes for strings that look like numbers
@@ -99,7 +96,6 @@ export function formatInputValue(value: any): string {
             // Format as JSON for complex objects
             return JSON.stringify(value, null, 2);
         } catch (e) {
-            console.error('Error stringifying object:', e);
             return '[Complex Object]';
         }
     }
@@ -110,10 +106,10 @@ export function formatInputValue(value: any): string {
 
 /**
  * Format a value for preview display
- * Creates a compact representation suitable for UI previews, stripping [[...]] brackets.
+ * Corrected to match Obsidian's native property display
  *
  * @param value - The value to format
- * @param propertyType - Optional property type hint (used for date/datetime)
+ * @param propertyType - Optional property type hint
  * @returns Formatted string for preview
  */
 export function formatValuePreview(value: any, propertyType?: string): string {
@@ -121,53 +117,96 @@ export function formatValuePreview(value: any, propertyType?: string): string {
         return 'null';
     }
 
+    // Handle string values
     if (typeof value === 'string') {
-        let displayValue = value;
-
-        if (displayValue.startsWith('[[') && displayValue.endsWith(']]')) {
-            displayValue = displayValue.substring(2, displayValue.length - 2).trim();
+        // For multiline text, preserve line breaks rather than converting to spaces
+        if (propertyType === 'multitext') {
+            return value; // Return the original string for ONLY multitext
         }
-
-        // Handle special property types like date/datetime (no change here)
-        if (propertyType) {
-            if (propertyType === 'date' || propertyType === 'datetime') {
-                // Return date/datetime strings directly without further modification/truncation
-                return displayValue;
+        
+        // Only process as links if they are actual wikilinks
+        if (value.startsWith('[[') && value.endsWith(']]')) {
+            const linkContent = value.substring(2, value.length - 2);
+            
+            // Handle aliases with pipe character
+            const pipeIndex = linkContent.indexOf('|');
+            if (pipeIndex !== -1) {
+                return linkContent.substring(pipeIndex + 1).trim();
             }
+            
+            return linkContent.trim();
         }
-
-        // Truncate long strings (apply after stripping brackets)
-        if (displayValue.length > 30) {
-            return `${displayValue.substring(0, 27)}...`;
-        }
-
-        // Return the potentially modified string value
-        return displayValue;
+        
+        // Otherwise return the string as-is without any link processing
+        return value;
     }
 
+    // Handle array values
     if (Array.isArray(value)) {
-        if (value.length === 0) return '[]';
-        // Check if array contains complex items (arrays or objects)
-        const hasComplexItems = value.some(item => Array.isArray(item) || (typeof item === 'object' && item !== null));
-        if (hasComplexItems) {
-             return `[Array: ${value.length} items]`; // Keep simple preview for complex arrays
-        } else {
-            // For simple arrays, attempt to join and preview
-            const joined = value.map(item => formatValuePreview(item)).join(', ');
-             if (joined.length > 30) {
-                 return `[${value.length} items]...`; // Truncate joined preview
-             }
-             return `[${joined}]`; // Show simple array content
+        if (value.length === 0) return '';
+        
+        // For true wiki link arrays, process them as links (only these should be treated as links)
+        if (propertyType === 'list' && 
+            value.every(item => 
+                typeof item === 'string' && 
+                item.startsWith('[[') && 
+                item.endsWith(']]')
+            )) {
+            // Process wiki links in array
+            const processedLinks = value.map(item => {
+                const linkContent = item.substring(2, item.length - 2);
+                const pipeIndex = linkContent.indexOf('|');
+                if (pipeIndex !== -1) {
+                    return linkContent.substring(pipeIndex + 1).trim();
+                }
+                return linkContent.trim();
+            });
+            
+            // For small arrays, show all items
+            if (value.length <= 3) {
+                return processedLinks.join(', ');
+            }
+            
+            // For larger arrays, show the first item and count
+            return `${processedLinks[0]}, ${value.length - 1} more items`;
         }
+        
+        // For URL arrays, they should be treated as links in Obsidian
+        if (propertyType === 'list' && 
+            value.every(item => 
+                typeof item === 'string' && 
+                (item.startsWith('http://') || item.startsWith('https://'))
+            )) {
+            // Process URLs in array
+            // For small arrays, show all items
+            if (value.length <= 3) {
+                return value.join(', ');
+            }
+            
+            // For larger arrays, show the first item and count
+            return `${value[0]}, ${value.length - 1} more items`;
+        }
+        
+        // For regular arrays, just display them as strings (not as links)
+        // For small arrays, show all items
+        if (value.length <= 3) {
+            return value.map(item => String(item)).join(', ');
+        }
+        
+        // For larger arrays, show the first item and count
+        return `${String(value[0])}, ${value.length - 1} more items`;
     }
 
-    if (typeof value === 'object') {
-        // Handle potential null objects explicitly if needed, though initial check covers null
-        if (value === null) return 'null';
-        // Basic object preview
+    // Handle objects
+    if (typeof value === 'object' && value !== null) {
         const keys = Object.keys(value);
-        if (keys.length === 0) return '{}';
-        return `{${keys.slice(0, 2).join(', ')}${keys.length > 2 ? ', ...' : ''}}`; // Preview first few keys
+        if (keys.length === 0) return '';
+        
+        if (keys.length <= 2) {
+            return keys.map(key => `${key}: ${String(value[key])}`).join(', ');
+        }
+        
+        return `${keys[0]}: ${String(value[keys[0]])}, ... +${keys.length - 1} more!`;
     }
 
     // For booleans, numbers, etc.
@@ -260,9 +299,6 @@ export function detectStringValueType(value: string): string {
 /**
  * Parse a string value to detect if it contains a link
  * Supports wiki-links, markdown links, and raw URLs
- * 
- * @param value - The string value to analyze
- * @returns Object with link information
  */
 export function parseValueLinks(value: string): {
     isLink: boolean, 
@@ -279,15 +315,15 @@ export function parseValueLinks(value: string): {
             return {
                 isLink: true,
                 type: 'wiki',
-                path: linkText.substring(0, pipeIndex),
-                displayText: linkText.substring(pipeIndex + 1)
+                path: linkText.substring(0, pipeIndex).trim(),
+                displayText: linkText.substring(pipeIndex + 1).trim()
             };
         } else {
             return {
                 isLink: true,
                 type: 'wiki',
-                path: linkText,
-                displayText: linkText
+                path: linkText.trim(),
+                displayText: linkText.trim()
             };
         }
     }
