@@ -58,6 +58,21 @@ export class PropertyManagerMenu extends Modal {
             .setName('File(s) Selection Options')
             .setHeading()
             .settingEl.setAttrs({ role: 'heading', 'aria-level': '2' });
+
+        // Button: Select Current File (NEW)
+        new Setting(containerEl)
+        .setName('Current File')
+        .setDesc('Select only the currently active file')
+        .addButton(button => {
+            button
+                .setButtonText('Select File')
+                .setTooltip('Selects only the currently active file.')
+                .onClick(() => {
+                    this.selectCurrentFile();
+                });
+            // Add aria-label for screen readers
+            button.buttonEl.setAttribute('aria-label', 'Select only the currently active file');
+        });
     
         // Button: Select All in Current Folder
         new Setting(containerEl)
@@ -105,6 +120,32 @@ export class PropertyManagerMenu extends Modal {
                 button.buttonEl.setAttribute('aria-label', 'Browse and manually select specific files or folders from your vault');
             });
 
+    }
+
+    /**
+     * Selects only the current active file
+     */
+    private selectCurrentFile() {
+        try {
+            const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+            if (!activeView || !activeView.file) {
+                new Notice('No file is currently active');
+                return;
+            }
+
+            const currentFile = activeView.file;
+            if (!(currentFile instanceof TFile) || currentFile.extension !== 'md') {
+                new Notice('The current file is not a Markdown file');
+                return;
+            }
+
+            this.plugin.selectedFiles = [currentFile];
+            this.log(`Selected current file: ${currentFile.path}`);
+            this.updateSelectedFilesCount();
+        } catch (error) {
+            this.log(`Error selecting current file: ${error}`, 'error');
+            new Notice('Failed to select current file');
+        }
     }
 
     /**

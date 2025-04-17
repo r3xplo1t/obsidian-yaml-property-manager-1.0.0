@@ -125,7 +125,7 @@ export class BrowserModal extends Modal {
         this.renderFileTree(fileTreeContainer, countTextSpan);
         
         // Button container
-        const buttonContainer = contentEl.createDiv({ cls: 'modal-button-container' });
+        const buttonContainer = this.modalEl.createDiv({ cls: 'modal-button-container' });
 
         // Confirm button
         const confirmButton = buttonContainer.createEl('button', {
@@ -893,7 +893,12 @@ export class BrowserModal extends Modal {
         
         for (const child of folder.children) {
             if (child instanceof TFolder && !child.path.startsWith('.')) {
-                // Found a valid child folder
+                // Skip empty folders in the calculation - they don't affect the parent's state
+                if (this.isFolderEmpty(child)) {
+                    continue;
+                }
+                
+                // Found a valid non-empty child folder
                 hasValidChildren = true;
                 
                 // If this folder is directly selected, that's sufficient
@@ -916,14 +921,32 @@ export class BrowserModal extends Modal {
             }
         }
         
-        // If no valid children were found (empty folder), return false instead of true
-        // Empty folders should not be considered as having "all children selected"
+        // If no valid children were found (all empty folders or truly empty), 
+        // we'll consider this based on if the parent is selected
         if (!hasValidChildren) {
-            return false;
+            // Check if this folder is explicitly selected by the user
+            return this.selectedFolders.some(f => f.path === folder.path);
         }
         
         // Otherwise all children must be selected or we would have returned false already
         return true;
+    }
+    
+    // Helper method to determine if a folder is empty (has no MD files or non-empty subfolders)
+    isFolderEmpty(folder: TFolder): boolean {
+        for (const child of folder.children) {
+            if (child instanceof TFile && child.extension === 'md') {
+                return false; // Has a markdown file, not empty
+            }
+            
+            if (child instanceof TFolder && !child.path.startsWith('.')) {
+                if (!this.isFolderEmpty(child)) {
+                    return false; // Has a non-empty subfolder, not empty
+                }
+            }
+        }
+        
+        return true; // No markdown files or non-empty subfolders found
     }
 
     ensureAllFolderSelections() {
