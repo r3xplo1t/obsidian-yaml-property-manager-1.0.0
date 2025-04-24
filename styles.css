@@ -358,9 +358,7 @@
   position: relative;       /* For positioning the icon */
   display: inline-flex;     /* For better layout with icon */
   align-items: center;      /* Center items vertically */
-  gap: 2px;                 /* Space between text and icon */
   border-radius: var(--radius-s);
-  padding: 0 2px; /* Original padding */
 }
 
 .property-value-link:hover,
@@ -400,8 +398,7 @@
 /* Styling for individual items within an expanded array view */
 .array-property-expanded-container .property-value-link,
 .array-property-expanded-container .clickable-link-item {
-  margin: 0 2px; /* Original margin */
-  padding: 2px 4px; /* Original padding */
+  padding: 1px 2px; /* Original padding */
   border-radius: var(--radius-s);
 }
 

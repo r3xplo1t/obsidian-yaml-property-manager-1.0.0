@@ -1,7 +1,8 @@
 import { App, Modal, Notice, TFile, Setting, FuzzySuggestModal, FuzzyMatch, setIcon, ToggleComponent, DropdownComponent, MarkdownRenderer } from 'obsidian';
 import YAMLPropertyManagerPlugin from '../../main';
-import { formatValuePreview, parseValueLinks } from '../propertyFormatters';
+import { formatValuePreview, parseValueLinks } from '../commonHelpers';
 import type { PropertyWithType } from '../PropertyTypeService';
+import { isPotentialLink, handleLinkClick } from '../commonHelpers';
 
 export class TemplateApplication extends Modal {
     plugin: YAMLPropertyManagerPlugin;
@@ -30,84 +31,6 @@ export class TemplateApplication extends Modal {
         this.plugin = plugin;
         this.targetFiles = targetFiles;
     }
-
-    /**
-     * Handles clicks on potential links within property values.
-     * Supports various link formats and properties containing links.
-     *
-     * @param linkTarget The value that might contain a link.
-     * @param event The mouse event that triggered the handler.
-     */
-    private handleLinkClick(linkTarget: any, event: MouseEvent): void {
-        event.stopPropagation(); // Prevent triggering other actions if nested
-
-        // Handle array with a single element
-        if (Array.isArray(linkTarget) && linkTarget.length === 1) {
-            // Extract the single element and process it
-            this.handleLinkClick(linkTarget[0], event);
-            return;
-        }
-
-        if (typeof linkTarget !== 'string') {
-            console.warn("handleLinkClick called with non-string target:", linkTarget);
-            return;
-        }
-
-        // Check for external links first
-        if (linkTarget.startsWith('https://') || linkTarget.startsWith('http://')) {
-            window.open(linkTarget, '_blank'); // Use '_blank' for safety
-            return;
-        }
-
-        // Attempt to parse Obsidian-style links (wikilinks, markdown links)
-        const linkInfo = parseValueLinks(linkTarget);
-        const sourcePath = ""; // Use vault root as the context for resolving links
-
-        // If this is a valid link with a path, use that path
-        if (linkInfo.isLink && linkInfo.path) {
-            try {
-                const targetFile = this.app.metadataCache.getFirstLinkpathDest(linkInfo.path, sourcePath);
-
-                if (targetFile instanceof TFile) {
-                    // File exists in the vault, open it in a new window leaf
-                    const leaf = this.app.workspace.getLeaf('window');
-                    leaf.openFile(targetFile).catch(err => {
-                        console.error(`Error opening link in new window: ${linkInfo.path}`, err);
-                        new Notice(`Could not open link: ${linkInfo.path}`);
-                    });
-                } else {
-                    // File not found in the vault
-                    new Notice(`File not found: ${linkInfo.path}`);
-                }
-                return;
-            } catch (error) {
-                console.error(`Error processing link: ${linkTarget}`, error);
-                new Notice(`Could not process link: ${linkTarget}`);
-                return;
-            }
-        }
-
-        // Fallback - try to resolve the raw link target
-        try {
-            const targetFile = this.app.metadataCache.getFirstLinkpathDest(linkTarget, sourcePath);
-            if (targetFile instanceof TFile) {
-                // File exists in the vault, open it
-                const leaf = this.app.workspace.getLeaf('window');
-                leaf.openFile(targetFile).catch(err => {
-                    console.error(`Error opening link in new window: ${linkTarget}`, err);
-                    new Notice(`Could not open link: ${linkTarget}`);
-                });
-            } else {
-                // Not found
-                new Notice(`File not found: ${linkTarget}`);
-            }
-        } catch (error) {
-            console.error(`Error processing link: ${linkTarget}`, error);
-            new Notice(`Could not process link: ${linkTarget}`);
-        }
-    }
-
-
 
     async onOpen() {
         const { contentEl } = this;
@@ -447,33 +370,6 @@ export class TemplateApplication extends Modal {
         this.updateApplyButtonState();
     }
 
-    /**
-     * Checks if a value is actually a link that should be clickable
-     */
-    private isPotentialLink(value: any): boolean {
-        // Handle arrays with single items
-        if (Array.isArray(value) && value.length === 1) {
-            return this.isPotentialLink(value[0]);
-        }
-        
-        // Only strings can be links
-        if (typeof value !== 'string') {
-            return false;
-        }
-        
-        const trimmedValue = value.trim();
-        
-        // Only treat these specific formats as links
-        return (
-            // Wiki links
-            (trimmedValue.startsWith('[[') && trimmedValue.endsWith(']]')) ||
-            // URLs
-            trimmedValue.startsWith('https://') ||
-            trimmedValue.startsWith('http://') ||
-            trimmedValue.startsWith('obsidian://')
-        );
-    }
-
     // Create property items for each property
     private createpropertySettings(propertyKeys: string[], properties: any, container: HTMLElement) {
         // Clear existing property toggles
@@ -534,7 +430,7 @@ export class TemplateApplication extends Modal {
             const firstItemDisplay = formatValuePreview(firstItemOriginal, internalType);
 
             // Check if the first item is an actual link
-            if (this.isPotentialLink(firstItemOriginal)) {
+            if (isPotentialLink(firstItemOriginal)) {
                 // Create a clickable element for actual links
                 const firstItemLinkEl = collapsedArrayView.createSpan({ 
                     text: firstItemDisplay, 
@@ -544,7 +440,7 @@ export class TemplateApplication extends Modal {
                 // Attach click listener only to actual links
                 this.plugin.registerDomEvent(firstItemLinkEl, 'click', (e) => {
                     e.stopPropagation();
-                    this.handleLinkClick(firstItemOriginal, e);
+                    handleLinkClick(this.app, firstItemOriginal, e);
                 });
             } else {
                 // Create a plain text element for regular items
@@ -609,7 +505,7 @@ export class TemplateApplication extends Modal {
                 const displayText = formatValuePreview(item, internalType);
                 
                 // Only treat actual links as clickable
-                if (this.isPotentialLink(item)) {
+                if (isPotentialLink(item)) {
                     // This is an actual link - create clickable element
                     const linkEl = expandedViewContainer.createSpan({ 
                         text: displayText, 
@@ -618,7 +514,7 @@ export class TemplateApplication extends Modal {
                     
                     // Attach click listener only to actual links
                     this.plugin.registerDomEvent(linkEl, 'click', (e) => {
-                        this.handleLinkClick(item, e);
+                        handleLinkClick(this.app, item, e);
                     });
                 } else {
                     // Regular item - create plain text (not clickable)
@@ -655,11 +551,11 @@ export class TemplateApplication extends Modal {
                     const singleItem = originalValue[0];
                     const valuePreview = formatValuePreview(singleItem, internalType);
                     
-                    if (!isEmptyValue && this.isPotentialLink(singleItem)) {
+                    if (!isEmptyValue && isPotentialLink(singleItem)) {
                         // Single item is a link - make it clickable
                         const linkEl = valueLine.createSpan({ text: valuePreview, cls: 'clickable-link-item' });
                         this.plugin.registerDomEvent(linkEl, 'click', (e) => {
-                            this.handleLinkClick(singleItem, e);
+                            handleLinkClick(this.app, singleItem, e);
                         });
                     } else {
                         // Single item is not a link - display as plain text
@@ -669,11 +565,11 @@ export class TemplateApplication extends Modal {
                     // Regular single value (not an array)
                     const valuePreview = formatValuePreview(originalValue, internalType);
                     
-                    if (!isEmptyValue && this.isPotentialLink(originalValue)) {
+                    if (!isEmptyValue && isPotentialLink(originalValue)) {
                         // Value is a link - make it clickable
                         const linkEl = valueLine.createSpan({ text: valuePreview, cls: 'clickable-link-item' });
                         this.plugin.registerDomEvent(linkEl, 'click', (e) => {
-                            this.handleLinkClick(originalValue, e);
+                            handleLinkClick(this.app, originalValue, e);
                         });
                     } else {
                         // Value is not a link or is empty - display as plain text

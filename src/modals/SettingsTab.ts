@@ -2,6 +2,7 @@ import { App, PluginSettingTab, Setting, Notice, ButtonComponent, Modal, setTool
 import YAMLPropertyManagerPlugin from '../../main';
 import { BrowserModal } from './BrowserModal';
 import { TreeNode } from '../interfaces';
+import { findNextFocusableElement, findPrevFocusableElement } from '../commonHelpers';
 
 export class SettingTab extends PluginSettingTab {
     plugin: YAMLPropertyManagerPlugin;
@@ -589,11 +590,11 @@ export class SettingTab extends PluginSettingTab {
                     }
                 } else if (e.key === 'ArrowDown') {
                     e.preventDefault();
-                    const nextFocusable = this.findNextFocusableElement(selfEl);
+                    const nextFocusable = findNextFocusableElement(selfEl);
                     if (nextFocusable) nextFocusable.focus();
                 } else if (e.key === 'ArrowUp') {
                     e.preventDefault();
-                    const prevFocusable = this.findPrevFocusableElement(selfEl);
+                    const prevFocusable = findPrevFocusableElement(selfEl);
                     if (prevFocusable) prevFocusable.focus();
                 }
             });
@@ -640,35 +641,6 @@ export class SettingTab extends PluginSettingTab {
                 }
             }
         });
-    }
-    
-    // Helper methods for keyboard navigation
-    private findNextFocusableElement(currentEl: HTMLElement): HTMLElement | null {
-        // Find all focusable elements
-        const focusableElements = Array.from(
-            document.querySelectorAll('.tree-item-self[tabindex="0"], .clickable-icon[tabindex="0"]')
-        ) as HTMLElement[];
-        
-        // Get current index
-        const currentIndex = focusableElements.indexOf(currentEl);
-        if (currentIndex >= 0 && currentIndex < focusableElements.length - 1) {
-            return focusableElements[currentIndex + 1];
-        }
-        return null;
-    }
-    
-    private findPrevFocusableElement(currentEl: HTMLElement): HTMLElement | null {
-        // Find all focusable elements
-        const focusableElements = Array.from(
-            document.querySelectorAll('.tree-item-self[tabindex="0"], .clickable-icon[tabindex="0"]')
-        ) as HTMLElement[];
-        
-        // Get current index
-        const currentIndex = focusableElements.indexOf(currentEl);
-        if (currentIndex > 0) {
-            return focusableElements[currentIndex - 1];
-        }
-        return null;
     }
 
     private debouncedSaveSettings(delay: number = 500): void {

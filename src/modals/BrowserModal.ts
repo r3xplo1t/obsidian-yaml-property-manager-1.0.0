@@ -1,6 +1,7 @@
 // BrowserModal.ts
 import { App, Modal, TFile, TFolder, Setting, setIcon, Plugin } from 'obsidian';
 import { TreeNode } from '../interfaces';
+import { findNextFocusableElement, findPrevFocusableElement } from '../commonHelpers';
 
 export interface BrowserModalResult {
     files: TFile[], 
@@ -730,41 +731,15 @@ export class BrowserModal extends Modal {
             e.preventDefault();
             
             // Find the next item to focus
-            const nextFocusable = this.findNextFocusableElement(selfEl);
+            const nextFocusable = findNextFocusableElement(selfEl);
             if (nextFocusable) nextFocusable.focus();
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
             
             // Find the previous item to focus
-            const prevFocusable = this.findPrevFocusableElement(selfEl);
+            const prevFocusable = findPrevFocusableElement(selfEl);
             if (prevFocusable) prevFocusable.focus();
         }
-    }
-
-    // Helper to find next focusable element
-    private findNextFocusableElement(currentEl: HTMLElement): HTMLElement | null {
-        const allFocusable = Array.from(
-            document.querySelectorAll('.tree-item-self[tabindex="0"]')
-        ) as HTMLElement[];
-        
-        const currentIndex = allFocusable.indexOf(currentEl);
-        if (currentIndex >= 0 && currentIndex < allFocusable.length - 1) {
-            return allFocusable[currentIndex + 1];
-        }
-        return null;
-    }
-
-    // Helper to find previous focusable element
-    private findPrevFocusableElement(currentEl: HTMLElement): HTMLElement | null {
-        const allFocusable = Array.from(
-            document.querySelectorAll('.tree-item-self[tabindex="0"]')
-        ) as HTMLElement[];
-        
-        const currentIndex = allFocusable.indexOf(currentEl);
-        if (currentIndex > 0) {
-            return allFocusable[currentIndex - 1];
-        }
-        return null;
     }
 
     // Other methods remain largely the same...

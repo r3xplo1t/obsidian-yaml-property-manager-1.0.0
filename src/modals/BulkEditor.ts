@@ -2,8 +2,9 @@
 import { App, Modal, TFile, Setting, ButtonComponent, DropdownComponent, ToggleComponent, Notice, setIcon, setTooltip } from 'obsidian';
 import YAMLPropertyManagerPlugin from '../../main';
 import type { PropertyWithType } from '../PropertyTypeService';
-import { formatValuePreview, formatInputValue } from '../propertyFormatters';
+import { formatValuePreview, formatInputValue } from '../commonHelpers';
 import { PROPERTY_TYPES } from '../constants';
+import { getEmptyValueForType, getDefaultTypeForKey } from '../commonHelpers';
 
 // Define interfaces for the state tracking
 interface PropertyState {
@@ -1818,6 +1819,9 @@ export class BulkEditor extends Modal {
         const state = this.propertiesState.get(key);
         if (!state) return undefined; // Don't add if no state
         
+        // Get property consistency stats from the class property
+        const stats = this.propertyConsistency.get(key);
+        
         // Get file-specific actions
         const fileActions = state.fileActions.get(filePath) || { type: false, value: false, add: false };
         
@@ -1829,8 +1833,10 @@ export class BulkEditor extends Modal {
                 : state.disabledAction;
                 
             if (action === 'add_if_missing') {
-                // Add empty property
-                return this.getEmptyValueForType(key);
+                // Add empty property based on the property type
+                const propertyType = state.changeType || 
+                    (stats?.type.mostCommonType ? stats.type.mostCommonType : getDefaultTypeForKey(key));
+                return getEmptyValueForType(propertyType);
             } else {
                 // Don't add the missing property
                 return undefined;
@@ -1845,7 +1851,7 @@ export class BulkEditor extends Modal {
         // Determine the value to add
         if (state.overrideValue && fileActions.value) {
             // Use the override value
-            const targetType = state.changeType || this.getDefaultTypeForKey(key);
+            const targetType = state.changeType || getDefaultTypeForKey(key);
             
             if (targetType === 'list') {
                 // Parse as comma-separated list
@@ -1868,47 +1874,10 @@ export class BulkEditor extends Modal {
                 return stats.value.mostCommonValue;
             } else {
                 // Otherwise use empty value for the type
-                return this.getEmptyValueForType(key);
+                const propertyType = state?.changeType || 
+                    (stats?.type.mostCommonType ? stats.type.mostCommonType : getDefaultTypeForKey(key));
+                return getEmptyValueForType(propertyType);
             }
-        }
-    }
-    
-    /**
-     * Gets the default empty value for a property type
-     */
-    private getEmptyValueForType(key: string): any {
-        const state = this.propertiesState.get(key);
-        const stats = this.propertyConsistency.get(key);
-        
-        // Determine the type
-        const type = state?.changeType || 
-            (stats?.type.mostCommonType ? stats.type.mostCommonType : this.getDefaultTypeForKey(key));
-            
-        switch (type) {
-            case 'number': return 0;
-            case 'checkbox': return false;
-            case 'list': return [];
-            case 'date': return '';
-            case 'datetime': return '';
-            default: return '';
-        }
-    }
-    
-    /**
-     * Gets the default type for a property key
-     */
-    private getDefaultTypeForKey(key: string): string {
-        // Check if the key name suggests a specific type
-        if (key.includes('date') || key.includes('time')) {
-            return 'datetime';
-        } else if (key.includes('list') || key.includes('tags') || key.endsWith('s')) {
-            return 'list';
-        } else if (key.includes('enable') || key.includes('check') || key.includes('toggle')) {
-            return 'checkbox';
-        } else if (key.includes('count') || key.includes('number') || key.includes('amount')) {
-            return 'number';
-        } else {
-            return 'text';
         }
     }
 

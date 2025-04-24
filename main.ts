@@ -24,6 +24,8 @@ import type {
     ObsidianPropertyType
 } from './src';
 
+import { logError } from './src/commonHelpers';
+
 // Type definitions
 type ModalType = 'main' | 'bulkEdit' | 'template' | 'batchSelect';
 type FileSelectionResult = { files: TFile[], folders: TFolder[] };
@@ -64,7 +66,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             
             // Attempt to save any pending settings
             this.saveSettings().catch(error => {
-                this.logError("Error saving settings during unload:", error);
+                logError('YAML Property Manager', 'Error saving settings during unload:', error);
             });
         } catch (error) {
             console.error("Error during plugin cleanup:", error);
@@ -254,7 +256,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                 }
             }
         } catch (error) {
-            this.logError("Error getting template files:", error);
+            logError('YAML Property Manager', 'Error getting template files:', error);
             // Don't rethrow, just return what we have so far
         }
         
@@ -284,7 +286,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                 }
             }
         } catch (error) {
-            this.logError(`Error processing folder ${folder.path}:`, error);
+            logError('YAML Property Manager', 'Error processing folder ${folder.path}:', error);
             // Don't rethrow, just return what we have so far
         }
         
@@ -339,7 +341,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             
             return properties;
         } catch (error) {
-            this.logError(`Error parsing properties for ${file.path}:`, error);
+            logError('YAML Property Manager', 'Error parsing properties for ${file.path}:', error);
             return {};
         }
     }
@@ -370,7 +372,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             
             return true;
         } catch (error) {
-            this.logError('Error applying properties:', error);
+            logError('YAML Property Manager', 'Error applying properties:', error);
             new Notice(`Error applying properties to ${file.name}: ${error.message}`);
             return false;
         }
@@ -391,7 +393,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             
             return true;
         } catch (error) {
-            this.logError(`Error setting property for ${filePath}:`, error);
+            logError('YAML Property Manager', 'Error setting property for ${filePath}:', error);
             return false;
         }
     }
@@ -421,7 +423,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                     }
                 }
             } catch (error) {
-                this.logError(`Error checking properties in ${file.path}:`, error);
+                logError('YAML Property Manager', 'Error checking properties in ${file.path}:', error);
                 // Continue with the next file
             }
         }
@@ -500,7 +502,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                     this.propertyCache.delete(file.path);
                     
                 } catch (error) {
-                    this.logError(`Error applying template to ${file.path}:`, error);
+                    logError('YAML Property Manager', 'Error applying template to ${file.path}:', error);
                     // Continue with other files
                 }
             }
@@ -508,7 +510,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             new Notice(`Applied template to ${successCount} of ${targetFiles.length} ${targetFiles.length === 1 ? 'file' : 'files'}`);
             return successCount;
         } catch (error) {
-            this.logError('Error applying template:', error);
+            logError('YAML Property Manager', 'Error applying template:', error);
             new Notice(`Error applying template: ${error.message}`);
             return 0;
         }
@@ -638,14 +640,9 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                 new Notice('YAML Property Manager has been reloaded');
             }, 300);
         } catch (error) {
-            this.logError('Error reloading plugin:', error);
+            logError('YAML Property Manager', 'Error reloading plugin:', error);
             new Notice('Failed to reload plugin: ' + error.message);
         }
-    }
-
-    // Error logging helper
-    public logError(message: string, error: any): void {
-        console.error(`[YAML Property Manager] ${message}`, error);
     }
 
     //#endregion

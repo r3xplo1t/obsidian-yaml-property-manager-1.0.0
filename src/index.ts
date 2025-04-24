@@ -39,7 +39,7 @@ export {
     formatInputValue, 
     formatValuePreview, 
     parseValueLinks 
-} from './propertyFormatters';
+} from './commonHelpers';
 
 // -------- UI Components --------
 // Main plugin modals
