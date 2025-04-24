@@ -557,12 +557,58 @@
   padding-bottom: var(--size-4-2) !important;
 }
 
+/* Make the header setting item sticky within its scroll container */
+.properties-list-container .bulk-property-item-header-setting.setting-item {
+  position: sticky;
+  top: calc(-1 * var(--size-4-2));
+  z-index: 10;
+  background-color: var(--background-primary);
+  border-bottom: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  padding-top: var(--size-4-1);
+  padding-bottom: var(--size-4-1);
+}
+
+/* Remove bottom border radius when the property item is expanded */
+.properties-list-container .bulk-property-item:not(.is-collapsed) .bulk-property-item-header-setting.setting-item {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+/* --- Header Hint Text Style --- */
+.property-toggle-hint {
+  display: block; /* Ensures it takes its own line */
+  color: var(--interactive-accent); /* Standard muted color for hints */
+  font-size: var(--font-ui-smaller); /* Smaller font size */
+  /* Adjust margin-top for clear spacing below the stats rows */
+  margin-top: var(--size-4-2); /* Increased margin for clearer separation */
+  /* margin-bottom: var(--size-4-1); */ /* Optional: Add space below if needed */
+  cursor: default; /* Ensure no pointer cursor */
+  line-height: var(--line-height-tight); /* Use a tight line height */
+  padding: 0; /* Ensure no extra padding */
+}
+
+/* Underline hint text when the main header setting item is hovered */
+.bulk-property-item-header-setting.setting-item:hover .property-toggle-hint {
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+/* Change cursor to pointer on hover for the clickable header area */
+.bulk-property-item-header-setting.setting-item {
+  cursor: pointer;
+}
+
 /* Individual Property Item Styles */
 .bulk-property-item {
   border: 1px solid #ccc;
   background-color: #fff;
   margin-bottom: 10px;
-  border-radius: 4px;
+  border-radius: var(--radius-m);
+  -webkit-border-radius: var(--radius-m);
+  -moz-border-radius: var(--radius-m);
+  -ms-border-radius: var(--radius-m);
+  -o-border-radius: var(--radius-m);
 }
 
 .bulk-property-item.dragging {
@@ -590,23 +636,13 @@
   z-index: 2;
 }
 
-.bulk-property-item.is-collapsed .property-header {
-  border-bottom: none;
-  border-bottom-left-radius: 3px;
-  border-bottom-right-radius: 3px;
-}
-
-.collapse-toggle {
-  display: inline-flex;
-  padding: 0;
-  margin: 0 5px 0 0;
-  font-size: 0.8em;
-  line-height: 1;
-  color: #555;
-  user-select: none;
-  width: 1em;
-  text-align: center;
-  flex-shrink: 0;
+.property-header-stat-row {
+  display: flex;         /* Arrange icon, label, value horizontally */
+  align-items: center;   /* Vertically align items */
+  gap: var(--size-4-1);  /* Add a small gap between items (adjust as needed) */
+  /* Optionally, adjust line height or margin if needed */
+  /* line-height: var(--line-height-tight); */
+  /* margin-bottom: var(--size-4-0); */ /* Tiny space between rows */
 }
 
 .property-name {
@@ -660,14 +696,6 @@
   transition: transform 0.2s ease-in-out;
 }
 
-.setting-toggle:checked, .edit-enable-toggle:checked {
-  background-color: #4a88e0;
-}
-
-.setting-toggle:checked::before, .edit-enable-toggle:checked::before {
-  transform: translateX(14px);
-}
-
 /* Style for the Add button (ensure it has some top margin) */
 .add-property-list-item {
   /* ... (keep existing styles for background, border, cursor etc.) ... */
@@ -697,6 +725,59 @@ color: var(--text-normal);
 .add-property-list-item span {
 margin-right: var(--size-4-2);
 font-weight: bold;
+}
+
+/* --- Bulk Editor Type Consistency Warning Style --- */
+
+.type-consistency-warning {
+  display: block; /* Or inline-block if preferred */
+  color: var(--text-error); /* Standard warning/error color */
+  font-size: var(--font-ui-smaller); /* Match other descriptions */
+  margin-top: var(--size-4-1); /* Optional spacing */
+}
+
+/* Optional: Style for the disabled input if needed */
+.most-consistent-type-input:disabled {
+  /* Example: Ensure background matches theme */
+  background-color: var(--background-secondary);
+  color: var(--text-disabled);
+  cursor: not-allowed;
+}
+
+/* --- Bulk Editor Value Consistency Warning Style --- */
+
+.value-consistency-warning {
+  display: block; /* Or inline-block if preferred */
+  color: var(--text-error); /* Standard warning/error color */
+  font-size: var(--font-ui-smaller); /* Match other descriptions */
+  margin-top: var(--size-4-1); /* Optional spacing */
+}
+
+/* --- Bulk Editor Consistency Warning Styles --- */
+
+.type-consistency-warning,
+.value-consistency-warning { /* Apply to both */
+  display: block; /* Or inline-block if preferred */
+  color: var(--text-error); /* Standard warning/error color */
+  font-size: var(--font-ui-smaller); /* Match other descriptions */
+  margin-top: var(--size-4-1); /* Optional spacing */
+}
+
+/* --- Bulk Editor Dropdown Option Truncation --- */
+.most-consistent-value-dropdown option {
+  /* Ensure text doesn't wrap and shows ellipsis if too long */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  /* You might need to set a max-width on the select/option if ellipsis doesn't work */
+  /* max-width: 200px; */ /* Example */
+}
+
+/* Optional: Style for the disabled N/A text input */
+.na-placeholder-input:disabled {
+    /* background-color: var(--background-secondary-alt); */ /* Slightly different background? */
+    /* color: var(--text-faint); */ /* Fainter text? */
+    cursor: not-allowed;
 }
 
 /* --- Inconsistent Files Section Styles --- */

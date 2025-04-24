@@ -1,8 +1,8 @@
 // src/modals/BulkEditor.ts
-import { App, Modal, TFile, Setting, ButtonComponent, DropdownComponent, ToggleComponent, Notice, setIcon } from 'obsidian';
+import { App, Modal, TFile, Setting, ButtonComponent, DropdownComponent, ToggleComponent, Notice, setIcon, setTooltip } from 'obsidian';
 import YAMLPropertyManagerPlugin from '../../main';
 import type { PropertyWithType } from '../PropertyTypeService';
-import { formatValuePreview } from '../propertyFormatters';
+import { formatValuePreview, formatInputValue } from '../propertyFormatters';
 import { PROPERTY_TYPES } from '../constants';
 
 // Define interfaces for the state tracking
@@ -12,7 +12,8 @@ interface PropertyState {
     expanded: boolean;
     applyOrder: boolean;
     changeType: string | null;
-    overrideValue: string | null;
+    overrideValue: string | null; // Keep this for simple text override option
+    selectedValueOverride?: any | null; // Store dropdown selection (optional)
     disabledAction: 'global' | 'keep' | 'remove' | 'add_if_missing';
     excludedFiles: Set<string>;
     fileActions: Map<string, {
@@ -20,6 +21,19 @@ interface PropertyState {
         value: boolean;
         add: boolean;
     }>;
+}
+
+/* Interface for property consistency statistics */
+interface PropertyConsistencyStats {
+    property: { total: number; present: number };
+    type: { total: number; consistent: number; mostCommonType: string | null };
+    value: {
+        total: number;
+        consistent: number;
+        mostCommonValue: any;
+        firstEncounteredValue: any;
+        allUniqueValues: any[];
+    };
 }
 
 export class BulkEditor extends Modal {
@@ -47,11 +61,7 @@ export class BulkEditor extends Modal {
     };
 
     private propertiesState: Map<string, PropertyState> = new Map();
-    private propertyConsistency: Map<string, {
-        property: { total: number, present: number },
-        type: { total: number, consistent: number, mostCommonType: string | null },
-        value: { total: number, consistent: number, mostCommonValue: any }
-    }> = new Map();
+    private propertyConsistency: Map<string, PropertyConsistencyStats> = new Map();
     
     // File property cache (to avoid repeated processing)
     private fileProperties: Map<string, Record<string, PropertyWithType>> = new Map();
@@ -292,28 +302,7 @@ export class BulkEditor extends Modal {
         const propertyItems = this.propertiesListContainer?.querySelectorAll('.bulk-property-item') || [];
         propertyItems.forEach(item => {
             const header = item.querySelector('.setting-item.bulk-property-item-header-setting'); // Use updated selector
-            const collapseToggle = item.querySelector('.collapse-toggle');
             const contentContainer = item.querySelector('.property-content') as HTMLElement | null; // Use updated selector
-
-            if (expanded) {
-                // Expand: Update classes, icon and show content
-                item.classList.remove('is-collapsed');
-                if (collapseToggle) {
-                    collapseToggle.textContent = '▼';
-                }
-                if (contentContainer) {
-                    contentContainer.style.display = '';
-                }
-            } else {
-                // Collapse: Update classes, icon and hide content
-                item.classList.add('is-collapsed');
-                if (collapseToggle) {
-                    collapseToggle.textContent = '▶';
-                }
-                if (contentContainer) {
-                    contentContainer.style.display = 'none';
-                }
-            }
 
             // Update ARIA attribute for accessibility
             if (header) {
@@ -363,7 +352,13 @@ export class BulkEditor extends Modal {
                         this.propertyConsistency.set(key, {
                             property: { total: this.files.length, present: 0 },
                             type: { total: 0, consistent: 0, mostCommonType: null },
-                            value: { total: 0, consistent: 0, mostCommonValue: null }
+                            value: { // Ensure all value fields are initialized
+                                total: 0,
+                                consistent: 0,
+                                mostCommonValue: null,
+                                firstEncounteredValue: undefined, // Add this
+                                allUniqueValues: [] // Add this
+                            }
                         });
                     }
                     
@@ -422,61 +417,92 @@ export class BulkEditor extends Modal {
     }
     
     /**
-     * Finalizes consistency calculations by determining most common types and values
+     * Finalizes consistency calculations by determining most common types and values,
+     * collecting unique values, and storing the first encountered value.
      */
     private finalizeConsistencyCalculations() {
         this.propertyConsistency.forEach((stats, key) => {
-            // Determine most common type and value
             const typeCount = new Map<string, number>();
-            const valueCount = new Map<string, { count: number, value: any }>();
-            
-            // Process each file's property to count types and values
+            const valueDetails = {
+                counts: new Map<string, { count: number; value: any }>(),
+                firstValue: undefined as any,
+                hasFoundFirst: false,
+                uniqueValuesSet: new Set<string>(), // Store stringified unique values
+                uniqueValues: [] as any[] // Store actual unique values
+            };
+
+            // Process each file's property
             this.files.forEach(file => {
                 const properties = this.fileProperties.get(file.path);
                 if (!properties || !(key in properties)) return;
-                
+
                 const property = properties[key];
-                
+
+                // Store first encountered value
+                if (!valueDetails.hasFoundFirst) {
+                    valueDetails.firstValue = property.value;
+                    valueDetails.hasFoundFirst = true;
+                }
+
                 // Count types
                 const type = property.type;
                 typeCount.set(type, (typeCount.get(type) || 0) + 1);
-                
-                // Count values (stringify for comparison)
-                const valueStr = JSON.stringify(property.value);
-                if (!valueCount.has(valueStr)) {
-                    valueCount.set(valueStr, { count: 0, value: property.value });
+
+                // Count values (stringify for comparison, store original value)
+                const valueStr = JSON.stringify(property.value); // Key for counting
+                if (!valueDetails.counts.has(valueStr)) {
+                    valueDetails.counts.set(valueStr, { count: 0, value: property.value });
                 }
-                valueCount.get(valueStr)!.count++;
+                valueDetails.counts.get(valueStr)!.count++;
+
+                // Collect unique values
+                if (!valueDetails.uniqueValuesSet.has(valueStr)) {
+                    valueDetails.uniqueValuesSet.add(valueStr);
+                    valueDetails.uniqueValues.push(property.value);
+                }
             });
-            
+
             // Find most common type
             let mostCommonType: string | null = null;
             let maxTypeCount = 0;
-            
             typeCount.forEach((count, type) => {
                 if (count > maxTypeCount) {
                     maxTypeCount = count;
                     mostCommonType = type;
                 }
             });
-            
+
             // Find most common value
             let mostCommonValue: any = null;
             let maxValueCount = 0;
-            
-            valueCount.forEach(({count, value}, valueStr) => {
+            valueDetails.counts.forEach(({ count, value }) => {
                 if (count > maxValueCount) {
                     maxValueCount = count;
                     mostCommonValue = value;
                 }
             });
-            
-            // Update stats
+
+            // Update main stats
             stats.type.consistent = mostCommonType ? typeCount.get(mostCommonType) || 0 : 0;
             stats.type.mostCommonType = mostCommonType;
-            
+
+            // Ensure value stats are initialized if they weren't already
+             if (!stats.value) {
+                 stats.value = {
+                     total: stats.type.total, // total value count is same as type count
+                     consistent: 0,
+                     mostCommonValue: null,
+                     firstEncounteredValue: undefined,
+                     allUniqueValues: []
+                 };
+             }
+
+            stats.value.total = stats.type.total; // Update total count
             stats.value.consistent = maxValueCount;
             stats.value.mostCommonValue = mostCommonValue;
+            stats.value.firstEncounteredValue = valueDetails.firstValue;
+            stats.value.allUniqueValues = valueDetails.uniqueValues;
+
         });
     }
     
@@ -504,13 +530,6 @@ export class BulkEditor extends Modal {
         const propertyHeaderSetting = new Setting(propertyItem);
         propertyHeaderSetting.settingEl.addClass('bulk-property-item-header-setting');
 
-        // Collapse Indicator
-        const collapseToggle = propertyHeaderSetting.nameEl.createSpan({
-            cls: 'collapse-toggle',
-            text: state.expanded ? '▼' : '▶',
-            attr: { style: 'margin-right: var(--size-4-2);' }
-        });
-
         // Property Name
         propertyHeaderSetting.setName(key);
 
@@ -525,36 +544,6 @@ export class BulkEditor extends Modal {
         const descEl = propertyHeaderSetting.descEl;
         descEl.empty(); // Clear default description content
         descEl.addClass('bulk-property-stats-description'); // Add class for styling
-
-        // Helper function to add a status row
-        const addStatusRow = (label: string, value: string, isConsistent: boolean) => {
-            const row = descEl.createDiv({ cls: 'property-header-stat-row' }); // Each status on a new div/row
-            row.createSpan({ cls: 'property-header-stat-label', text: `${label}: ` });
-            row.createSpan({ cls: 'property-header-stat-value', text: value });
-            // Add icon based on consistency
-            row.createSpan({
-                cls: `property-header-stat-icon ${isConsistent ? 'is-consistent' : 'is-inconsistent'}`,
-                text: isConsistent ? '✓' : '⚠' // Use checkmark or warning
-            });
-        };
-
-        // Add status rows
-        addStatusRow(
-            'Property',
-            `${stats.property.present}/${stats.property.total}`,
-            stats.property.present === stats.property.total
-        );
-        addStatusRow(
-            'Type',
-            `${stats.type.consistent}/${stats.type.total}`,
-            stats.type.consistent === stats.type.total
-        );
-        addStatusRow(
-            'Value',
-            `${stats.value.consistent}/${stats.type.total}`,
-            stats.value.consistent === stats.type.total
-        );
-
 
         // --- Controls Area (Toggle and Drag Handle only) ---
         const controlEl = propertyHeaderSetting.controlEl;
@@ -577,6 +566,38 @@ export class BulkEditor extends Modal {
             attr: { draggable: 'true', title: `Drag to reorder ${key} property` }
         });
 
+        // Helper function to add a status row
+        const addStatusRow = (label: string, value: string, isConsistent: boolean) => {
+            const row = descEl.createDiv({ cls: 'property-header-stat-row' }); // Each status on a new div/row
+            // Add icon based on consistency
+            row.createSpan({
+                cls: `property-header-stat-icon ${isConsistent ? 'is-consistent' : 'is-inconsistent'}`,
+                text: isConsistent ? '✓' : '⚠' // Use checkmark or warning
+            });
+            row.createSpan({ cls: 'property-header-stat-label', text: `${label}: ` });
+            row.createSpan({ cls: 'property-header-stat-value', text: value });
+        };
+
+        // Add status rows
+        addStatusRow(
+            'Property',
+            `${stats.property.present}/${stats.property.total}`,
+            stats.property.present === stats.property.total
+        );
+        addStatusRow(
+            'Type',
+            `${stats.type.consistent}/${stats.type.total}`,
+            stats.type.consistent === stats.type.total
+        );
+        addStatusRow(
+            'Value',
+            `${stats.value.consistent}/${stats.type.total}`,
+            stats.value.consistent === stats.type.total
+        );
+
+        // --- Dynamic Hint Text Span ---
+        const hintSpan = descEl.createSpan({ cls: 'property-toggle-hint' });
+        hintSpan.textContent = state.expanded ? 'Toggle to hide options.' : 'Toggle to display options.';
 
         // --- Content Section ---
         const contentContainer = propertyItem.createDiv({ cls: 'property-content' });
@@ -588,84 +609,205 @@ export class BulkEditor extends Modal {
 
         // --- Event Handlers ---
         this.plugin.registerDomEvent(propertyHeaderSetting.settingEl, 'click', (e: MouseEvent) => {
-             if (controlEl.contains(e.target as Node)) { return; }
+            // Ignore clicks on controls
+            if (controlEl.contains(e.target as Node)) { return; }
+
+            // Toggle state
             state.expanded = !state.expanded;
+
+            // Find the hint span dynamically if needed, though the 'hintSpan' variable should still be in scope
+            const currentHintSpan = propertyHeaderSetting.descEl.querySelector('.property-toggle-hint'); // More robust way to find it
+
+            // Update UI
             if (state.expanded) {
                 propertyItem.classList.remove('is-collapsed');
-                collapseToggle.textContent = '▼';
                 contentContainer.style.display = '';
+                propertyHeaderSetting.settingEl.setAttribute('aria-expanded', 'true');
+                if (currentHintSpan) currentHintSpan.textContent = 'Toggle to hide options.'; // Update hint text
             } else {
                 propertyItem.classList.add('is-collapsed');
-                collapseToggle.textContent = '▶';
                 contentContainer.style.display = 'none';
+                propertyHeaderSetting.settingEl.setAttribute('aria-expanded', 'false');
+                if (currentHintSpan) currentHintSpan.textContent = 'Toggle to display options.'; // Update hint text
             }
-            propertyHeaderSetting.settingEl.setAttribute('aria-expanded', state.expanded.toString());
+            // Update the global expand/collapse button state if necessary
             this.updateExpandCollapseButtonState();
         });
 
         this.plugin.registerDomEvent(propertyHeaderSetting.settingEl, 'keydown', (e: KeyboardEvent) => {
-             if (e.key === 'Enter' || e.key === ' ') {
+            if (e.key === 'Enter' || e.key === ' ') {
+                // Prevent toggling if focus is on the actual checkbox toggle in controls
                 if (e.target instanceof HTMLElement && controlEl.contains(e.target) && e.target.closest('.checkbox-container')) { return; }
-                 if (!controlEl.contains(e.target as Node)) {
-                    e.preventDefault();
-                    propertyHeaderSetting.settingEl.click();
-                 }
+                // Allow toggling if focus is anywhere else in the header, except controls
+                if (!controlEl.contains(e.target as Node)) {
+                e.preventDefault();
+                propertyHeaderSetting.settingEl.click(); // Simulate click to trigger expansion logic
+                }
             }
         });
     }
     
     /**
-     * Creates the statistics section for a property
+     * Creates the statistics section for a property, including type and value consistency.
      */
     private createStatisticsSection(container: HTMLElement, key: string) {
         const stats = this.propertyConsistency.get(key);
-        if (!stats) return;
+        const state = this.propertiesState.get(key); // Get state for storing selection
+        if (!stats || !state) return; // Need both stats and state
 
-        // Task 4.1: Section header using Setting
+        // Section header
         new Setting(container)
             .setName('Statistics')
             .setHeading()
-            .settingEl.addClass('bulk-editor-section-heading'); // Optional class for styling
+            .settingEl.addClass('bulk-editor-section-heading');
 
-        // Type Consistency (Structure needs update in Task 5)
+        // --- Type Consistency Setting ---
         const typeConsistencySetting = new Setting(container)
-            .setName('Type Consistency');
+            .setName('Most Consistent Type');
 
-        // Set the base description first
-        typeConsistencySetting.setDesc('Consistency of the property type across files.');
+        // Determine type consistency states
+        const isTypeChaotic = stats.type.total > 1 && stats.type.consistent === 1;
+        const isTypeFullyConsistent = stats.type.total > 0 && stats.type.consistent === stats.type.total;
+        const hasTypeData = stats.type.total > 0;
 
-        // If there's a most common type, add details on new lines
-        if (stats.type.mostCommonType) {
-            const descEl = typeConsistencySetting.descEl; // Get the description element
-            descEl.createEl('br'); // Add line break after base description
-            descEl.createSpan({ text: 'Most consistent type:' }); // Add label on its own line
-            descEl.createEl('br'); // Add line break after label
-            // Add the value on its own line, potentially styled
-            descEl.createSpan({
-                 cls: 'value-display-container', // Reuse existing class if desired
-                 text: this.plugin.propertyTypeService.getPropertyTypeDisplayName(stats.type.mostCommonType)
+        // Manually build the description for Type
+        const typeDescEl = typeConsistencySetting.descEl;
+        typeDescEl.empty();
+        typeDescEl.createSpan({ text: 'The value represents the most consistent property type across the selected files.' });
+        typeDescEl.createEl('br');
+
+        if (isTypeChaotic) {
+            const warningSpan = typeDescEl.createSpan({ cls: 'type-consistency-warning' });
+            warningSpan.createSpan({ text: '⚠ ' });
+            warningSpan.appendText('No files use a type consistently');
+        } else if (hasTypeData) {
+            const statusRow = typeDescEl.createDiv({ cls: 'property-header-stat-row' });
+            const iconClass = isTypeFullyConsistent ? 'is-consistent' : 'is-inconsistent';
+            const iconText = isTypeFullyConsistent ? '✓' : '⚠';
+            statusRow.createSpan({ cls: `property-header-stat-icon ${iconClass}`, text: iconText });
+            statusRow.createSpan({ cls: 'property-header-stat-label', text: `${stats.type.consistent}/${stats.type.total} files share the most common type.` });
+        } else {
+            typeDescEl.createSpan({text: 'Property not found in any selected file.', cls: 'text-muted'});
+        }
+
+        // Add Disabled Input for Most Common Type
+        typeConsistencySetting.addText((text) => {
+            let displayValue = 'N/A';
+            if (!isTypeChaotic && stats.type.mostCommonType) {
+                 displayValue = this.plugin.propertyTypeService.getPropertyTypeDisplayName(stats.type.mostCommonType);
+            }
+            text.setValue(displayValue).setDisabled(true).setPlaceholder('N/A');
+            text.inputEl.addClass('most-consistent-type-input');
+        });
+
+
+        // --- Value Consistency Setting (Modified to Dropdown/Text) ---
+        const valueConsistencySetting = new Setting(container)
+            .setName('Property Values'); // Renamed
+
+        // Determine value consistency states
+        const isValueChaotic = stats.value.total > 1 && stats.value.consistent === 1;
+        const isValueFullyConsistent = stats.value.total > 0 && stats.value.consistent === stats.value.total;
+        const hasValueData = stats.value.total > 0;
+
+        // Manually build the description for Value
+        const valueDescEl = valueConsistencySetting.descEl;
+        valueDescEl.empty();
+        valueDescEl.createSpan({ text: 'The first value is the most common or first found.' }); // Updated text
+        valueDescEl.createEl('br');
+         valueDescEl.createSpan({ text: 'Select a value to apply consistently.' }); // Updated text
+        valueDescEl.createEl('br');
+
+        if (isValueChaotic) {
+            const warningSpan = valueDescEl.createSpan({ cls: 'value-consistency-warning' });
+            warningSpan.createSpan({ text: '⚠ ' });
+            warningSpan.appendText('No files share the same value');
+        } else if (hasValueData) {
+            const statusRow = valueDescEl.createDiv({ cls: 'property-header-stat-row' });
+            // Icon reflects consistency of the MOST COMMON value
+            const iconClass = isValueFullyConsistent ? 'is-consistent' : 'is-inconsistent';
+            const iconText = isValueFullyConsistent ? '✓' : '⚠';
+            statusRow.createSpan({ cls: `property-header-stat-icon ${iconClass}`, text: iconText });
+            statusRow.createSpan({ cls: 'property-header-stat-label', text: `${stats.value.consistent}/${stats.value.total} files share the most common value.` }); // Text reflects most common
+        }
+        // No "else" needed here, handled by the control below
+
+        // --- Add Conditional Control: Dropdown or Disabled Text ---
+        if (!hasValueData) {
+            // Property doesn't exist anywhere, show disabled N/A text
+            valueConsistencySetting.addText((text) => {
+                text.setValue("N/A")
+                    .setDisabled(true)
+                    .setPlaceholder("N/A")
+                    .inputEl.addClass('na-placeholder-input');
+            });
+        } else {
+            // Property exists, create the dropdown
+            valueConsistencySetting.addDropdown((dropdown) => {
+                dropdown.selectEl.addClass('most-consistent-value-dropdown'); // Add class for styling options
+
+                // Add a "No Override" option? Or assume selection always overrides?
+                // For now, assume selection overrides.
+                // dropdown.addOption('__NONE__', '(No Override)'); // Example
+
+                const uniqueValues = stats.value.allUniqueValues || [];
+                const valueMap = new Map<string, any>(); // Map string key back to original value
+
+                // Populate dropdown with unique values
+                uniqueValues.forEach(value => {
+                    const displayKey = JSON.stringify(value); // Use stringified value as the key
+                    const displayText = formatValuePreview(value, stats.type.mostCommonType || undefined); // Use preview for display
+                    dropdown.addOption(displayKey, displayText || String(value)); // Show stringified if preview empty
+                    valueMap.set(displayKey, value); // Store mapping
+
+                    // Find the specific <option> element just added to add tooltip
+                    const optionEl = dropdown.selectEl.options[dropdown.selectEl.options.length - 1];
+                    if (optionEl) {
+                         // Generate more detailed tooltip text (e.g., using formatInputValue or JSON)
+                         const tooltipText = formatInputValue(value); // Or JSON.stringify(value, null, 2) for more detail
+                         setTooltip(optionEl, tooltipText, { placement: 'right' });
+                    }
+                });
+
+                // Determine the default selected value based on logic
+                let defaultValue = null;
+                let defaultKey = null;
+
+                if (isValueFullyConsistent) {
+                    defaultValue = stats.value.mostCommonValue;
+                } else if (isValueChaotic) {
+                    defaultValue = stats.value.firstEncounteredValue;
+                } else { // Partially consistent
+                    defaultValue = stats.value.mostCommonValue;
+                }
+
+                // Find the key for the default value
+                defaultKey = JSON.stringify(defaultValue);
+                 // Ensure the default key actually exists as an option, otherwise fallback or select none
+                 if (valueMap.has(defaultKey)) {
+                    dropdown.setValue(defaultKey);
+                    // Initialize state
+                    state.selectedValueOverride = defaultValue;
+                 } else {
+                     // Handle cases where default couldn't be matched (e.g., only null/undefined values)
+                     // Maybe select first option or add a placeholder option?
+                     // For now, set state to null if default not found
+                     state.selectedValueOverride = null;
+                 }
+
+
+                // Store the selected value in the property state on change
+                dropdown.onChange(selectedValueKey => {
+                    if (valueMap.has(selectedValueKey)) {
+                         state.selectedValueOverride = valueMap.get(selectedValueKey);
+                    } else {
+                        state.selectedValueOverride = null; // Handle if somehow an invalid key is selected
+                    }
+                    // console.log(`Selected value override for ${key}:`, state.selectedValueOverride);
+                });
             });
         }
-
-        // Value Consistency (Structure needs update in Task 5)
-        const valueConsistencySetting = new Setting(container)
-        .setName('Value Consistency');
-        let valueDesc = 'Consistency of the property value across files.';
-        valueConsistencySetting.setDesc(valueDesc);
-        if (stats.value.consistent > 0 && stats.value.mostCommonValue !== null) {
-            valueConsistencySetting.descEl.createEl('br');
-            const statDetail = valueConsistencySetting.descEl.createSpan({ cls: 'stat-detail' });
-            statDetail.createSpan({ text: 'Most consistent value: ' });
-            const valueContainer = statDetail.createSpan({ cls: 'value-display-container' });
-            const formattedValue = formatValuePreview(stats.value.mostCommonValue, stats.type.mostCommonType || undefined);
-            if (typeof stats.value.mostCommonValue === 'string' && stats.value.mostCommonValue.includes('\n')) {
-                valueContainer.createSpan({ cls: 'multiline-value', text: stats.value.mostCommonValue });
-            } else if (Array.isArray(stats.value.mostCommonValue) && stats.value.mostCommonValue.length > 1) {
-                this.createArrayValueDisplay(valueContainer, stats.value.mostCommonValue, stats.type.mostCommonType);
-            } else {
-                valueContainer.createSpan({ text: formattedValue });
-            }
-        }
+        // --- End of Value Consistency Setting ---
     }
     
     /**
