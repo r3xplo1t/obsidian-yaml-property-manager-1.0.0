@@ -12,9 +12,9 @@ interface PropertyState {
     enabled: boolean;
     expanded: boolean;
     applyOrder: boolean;
-    changeType: string | null;
-    overrideValue: string | null; // Keep this for simple text override option
-    selectedValueOverride?: any | null; // Store dropdown selection (optional)
+    changeType: string | null; // null means use detected/no override
+    // overrideValue: string | null; // REMOVED - Merged into selectedValueOverride logic
+    selectedValueOverride?: any | null; // Stores value from new input/pill container OR selection modal
     disabledAction: 'global' | 'keep' | 'remove' | 'add_if_missing';
     excludedFiles: Set<string>;
     fileActions: Map<string, {
@@ -340,7 +340,6 @@ export class BulkEditor extends Modal {
                             expanded: this.globalSettings.expandAll,
                             applyOrder: true,
                             changeType: null,
-                            overrideValue: null,
                             disabledAction: 'global',
                             excludedFiles: new Set<string>(),
                             fileActions: new Map()
@@ -600,11 +599,212 @@ export class BulkEditor extends Modal {
         const hintSpan = descEl.createSpan({ cls: 'property-toggle-hint' });
         hintSpan.textContent = state.expanded ? 'Toggle to hide options.' : 'Toggle to display options.';
 
-        // --- Content Section ---
+        // --- Options Section ---
         const contentContainer = propertyItem.createDiv({ cls: 'property-content' });
         if (!state.expanded) { contentContainer.style.display = 'none'; }
-        this.createStatisticsSection(contentContainer, key); // Note: This function might be redundant/merged later if stats are only in header
-        this.createOptionsSection(contentContainer, key);
+
+        // Section header
+        new Setting(contentContainer)
+            .setName('Options')
+            .setHeading()
+            .settingEl.addClass('bulk-editor-section-heading');
+
+        // Action if Edit Disabled
+        new Setting(contentContainer)
+            .setName('Action if Edit Disabled')
+            .setDesc('Overrides global setting if the edit toggle above is off.')
+            .addDropdown(dropdown => {
+                dropdown
+                    .addOption('global', 'Use Global Setting (Default)')
+                    .addOption('keep', 'Keep Existing')
+                    .addOption('remove', 'Remove Property')
+                    .addOption('add_if_missing', 'Add Empty if Missing')
+                    .setValue(state.disabledAction)
+                    .onChange(value => {
+                        state.disabledAction = value as 'global' | 'keep' | 'remove' | 'add_if_missing';
+                    });
+                // Add tooltip for accessibility/clarity
+                setTooltip(dropdown.selectEl, 'Choose action for this property if its edit toggle is disabled.');
+            });
+
+        // Apply Order for This Property
+        new Setting(contentContainer)
+            .setName('Apply Order for This Property')
+            .setDesc('When enabled, the position of this property in the list will be preserved on apply.')
+            .addToggle(toggle => {
+                toggle
+                    .setValue(state.applyOrder)
+                    .setTooltip(`Toggle order preservation for ${key}`)
+                    .onChange(value => {
+                        state.applyOrder = value;
+                    });
+            });
+
+        // Property Type (Interactive Dropdown)
+        const typeSetting = new Setting(contentContainer)
+            .setName('Property Type');
+
+        const typeDescEl = typeSetting.descEl;
+        typeDescEl.empty(); // Clear default
+
+        // Determine default type
+        const defaultType = stats.type.mostCommonType; // Can be null
+
+        // Check if property exists at all to determine if a type *should* be detected
+        const propertyExistsInAnyFile = stats.property.present > 0;
+
+        if (propertyExistsInAnyFile && defaultType) {
+            // A common type exists
+            const defaultTypeDisplayName = this.plugin.propertyTypeService.getPropertyTypeDisplayName(defaultType);
+             typeDescEl.createSpan({ text: `Most common type: '${defaultTypeDisplayName}'. Select to override.`});
+
+            typeSetting.addDropdown(dropdown => {
+                dropdown.addOption("", defaultTypeDisplayName); // Value "" means no override
+
+                PROPERTY_TYPES.forEach(propType => {
+                    if (propType.value !== defaultType) {
+                        dropdown.addOption(propType.value, propType.label);
+                    }
+                });
+
+                dropdown.setValue(state.changeType || ""); // Select override or default ""
+                dropdown.onChange(value => {
+                    const newSelectedType = value === "" ? null : value;
+                    const effectiveType = newSelectedType || defaultType; // Determine the type to convert to
+    
+                    // Convert the current value to the new type
+                    const convertedValue = this.convertValueToType(state.selectedValueOverride, effectiveType);
+    
+                    // Update the state
+                    state.changeType = newSelectedType;
+                    state.selectedValueOverride = convertedValue;
+    
+                    // Update the text input display
+                    const valueInput = contentContainer.querySelector(`.bulk-value-input[data-property-key="${key}"]`) as HTMLInputElement | null;
+                    if (valueInput) {
+                        valueInput.value = formatInputValue(convertedValue);
+                    }
+    
+                    console.log(`Type for ${key} changed to effective: ${effectiveType}. Value converted and input updated.`);
+                    // Later: This is also where we'd switch between text/pill input
+                });
+                 setTooltip(dropdown.selectEl, `Detected type: ${defaultTypeDisplayName}. Select a different type to apply.`);
+            });
+        } else {
+            // No consistent type detected OR property doesn't exist in any file
+             typeDescEl.createSpan({
+                 cls: 'setting-warning-text', // Use warning class
+                 text: propertyExistsInAnyFile
+                    ? '⚠️ No consistent type detected. Please select a type.'
+                    : 'Property not found in any selected file. Select a type to add it.'
+             });
+
+            typeSetting.addDropdown(dropdown => {
+                dropdown.addOption("", "-- Select Type --"); // Placeholder
+
+                PROPERTY_TYPES.forEach(propType => {
+                    dropdown.addOption(propType.value, propType.label);
+                });
+
+                dropdown.setValue(state.changeType || ""); // Select override or placeholder ""
+                dropdown.onChange(value => {
+                    const newSelectedType = value === "" ? null : value;
+                    // Determine the actual type we are converting to
+                    const effectiveType = newSelectedType || defaultType || 'text'; // Fallback to 'text'
+    
+                    // Convert the current value to the new type
+                    const convertedValue = this.convertValueToType(state.selectedValueOverride, effectiveType);
+    
+                    // Update the state
+                    state.changeType = newSelectedType;
+                    state.selectedValueOverride = convertedValue;
+    
+                    // Find the textarea associated with this property
+                    const valueTextarea = contentContainer.querySelector(`textarea.bulk-value-textarea[data-property-key="${key}"]`) as HTMLTextAreaElement | null;
+                    if (valueTextarea) {
+                        // Update the textarea's displayed value
+                        valueTextarea.value = formatInputValue(convertedValue);
+                        // Trigger resize after changing value programmatically
+                        this.autoResizeTextarea(valueTextarea);
+                    }
+    
+                    console.log(`Type for ${key} changed to effective: ${effectiveType}. Value converted and input updated.`);
+                    // Later: This is also where we'd switch between textarea/pill input
+                });
+                 setTooltip(dropdown.selectEl, 'Select the desired property type.');
+            });
+        }
+
+
+        // --- Property Value (Textarea + Select Button Inside) ---
+        // Setting for Label/Description Only
+        const valueSetting = new Setting(contentContainer)
+             .setName('Property Value')
+             .setDesc('Enter value or select existing.');
+             // No controls added directly to the setting line itself
+
+        // Wrapper for Textarea and Button
+        const valueWrapper = contentContainer.createDiv({ cls: 'bulk-value-wrapper' });
+
+        // Determine initial value to display (same logic as before)
+         let initialDisplayValue = '';
+         // Use state value first if it was already set (e.g., by type conversion)
+         if (state.selectedValueOverride !== null && state.selectedValueOverride !== undefined) {
+            initialDisplayValue = formatInputValue(state.selectedValueOverride);
+         } else if (stats.value.consistent > 0 && stats.value.mostCommonValue !== undefined) {
+             initialDisplayValue = formatInputValue(stats.value.mostCommonValue);
+             state.selectedValueOverride = stats.value.mostCommonValue; // Ensure state reflects initial display
+         } else if (stats.value.firstEncounteredValue !== undefined) {
+             initialDisplayValue = formatInputValue(stats.value.firstEncounteredValue);
+             state.selectedValueOverride = stats.value.firstEncounteredValue; // Ensure state reflects initial display
+         }
+         // Fallback if all else fails
+          state.selectedValueOverride = state.selectedValueOverride ?? null;
+
+
+        // Create Textarea inside Wrapper
+        const textarea = valueWrapper.createEl('textarea');
+        textarea.addClasses(['bulk-value-input', 'bulk-value-textarea', 'input', 'markdown-source-view', 'mod-cm6']);
+        textarea.setAttribute('data-property-key', key);
+        textarea.placeholder = 'Enter value...';
+        textarea.value = initialDisplayValue;
+
+        // Attach input listener for auto-resize and state update
+        this.plugin.registerDomEvent(textarea, 'input', () => {
+             this.autoResizeTextarea(textarea); // Auto-resize on input
+             // Update state logic
+             const currentTargetType = state.changeType || stats.type.mostCommonType;
+             const typedValue = this.parseInputToTypedValue(textarea.value, currentTargetType);
+             state.selectedValueOverride = typedValue;
+        });
+
+        // Initial resize after setting value
+        this.autoResizeTextarea(textarea);
+
+        // Create Select Button inside Wrapper
+        const selectButton = valueWrapper.createDiv({
+            cls: 'bulk-value-select-button clickable-icon',
+            attr: { title: 'Select an existing value', role: 'button', tabindex: '0' }
+        });
+        setIcon(selectButton, 'list'); // Use list icon
+
+        // Attach placeholder click logic
+        this.plugin.registerDomEvent(selectButton, 'click', () => {
+             new Notice(`Modal for selecting existing values for "${key}" not yet implemented.`);
+             // TODO: Add ExistingValuesModal opening logic
+        });
+         // Add keydown listener for accessibility (Enter/Space to trigger click)
+         this.plugin.registerDomEvent(selectButton, 'keydown', (e: KeyboardEvent) => {
+             if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                selectButton.click();
+             }
+         });
+        // --- End Property Value ---
+
+
+        // --- Inconsistent Files Section (Keep as is for now) ---
         this.createInconsistentFilesSection(contentContainer, key);
 
 
@@ -647,247 +847,7 @@ export class BulkEditor extends Modal {
             }
         });
     }
-    
-    /**
-     * Creates the statistics section for a property, including type and value consistency.
-     */
-    private createStatisticsSection(container: HTMLElement, key: string) {
-        const stats = this.propertyConsistency.get(key);
-        const state = this.propertiesState.get(key); // Get state for storing selection
-        if (!stats || !state) return; // Need both stats and state
 
-        // Section header
-        new Setting(container)
-            .setName('Statistics')
-            .setHeading()
-            .settingEl.addClass('bulk-editor-section-heading');
-
-        // --- Type Consistency Setting ---
-        const typeConsistencySetting = new Setting(container)
-            .setName('Most Consistent Type');
-
-        // Determine type consistency states
-        const isTypeChaotic = stats.type.total > 1 && stats.type.consistent === 1;
-        const isTypeFullyConsistent = stats.type.total > 0 && stats.type.consistent === stats.type.total;
-        const hasTypeData = stats.type.total > 0;
-
-        // Manually build the description for Type
-        const typeDescEl = typeConsistencySetting.descEl;
-        typeDescEl.empty();
-        typeDescEl.createSpan({ text: 'The value represents the most consistent property type across the selected files.' });
-        typeDescEl.createEl('br');
-
-        if (isTypeChaotic) {
-            const warningSpan = typeDescEl.createSpan({ cls: 'type-consistency-warning' });
-            warningSpan.createSpan({ text: '⚠ ' });
-            warningSpan.appendText('No files use a type consistently');
-        } else if (hasTypeData) {
-            const statusRow = typeDescEl.createDiv({ cls: 'property-header-stat-row' });
-            const iconClass = isTypeFullyConsistent ? 'is-consistent' : 'is-inconsistent';
-            const iconText = isTypeFullyConsistent ? '✓' : '⚠';
-            statusRow.createSpan({ cls: `property-header-stat-icon ${iconClass}`, text: iconText });
-            statusRow.createSpan({ cls: 'property-header-stat-label', text: `${stats.type.consistent}/${stats.type.total} files share the most common type.` });
-        } else {
-            typeDescEl.createSpan({text: 'Property not found in any selected file.', cls: 'text-muted'});
-        }
-
-        // Add Disabled Input for Most Common Type
-        typeConsistencySetting.addText((text) => {
-            let displayValue = 'N/A';
-            if (!isTypeChaotic && stats.type.mostCommonType) {
-                 displayValue = this.plugin.propertyTypeService.getPropertyTypeDisplayName(stats.type.mostCommonType);
-            }
-            text.setValue(displayValue).setDisabled(true).setPlaceholder('N/A');
-            text.inputEl.addClass('most-consistent-type-input');
-        });
-
-
-        // --- Value Consistency Setting (Modified to Dropdown/Text) ---
-        const valueConsistencySetting = new Setting(container)
-            .setName('Property Values'); // Renamed
-
-        // Determine value consistency states
-        const isValueChaotic = stats.value.total > 1 && stats.value.consistent === 1;
-        const isValueFullyConsistent = stats.value.total > 0 && stats.value.consistent === stats.value.total;
-        const hasValueData = stats.value.total > 0;
-
-        // Manually build the description for Value
-        const valueDescEl = valueConsistencySetting.descEl;
-        valueDescEl.empty();
-        valueDescEl.createSpan({ text: 'The first value is the most common or first found.' }); // Updated text
-        valueDescEl.createEl('br');
-         valueDescEl.createSpan({ text: 'Select a value to apply consistently.' }); // Updated text
-        valueDescEl.createEl('br');
-
-        if (isValueChaotic) {
-            const warningSpan = valueDescEl.createSpan({ cls: 'value-consistency-warning' });
-            warningSpan.createSpan({ text: '⚠ ' });
-            warningSpan.appendText('No files share the same value');
-        } else if (hasValueData) {
-            const statusRow = valueDescEl.createDiv({ cls: 'property-header-stat-row' });
-            // Icon reflects consistency of the MOST COMMON value
-            const iconClass = isValueFullyConsistent ? 'is-consistent' : 'is-inconsistent';
-            const iconText = isValueFullyConsistent ? '✓' : '⚠';
-            statusRow.createSpan({ cls: `property-header-stat-icon ${iconClass}`, text: iconText });
-            statusRow.createSpan({ cls: 'property-header-stat-label', text: `${stats.value.consistent}/${stats.value.total} files share the most common value.` }); // Text reflects most common
-        }
-        // No "else" needed here, handled by the control below
-
-        // --- Add Conditional Control: Dropdown or Disabled Text ---
-        if (!hasValueData) {
-            // Property doesn't exist anywhere, show disabled N/A text
-            valueConsistencySetting.addText((text) => {
-                text.setValue("N/A")
-                    .setDisabled(true)
-                    .setPlaceholder("N/A")
-                    .inputEl.addClass('na-placeholder-input');
-            });
-        } else {
-            // Property exists, create the dropdown
-            valueConsistencySetting.addDropdown((dropdown) => {
-                dropdown.selectEl.addClass('most-consistent-value-dropdown'); // Add class for styling options
-
-                // Add a "No Override" option? Or assume selection always overrides?
-                // For now, assume selection overrides.
-                // dropdown.addOption('__NONE__', '(No Override)'); // Example
-
-                const uniqueValues = stats.value.allUniqueValues || [];
-                const valueMap = new Map<string, any>(); // Map string key back to original value
-
-                // Populate dropdown with unique values
-                uniqueValues.forEach(value => {
-                    const displayKey = JSON.stringify(value); // Use stringified value as the key
-                    const displayText = formatValuePreview(value, stats.type.mostCommonType || undefined); // Use preview for display
-                    dropdown.addOption(displayKey, displayText || String(value)); // Show stringified if preview empty
-                    valueMap.set(displayKey, value); // Store mapping
-
-                    // Find the specific <option> element just added to add tooltip
-                    const optionEl = dropdown.selectEl.options[dropdown.selectEl.options.length - 1];
-                    if (optionEl) {
-                         // Generate more detailed tooltip text (e.g., using formatInputValue or JSON)
-                         const tooltipText = formatInputValue(value); // Or JSON.stringify(value, null, 2) for more detail
-                         setTooltip(optionEl, tooltipText, { placement: 'right' });
-                    }
-                });
-
-                // Determine the default selected value based on logic
-                let defaultValue = null;
-                let defaultKey = null;
-
-                if (isValueFullyConsistent) {
-                    defaultValue = stats.value.mostCommonValue;
-                } else if (isValueChaotic) {
-                    defaultValue = stats.value.firstEncounteredValue;
-                } else { // Partially consistent
-                    defaultValue = stats.value.mostCommonValue;
-                }
-
-                // Find the key for the default value
-                defaultKey = JSON.stringify(defaultValue);
-                 // Ensure the default key actually exists as an option, otherwise fallback or select none
-                 if (valueMap.has(defaultKey)) {
-                    dropdown.setValue(defaultKey);
-                    // Initialize state
-                    state.selectedValueOverride = defaultValue;
-                 } else {
-                     // Handle cases where default couldn't be matched (e.g., only null/undefined values)
-                     // Maybe select first option or add a placeholder option?
-                     // For now, set state to null if default not found
-                     state.selectedValueOverride = null;
-                 }
-
-
-                // Store the selected value in the property state on change
-                dropdown.onChange(selectedValueKey => {
-                    if (valueMap.has(selectedValueKey)) {
-                         state.selectedValueOverride = valueMap.get(selectedValueKey);
-                    } else {
-                        state.selectedValueOverride = null; // Handle if somehow an invalid key is selected
-                    }
-                    // console.log(`Selected value override for ${key}:`, state.selectedValueOverride);
-                });
-            });
-        }
-        // --- End of Value Consistency Setting ---
-    }
-    
-    /**
-     * Creates the options section for a property
-     */
-    private createOptionsSection(container: HTMLElement, key: string) {
-        const state = this.propertiesState.get(key);
-        const stats = this.propertyConsistency.get(key);
-        if (!state || !stats) return;
-        
-        // Section header
-        new Setting(container)
-            .setName('Options')
-            .setHeading()
-            .settingEl.addClass('bulk-editor-section-heading');
-        
-        // Change Property Type
-        new Setting(container)
-            .setName('Change Property Type')
-            .setDesc('Select a new type to apply to this property across all files.')
-            .addDropdown(dropdown => {
-                dropdown
-                    .addOption('', '(Keep Current)')
-                    .addOptions(PROPERTY_TYPES.reduce((options, type) => {
-                        options[type.value] = type.label;
-                        return options;
-                    }, {} as Record<string, string>))
-                    .setValue(state.changeType || '')
-                    .onChange(value => {
-                        state.changeType = value || null;
-                    });
-                return dropdown;
-            });
-            
-        // Action if Edit Disabled
-        new Setting(container)
-            .setName('Action if Edit Disabled')
-            .setDesc('Overrides global setting if the edit toggle above is off.')
-            .addDropdown(dropdown => {
-                dropdown
-                    .addOption('global', 'Use Global Setting (Default)')
-                    .addOption('keep', 'Keep Existing')
-                    .addOption('remove', 'Remove Property')
-                    .addOption('add_if_missing', 'Add Empty if Missing')
-                    .setValue(state.disabledAction)
-                    .onChange(value => {
-                        state.disabledAction = value as 'global' | 'keep' | 'remove' | 'add_if_missing';
-                    });
-                return dropdown;
-            });
-            
-        // Override/Add Value
-        new Setting(container)
-            .setName('Override/Add Value')
-            .setDesc('Enter a value to set for this property in all selected files. Adds the property if missing.')
-            .addText(text => {
-                text
-                    .setPlaceholder('Enter value (comma-sep for lists)...')
-                    .setValue(state.overrideValue || '')
-                    .onChange(value => {
-                        state.overrideValue = value || null;
-                    });
-                return text;
-            });
-            
-        // Apply Order for This Property
-        new Setting(container)
-            .setName('Apply Order for This Property')
-            .setDesc('When enabled, the position of this property in the list will be preserved on apply.')
-            .addToggle(toggle => {
-                toggle
-                    .setValue(state.applyOrder)
-                    .onChange(value => {
-                        state.applyOrder = value;
-                    });
-                return toggle;
-            });
-    }
-    
     /**
      * Creates the inconsistent files section for a property
      */
@@ -1784,29 +1744,17 @@ export class BulkEditor extends Modal {
         }
         
         // Apply value override if requested
-        if (state.overrideValue && (fileActions.value || state.overrideValue !== null)) {
-            // Parse the override value based on the type
-            const stats = this.propertyConsistency.get(key);
-            const targetType = state.changeType || 
-                (stats ? stats.type.mostCommonType : null) || 
-                'text';
-                
-            if (targetType === 'list') {
-                // Parse as comma-separated list
-                newValue = state.overrideValue.split(',').map(s => s.trim());
-            } else if (targetType === 'number') {
-                // Parse as number
-                newValue = Number(state.overrideValue);
-                if (isNaN(newValue)) {
-                    newValue = 0; // Default for invalid number
-                }
-            } else if (targetType === 'checkbox') {
-                // Parse as boolean
-                newValue = state.overrideValue.toLowerCase() === 'true';
-            } else {
-                // Use as text
-                newValue = state.overrideValue;
-            }
+        // Apply value override if selectedValueOverride has a value (and fileActions allow it, or it's globally enabled)
+        // Note: state.selectedValueOverride will be populated by the new input mechanism later.
+        // For now, this check will likely be false unless manually set for testing.
+        if (state.selectedValueOverride !== null && state.selectedValueOverride !== undefined && fileActions.value) {
+            newValue = state.selectedValueOverride;
+            // We might need type conversion here later based on state.changeType or detected type
+        } else if (state.selectedValueOverride !== null && state.selectedValueOverride !== undefined && state.enabled && !fileActions.value) {
+            // If globally enabled but not specifically enabled for this file's value action,
+            // we still apply the override if one is set globally via selectedValueOverride.
+            // This assumes selectedValueOverride represents the intended override value.
+            newValue = state.selectedValueOverride;
         }
         
         return newValue;
@@ -1849,36 +1797,129 @@ export class BulkEditor extends Modal {
         }
         
         // Determine the value to add
-        if (state.overrideValue && fileActions.value) {
-            // Use the override value
-            const targetType = state.changeType || getDefaultTypeForKey(key);
-            
-            if (targetType === 'list') {
-                // Parse as comma-separated list
-                return state.overrideValue.split(',').map(s => s.trim());
-            } else if (targetType === 'number') {
-                // Parse as number
-                const num = Number(state.overrideValue);
-                return isNaN(num) ? 0 : num;
-            } else if (targetType === 'checkbox') {
-                // Parse as boolean
-                return state.overrideValue.toLowerCase() === 'true';
-            } else {
-                // Use as text
-                return state.overrideValue;
-            }
+        // Check if an override value is set via the new mechanism and fileActions allow it
+        if (state.selectedValueOverride !== null && state.selectedValueOverride !== undefined && fileActions.value) {
+            // Use the selected override value
+            // Note: We might need type conversion here later based on state.changeType or detected type
+            return state.selectedValueOverride;
+        } else if (state.selectedValueOverride !== null && state.selectedValueOverride !== undefined && state.enabled && !fileActions.value) {
+                // Apply global override if enabled, even if not specifically for this file
+                return state.selectedValueOverride;
         } else {
+            // No specific override set or file action disabled, use default logic:
             // Use the most common value if available
             const stats = this.propertyConsistency.get(key);
-            if (stats && stats.value.mostCommonValue !== null) {
-                return stats.value.mostCommonValue;
+            if (stats && stats.value.mostCommonValue !== null && stats.value.mostCommonValue !== undefined) {
+                    return stats.value.mostCommonValue;
             } else {
-                // Otherwise use empty value for the type
-                const propertyType = state?.changeType || 
-                    (stats?.type.mostCommonType ? stats.type.mostCommonType : getDefaultTypeForKey(key));
+                // Otherwise use empty value for the determined type
+                const propertyType = state.changeType || // Use selected override type first
+                    (stats?.type.mostCommonType) || // Then use most common detected type
+                    getDefaultTypeForKey(key); // Fallback to guessing based on key
                 return getEmptyValueForType(propertyType);
             }
         }
+    }
+
+    /**
+     * Attempts to parse a string input into a typed value based on the target type.
+     */
+    private parseInputToTypedValue(rawString: string, targetType: string | null): any {
+        const trimmedString = rawString.trim();
+
+        switch (targetType) {
+            case 'number':
+                if (trimmedString === '') return null; // Allow clearing number field
+                const num = parseFloat(trimmedString);
+                return isNaN(num) ? rawString : num; // Keep raw string if not a valid number
+            case 'checkbox':
+                if (trimmedString.toLowerCase() === 'true') return true;
+                if (trimmedString.toLowerCase() === 'false') return false;
+                // Allow clearing checkbox field? Return null or keep raw string? Let's default to null.
+                if (trimmedString === '') return null;
+                return rawString; // Keep raw string if not true/false
+            case 'date':
+            case 'datetime':
+                // Basic validation - check if it resembles a date/datetime
+                // For now, just return the string, more robust parsing can be added
+                if (trimmedString === '') return null; // Allow clearing
+                return trimmedString; // Keep as string for now
+            case 'list':
+                // For text input mode (before pill implementation), treat as comma-separated
+                if (trimmedString === '') return []; // Empty array
+                return trimmedString.split(',').map((s: string) => s.trim()).filter(s => s !== '');
+            case 'text':
+            default:
+                return rawString; // Return the raw string for text or unknown types
+        }
+    }
+
+    /**
+     * Attempts to convert an existing value to a new target type.
+     */
+    private convertValueToType(currentValue: any, newTargetType: string | null): any {
+        // Simple conversion logic, can be expanded
+        if (currentValue === null || currentValue === undefined) {
+            return getEmptyValueForType(newTargetType || 'text');
+        }
+
+        const currentType = typeof currentValue;
+
+        switch (newTargetType) {
+            case 'number':
+                const num = parseFloat(String(currentValue));
+                return isNaN(num) ? 0 : num; // Default to 0 if conversion fails
+            case 'checkbox':
+                // Be lenient with truthy/falsy conversion
+                if (typeof currentValue === 'string') {
+                    return currentValue.toLowerCase() === 'true' || currentValue === '1';
+                }
+                return Boolean(currentValue);
+            case 'date':
+            case 'datetime':
+                // Attempt to keep the format if it looks like one, otherwise stringify
+                const dateStr = String(currentValue);
+                // Basic check - could use moment.js for robust validation later
+                if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+                    return dateStr;
+                }
+                return formatInputValue(currentValue); // Fallback to general input format
+            case 'list':
+                if (Array.isArray(currentValue)) return currentValue;
+                if (typeof currentValue === 'string' && currentValue.includes(',')) {
+                    return currentValue.split(',').map((s: string) => s.trim()).filter(s => s !== '');
+                }
+                // Wrap non-list value in an array
+                return [currentValue];
+            case 'text':
+            default:
+                if (Array.isArray(currentValue)) return currentValue.join(', '); // Convert array to comma-separated string
+                return String(currentValue);
+        }
+    }
+    
+    /**
+     * Automatically adjusts the height of a textarea to fit its content.
+     */
+    private autoResizeTextarea(textarea: HTMLTextAreaElement): void {
+        textarea.style.height = 'auto'; // Reset height to recalculate based on content
+        // Calculate min height (e.g., based on 1 line of text)
+        const style = window.getComputedStyle(textarea);
+        const paddingTop = parseFloat(style.paddingTop);
+        const paddingBottom = parseFloat(style.paddingBottom);
+        const lineHeight = parseFloat(style.lineHeight);
+        const minHeight = lineHeight + paddingTop + paddingBottom; // Approximately 1 line height + padding
+
+        textarea.style.height = Math.max(minHeight, textarea.scrollHeight) + 'px';
+        // Optional: Limit max height and show scrollbar if needed
+        // const maxHeight = 200; // Example max height in pixels
+        // if (textarea.scrollHeight > maxHeight) {
+        //     textarea.style.height = maxHeight + 'px';
+        //     textarea.style.overflowY = 'auto';
+        // } else {
+        //     textarea.style.overflowY = 'hidden';
+        // }
+        textarea.style.overflowY = 'hidden'; // Keep hidden for now unless max height is implemented
     }
 
     onClose() {

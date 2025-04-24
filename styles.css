@@ -724,6 +724,81 @@ margin-right: var(--size-4-2);
 font-weight: bold;
 }
 
+/* --- Bulk Editor Value Input Styles --- */
+
+/* Wrapper for textarea and internal button */
+.bulk-value-wrapper {
+  position: relative;
+  margin-top: var(--size-4-1);
+  margin-bottom: var(--size-4-2);
+}
+
+.bulk-value-wrapper textarea.bulk-value-textarea.input {
+  width: 100%;
+  box-sizing: border-box;
+  resize: none;
+  overflow-y: hidden;
+  font-size: var(--metadata-input-font-size);
+  line-height: var(--line-height-normal);
+  padding: var(--size-4-1) var(--size-4-2);
+  min-height: fit-content;
+  border: var(--input-border-width) solid var(--background-modifier-border);
+  border-radius: var(--input-radius);
+  background-color: var(--input-background);
+  color: var(--text-normal);
+  font-family: inherit;
+  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
+}
+
+/* MORE SPECIFIC selector for the focus state */
+.bulk-value-wrapper textarea.bulk-value-textarea.input:focus {
+  border: var(--input-border-width) solid var(--background-modifier-border);
+  outline: none;
+}
+
+/* Style the button positioned inside (selector remains the same) */
+.bulk-value-select-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 2px;
+  border-radius: var(--radius-s);
+  cursor: pointer;
+  color: var(--icon-color);
+  opacity: 0.6;
+  transition: background-color 0.2s ease;
+  -webkit-transition: opacity 0.2s ease, background-color 0.2s ease;
+  -moz-transition: opacity 0.2s ease, background-color 0.2s ease;
+  -ms-transition: opacity 0.2s ease, background-color 0.2s ease;
+  -o-transition: opacity 0.2s ease, background-color 0.2s ease;
+}
+
+.bulk-value-select-button svg {
+   width: var(--icon-s);
+   height: var(--icon-s);
+   stroke-width: var(--icon-stroke-width);
+}
+
+.bulk-value-select-button:hover,
+.bulk-value-select-button:focus-visible /* Show clearly on focus */
+ {
+  opacity: 1;
+  background-color: var(--background-modifier-hover);
+}
+
+.bulk-value-select-button:focus-visible {
+     outline: 2px solid var(--interactive-accent);
+     outline-offset: 1px;
+}
+.bulk-value-select-button:focus:not(:focus-visible) {
+    outline: none;
+}
+
 /* --- Bulk Editor Type Consistency Warning Style --- */
 
 .type-consistency-warning {
