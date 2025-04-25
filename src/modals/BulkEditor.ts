@@ -821,161 +821,414 @@ export class BulkEditor extends Modal {
 
     /**
      * Updates the input control for the property value based on the selected type.
-     * Uses direct component instantiation instead of Setting wrappers.
+     * Uses a unified container with all possible input types.
      */
     private updateValueControl(
         valueControlContainer: HTMLElement,
         key: string,
         selectedType: string | null
-    ) {
+        ): void {
         const state = this.propertiesState.get(key);
         const stats = this.propertyConsistency.get(key);
         if (!state || !stats) return;
 
-        valueControlContainer.empty(); // Clear previous control
-
         const mostCommonTypeValue = stats.type.mostCommonType;
         const actualType = selectedType || mostCommonTypeValue || 'text';
+        
+        // Check if the container is already created
+        const existingContainer = valueControlContainer.querySelector('.unified-value-container');
+        
+        if (!existingContainer) {
+            // First time - create the container with all inputs
+            this.createUnifiedValueContainer(valueControlContainer, key, actualType);
+        } else {
+            // Container exists - just update visibility
+            this.updateInputVisibility(existingContainer as HTMLElement, actualType, key);
+        }
+    }
+
+    /**
+     * Creates a unified value container with all possible input types
+     * Shows/hides inputs based on the current property type
+     */
+    private createUnifiedValueContainer(
+        container: HTMLElement,
+        key: string,
+        initialType: string | null
+        ): HTMLElement {
+        const state = this.propertiesState.get(key);
+        const stats = this.propertyConsistency.get(key);
+        if (!state || !stats) return container;
+
+        const mostCommonTypeValue = stats.type.mostCommonType;
+        const actualType = initialType || mostCommonTypeValue || 'text';
         const hasValueData = stats.value.total > 0;
 
+        // Create the unified container
+        const valueContainer = container.createDiv({
+            cls: 'unified-value-container'
+        });
+        
         // Determine initial value
-        let initialValueForControl: any = '';
-        let controlValueSource: 'override' | 'detected' | 'none' = 'none';
+        let initialValue: any = '';
         if (state.overrideValue !== null && state.overrideValue !== undefined) {
-            initialValueForControl = state.overrideValue;
-            controlValueSource = 'override';
+            initialValue = state.overrideValue;
         } else if (hasValueData) {
-            initialValueForControl = stats.value.mostCommonValue ?? stats.value.firstEncounteredValue;
-            controlValueSource = 'detected';
+            initialValue = stats.value.mostCommonValue ?? stats.value.firstEncounteredValue;
         }
 
-        // --- Validation Feedback Helper ---
-        const handleValidation = (inputEl: HTMLInputElement | HTMLTextAreaElement, isValid: boolean, message: string = "Invalid format") => {
-            inputEl.toggleClass('is-invalid', !isValid);
-            // Find or create error message element within the container
-            let errorEl = valueControlContainer.querySelector('.validation-error-message') as HTMLElement;
-            if (!isValid) {
-                if (!errorEl) {
-                    errorEl = valueControlContainer.createDiv({ cls: 'validation-error-message' });
-                }
-                errorEl.setText(message);
-            } else {
-                if (errorEl) {
-                    errorEl.remove();
-                }
+        // 1. Create Text input (single line)
+        const textContainer = valueContainer.createDiv({
+            cls: 'input-container text-input-container'
+        });
+        const textComponent = new TextComponent(textContainer);
+        textComponent.inputEl.addClass('property-value-text');
+        textComponent.setPlaceholder('Enter text value...');
+        textComponent.setValue(typeof initialValue === 'string' ? initialValue : formatInputValue(initialValue));
+        textComponent.onChange(value => {
+            state.overrideValue = value || null;
+        });
+
+        // 2. Create Multiline Text input with proper line break handling
+        const multilineContainer = valueContainer.createDiv({
+            cls: 'input-container multiline-input-container'
+        });
+
+        // Create textarea directly instead of using the component
+        const multilineTextarea = multilineContainer.createEl('textarea', {
+            cls: 'property-value-multitext',
+            attr: {
+                placeholder: 'Enter text value...',
+                rows: '4'
             }
+        });
+
+        // Ensure we properly format multiline text value
+        let multilineValue = '';
+        if (typeof initialValue === 'string') {
+            multilineValue = initialValue;
+        } else if (initialValue !== null && initialValue !== undefined) {
+            multilineValue = formatInputValue(initialValue);
+        }
+
+        // Set value directly to preserve line breaks
+        multilineTextarea.value = multilineValue;
+
+        // Add change handler
+        this.plugin.registerDomEvent(multilineTextarea, 'input', () => {
+            state.overrideValue = multilineTextarea.value || null;
+        });
+
+        // Setup expand/collapse behavior
+        multilineTextarea.style.maxHeight = '100px';
+        multilineTextarea.style.overflowY = 'auto';
+
+        this.plugin.registerDomEvent(multilineTextarea, 'focus', () => {
+            multilineTextarea.style.maxHeight = '300px';
+        });
+
+        this.plugin.registerDomEvent(multilineTextarea, 'blur', () => {
+            multilineTextarea.style.maxHeight = '100px';
+        });
+        
+        // 3. Create Number input
+        const numberContainer = valueContainer.createDiv({
+            cls: 'input-container number-input-container'
+        });
+        const numberComponent = new TextComponent(numberContainer);
+        numberComponent.inputEl.addClass('property-value-number');
+        numberComponent.setPlaceholder('Enter number...');
+        
+        let initialNumberValue = '';
+        if (typeof initialValue === 'number') {
+            initialNumberValue = String(initialValue);
+        } else if (typeof initialValue === 'string' && !isNaN(Number(initialValue))) {
+            initialNumberValue = initialValue;
+        } else if (initialValue !== null && initialValue !== undefined) {
+            initialNumberValue = formatInputValue(initialValue);
+        }
+        
+        numberComponent.setValue(initialNumberValue);
+        
+        // Create validation message element
+        const numberValidationMsg = numberContainer.createDiv({
+            cls: 'validation-error-message is-hidden'
+        });
+        
+        // Add validation handler
+        const validateNumber = (value: string): boolean => {
+            const isValid = value === '' || !isNaN(Number(value.trim()));
+            numberComponent.inputEl.toggleClass('is-invalid', !isValid);
+            
+            if (!isValid) {
+                numberValidationMsg.setText('Must be a number');
+                numberValidationMsg.removeClass('is-hidden');
+            } else {
+                numberValidationMsg.addClass('is-hidden');
+            }
+            
+            return isValid;
         };
-        // --- End Validation Helper ---
-
-        // --- Create Control Directly ---
-        switch (actualType) {
-            case 'checkbox':
-                const toggleComponent = new ToggleComponent(valueControlContainer);
-                let isChecked = false;
-                if (controlValueSource === 'override' && typeof initialValueForControl === 'boolean') {
-                    isChecked = initialValueForControl;
-                } else if (controlValueSource !== 'none') {
-                    isChecked = typeof initialValueForControl === 'boolean' ? initialValueForControl : String(formatInputValue(initialValueForControl)).toLowerCase() === 'true';
-                }
-                toggleComponent
-                    .setValue(isChecked)
-                    .onChange(value => {
-                        state.overrideValue = value; // Store boolean
-                    });
-                // Add class for specific styling if needed
-                toggleComponent.toggleEl.addClass('property-value-checkbox');
-                break;
-
-            case 'number':
-                const numberComponent = new TextComponent(valueControlContainer);
-                let initialNumberString = '';
-                if (controlValueSource === 'override') {
-                    initialNumberString = (initialValueForControl === null || initialValueForControl === undefined) ? '' : String(initialValueForControl);
-                } else if (controlValueSource === 'detected') {
-                    initialNumberString = formatInputValue(initialValueForControl);
-                }
-                const validateNumber = (currentValue: string): boolean => {
-                    const isValid = currentValue === '' || !isNaN(Number(currentValue.trim()));
-                    handleValidation(numberComponent.inputEl, isValid, "Must be a number");
-                    return isValid;
-                };
-                numberComponent
-                    .setPlaceholder('Enter number...')
-                    .setValue(initialNumberString)
-                    .onChange(value => {
-                        const isValid = validateNumber(value);
-                        if (isValid && value.trim() !== '') { state.overrideValue = Number(value.trim());}
-                        else if (value.trim() === '') { state.overrideValue = null; }
-                        else { state.overrideValue = value; } // Store invalid string
-                    });
-                numberComponent.inputEl.addClass('property-value-number');
-                validateNumber(initialNumberString);
-                break;
-
-            case 'date':
-            case 'datetime':
-                const isDateOnly = actualType === 'date';
-                const placeholder = isDateOnly ? 'YYYY-MM-DD' : 'YYYY-MM-DD HH:mm';
-                const format = isDateOnly ? 'YYYY-MM-DD' : 'YYYY-MM-DD HH:mm';
-                const pattern = isDateOnly ? /^\d{4}-\d{2}-\d{2}$/ : /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/;
-                const dateComponent = new TextComponent(valueControlContainer);
-                let initialDateString = '';
-                if (controlValueSource === 'override') {
-                    initialDateString = (initialValueForControl === null || initialValueForControl === undefined) ? '' : String(initialValueForControl);
-                } else if (controlValueSource === 'detected') {
-                    initialDateString = formatInputValue(initialValueForControl);
-                }
-                const validateDate = (currentValue: string): boolean => {
-                    const isValid = currentValue === '' || pattern.test(currentValue);
-                    handleValidation(dateComponent.inputEl, isValid, `Use format: ${placeholder}`);
-                    return isValid;
-                };
-                dateComponent
-                    .setPlaceholder(placeholder)
-                    .setValue(initialDateString)
-                    .onChange(value => {
-                        validateDate(value);
-                        state.overrideValue = value || null;
-                    });
-                dateComponent.inputEl.addClass('property-value-date');
-                validateDate(initialDateString);
-                break;
-
-            case 'list':
-                // --- Placeholder for Custom List Component ---
-                const listPlaceholder = valueControlContainer.createDiv({
-                    cls: 'list-input-placeholder',
-                    text: 'List/Pill input component implementation pending...'
+        
+        numberComponent.onChange(value => {
+            const isValid = validateNumber(value);
+            if (isValid && value.trim() !== '') {
+                state.overrideValue = Number(value.trim());
+            } else if (value.trim() === '') {
+                state.overrideValue = null;
+            } else {
+                state.overrideValue = value; // Store invalid input as string
+            }
+        });
+        
+        // 4. Create Checkbox input
+        const checkboxContainer = valueContainer.createDiv({
+            cls: 'input-container checkbox-input-container'
+        });
+        const checkboxComponent = new ToggleComponent(checkboxContainer);
+        checkboxComponent.toggleEl.addClass('property-value-checkbox');
+        
+        let isChecked = false;
+        if (typeof initialValue === 'boolean') {
+            isChecked = initialValue;
+        } else if (typeof initialValue === 'string') {
+            isChecked = initialValue.toLowerCase() === 'true';
+        }
+        
+        checkboxComponent.setValue(isChecked);
+        checkboxComponent.onChange(value => {
+            state.overrideValue = value;
+        });
+        
+        // 5. Create Date input
+        const dateContainer = valueContainer.createDiv({
+            cls: 'input-container date-input-container'
+        });
+        const dateComponent = new TextComponent(dateContainer);
+        dateComponent.inputEl.addClass('property-value-date');
+        dateComponent.setPlaceholder('YYYY-MM-DD');
+        
+        let initialDateValue = '';
+        if (typeof initialValue === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(initialValue)) {
+            initialDateValue = initialValue;
+        } else if (initialValue !== null && initialValue !== undefined) {
+            const formattedValue = formatInputValue(initialValue);
+            if (/^\d{4}-\d{2}-\d{2}$/.test(formattedValue)) {
+                initialDateValue = formattedValue;
+            }
+        }
+        
+        dateComponent.setValue(initialDateValue);
+        
+        // Create validation message element
+        const dateValidationMsg = dateContainer.createDiv({
+            cls: 'validation-error-message is-hidden'
+        });
+        
+        // Add validation handler
+        const validateDate = (value: string): boolean => {
+            const isValid = value === '' || /^\d{4}-\d{2}-\d{2}$/.test(value);
+            dateComponent.inputEl.toggleClass('is-invalid', !isValid);
+            
+            if (!isValid) {
+                dateValidationMsg.setText('Use format: YYYY-MM-DD');
+                dateValidationMsg.removeClass('is-hidden');
+            } else {
+                dateValidationMsg.addClass('is-hidden');
+            }
+            
+            return isValid;
+        };
+        
+        dateComponent.onChange(value => {
+            validateDate(value);
+            state.overrideValue = value || null;
+        });
+        
+        // 6. Create DateTime input
+        const datetimeContainer = valueContainer.createDiv({
+            cls: 'input-container datetime-input-container'
+        });
+        const datetimeComponent = new TextComponent(datetimeContainer);
+        datetimeComponent.inputEl.addClass('property-value-datetime');
+        datetimeComponent.setPlaceholder('YYYY-MM-DD HH:MM');
+        
+        let initialDatetimeValue = '';
+        if (typeof initialValue === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(initialValue)) {
+            initialDatetimeValue = initialValue;
+        } else if (initialValue !== null && initialValue !== undefined) {
+            const formattedValue = formatInputValue(initialValue);
+            if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(formattedValue)) {
+                initialDatetimeValue = formattedValue;
+            }
+        }
+        
+        datetimeComponent.setValue(initialDatetimeValue);
+        
+        // Create validation message element
+        const datetimeValidationMsg = datetimeContainer.createDiv({
+            cls: 'validation-error-message is-hidden'
+        });
+        
+        // Add validation handler
+        const validateDatetime = (value: string): boolean => {
+            const isValid = value === '' || /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(value);
+            datetimeComponent.inputEl.toggleClass('is-invalid', !isValid);
+            
+            if (!isValid) {
+                datetimeValidationMsg.setText('Use format: YYYY-MM-DD HH:MM');
+                datetimeValidationMsg.removeClass('is-hidden');
+            } else {
+                datetimeValidationMsg.addClass('is-hidden');
+            }
+            
+            return isValid;
+        };
+        
+        datetimeComponent.onChange(value => {
+            validateDatetime(value);
+            state.overrideValue = value || null;
+        });
+        
+        // 7. Create List input (pill-based UI)
+        const listContainer = valueContainer.createDiv({
+            cls: 'input-container list-input-container'
+        });
+        
+        // Create the pill container
+        const pillContainer = listContainer.createDiv({
+            cls: 'pill-container'
+        });
+        
+        // Create the input field for new items
+        const listInputWrapper = listContainer.createDiv({
+            cls: 'list-input-wrapper'
+        });
+        
+        const listInputEl = listInputWrapper.createEl('input', {
+            cls: 'list-input',
+            attr: {
+                type: 'text',
+                placeholder: 'Add item (press Enter)'
+            }
+        });
+        
+        // Parse initial list items
+        let listItems: string[] = [];
+        if (Array.isArray(initialValue)) {
+            listItems = initialValue.map(item => typeof item === 'string' ? item : String(item));
+        } else if (typeof initialValue === 'string' && initialValue) {
+            listItems = initialValue.split(',').map(item => item.trim());
+        }
+        
+        // Keep track of list items
+        const updateListItems = (items: string[]) => {
+            // Update state
+            state.overrideValue = items.length ? items : null;
+            
+            // Update UI
+            pillContainer.empty();
+            
+            // Create pills for each item
+            items.forEach((item, index) => {
+                const pill = pillContainer.createDiv({
+                    cls: 'pill-item'
                 });
-                // Add basic display of current value for now
-                const initialListString = formatInputValue(initialValueForControl);
-                if (initialListString) {
-                    listPlaceholder.createEl('pre', { text: initialListString });
-                }
-                // TODO: Replace this placeholder div with the actual custom component build
-                break;
+                
+                // Text span to prevent overflow and allow for proper styling
+                pill.createSpan({
+                    cls: 'pill-text',
+                    text: item
+                });
+                
+                // Add remove button
+                const removeBtn = pill.createSpan({
+                    cls: 'pill-remove',
+                    text: '×'
+                });
+                
+                // Add click handler to remove button
+                this.plugin.registerDomEvent(removeBtn, 'click', (e) => {
+                    e.stopPropagation();
+                    const newItems = [...items];
+                    newItems.splice(index, 1);
+                    updateListItems(newItems);
+                });
+            });
+        };
+        
+        // Initial render of pills
+        updateListItems(listItems);
+        
+        // Handle Enter key to add new items
+        this.plugin.registerDomEvent(listInputEl, 'keydown', (e: KeyboardEvent) => {
+            if (e.key === 'Enter' && listInputEl.value.trim()) {
+                e.preventDefault();
+                const newItems = [...listItems, listInputEl.value.trim()];
+                listItems = newItems;
+                updateListItems(newItems);
+                listInputEl.value = '';
+            }
+        });
+        
+        // Show only the input for the current type
+        this.updateInputVisibility(valueContainer, actualType, key);
+        
+        return valueContainer;
+    }
 
+    /**
+     * Shows the appropriate input container based on the property type
+     */
+    private updateInputVisibility(container: HTMLElement, type: string, key: string) {
+        // Hide all input containers
+        container.querySelectorAll('.input-container').forEach(el => {
+            el.addClass('is-hidden');
+        });
+        
+        // Show the appropriate container
+        switch (type) {
+            case 'checkbox':
+                container.querySelector('.checkbox-input-container')?.removeClass('is-hidden');
+                break;
+            case 'number':
+                container.querySelector('.number-input-container')?.removeClass('is-hidden');
+                break;
+            case 'date':
+                container.querySelector('.date-input-container')?.removeClass('is-hidden');
+                break;
+            case 'datetime':
+                container.querySelector('.datetime-input-container')?.removeClass('is-hidden');
+                break;
+            case 'list':
+                container.querySelector('.list-input-container')?.removeClass('is-hidden');
+                break;
+            case 'multitext':
+                container.querySelector('.multiline-input-container')?.removeClass('is-hidden');
+                break;
             case 'text':
             default:
-                const textComponent = new TextAreaComponent(valueControlContainer);
-                let initialTextString = '';
-                if (controlValueSource === 'override') {
-                    initialTextString = (initialValueForControl === null || initialValueForControl === undefined) ? '' : String(initialValueForControl);
-                } else if (controlValueSource === 'detected') {
-                    initialTextString = formatInputValue(initialValueForControl);
+                // Check if the content appears to be multiline
+                const state = this.propertiesState.get(key);
+                let value = state?.overrideValue;
+                
+                // If no override value, try to get from stats
+                if (value === null || value === undefined) {
+                    const stats = this.propertyConsistency.get(key);
+                    if (stats && stats.value.total > 0) {
+                        value = stats.value.mostCommonValue ?? stats.value.firstEncounteredValue;
+                    }
                 }
-                textComponent
-                    .setPlaceholder('Enter text value...')
-                    .setValue(initialTextString)
-                    .onChange(value => {
-                        state.overrideValue = value || null;
-                    });
-                textComponent.inputEl.rows = 3;
-                textComponent.inputEl.addClass('property-value-override-textarea');
-                textComponent.inputEl.addClass('property-value-text'); // Add specific type class
+                
+                // Check if the content contains newlines or is explicitly marked as multitext
+                if (typeof value === 'string' && (value.includes('\n') || value === 'multitext')) {
+                    container.querySelector('.multiline-input-container')?.removeClass('is-hidden');
+                } else {
+                    container.querySelector('.text-input-container')?.removeClass('is-hidden');
+                }
                 break;
         }
-    } // End of updateValueControl
+    }
     
     /**
      * Creates the inconsistent files section for a property
