@@ -2,27 +2,53 @@
    YAML Property Manager - Plugin Styles
    =================================================== */
 
-/* == General / Shared Utilities == */
+/* ======================
+   1. GENERAL UTILITIES
+   ====================== */
 
-/* Basic keyframe animation (potentially used for loading indicators) */
+/* --- 1.1 Animations --- */
+
+/* Loading rotation animation */
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
 
-/* Utility class to hide elements (confirm usage in TS/HTML) */
-/* .is-hidden { */
-/* display: none !important; */
-/* } */
+/* Fade in up animation (used in browser modal) */
+@keyframes fade-in-up {
+  0% { opacity: 0; transform: translateY(10px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
 
-/* == Modal Styles == */
+/* Fade in down animation (used by array expansion) */
+@keyframes fade-in-down {
+  from { opacity: 0; transform: translateY(-5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
-/* General container for bottom buttons in modals */
+/* --- 1.2 Global Utility Classes --- */
+
+/* Utility to hide elements */
+.is-hidden {
+  display: none !important;
+}
+
+/* Animation for removing nodes */
+.is-removing {
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* =====================
+   2. MODAL STYLES
+   ===================== */
+
+/* Standard button container for modal footers */
 .modal > .modal-button-container {
   display: flex;
-  /* CHANGE THIS LINE back to flex-end */
-  justify-content: flex-end; /* Pushes buttons right */
-  /* Keep other properties like align-items, gap, padding etc. as they were */
+  justify-content: flex-end;
   align-items: center;
   gap: var(--size-4-2);
   padding: var(--size-4-3) var(--size-4-5);
@@ -30,12 +56,16 @@
   margin-top: var(--size-4-4);
 }
 
-/* == Tree View Component Styles (Used by Settings Tab & Browser Modal) == */
-/* Styles for hierarchical tree structures used in Settings and Browser */
+/* =========================
+   3. TREE VIEW COMPONENTS
+   ========================= */
+/* Used in Settings Tab and Browser Modal */
+
+/* --- 3.1 Tree Containers --- */
 
 /* Base container for tree structures */
-.file-tree-container, /* Used in Browser Modal */
-.nav-folder-container /* Used in Settings Tab */ {
+.file-tree-container,
+.nav-folder-container {
   margin: var(--size-4-2) 0;
   max-height: 400px;
   overflow-y: auto;
@@ -44,6 +74,8 @@
   padding: var(--size-4-2);
 }
 
+/* --- 3.2 Tree Items --- */
+
 /* Individual tree item wrapper */
 .tree-item {
   position: relative;
@@ -51,7 +83,7 @@
   flex-direction: column;
 }
 
-/* The visible, interactive part of a tree item (row) */
+/* The visible, interactive part of a tree item */
 .tree-item-self {
   display: flex;
   align-items: center;
@@ -60,30 +92,52 @@
   border-radius: var(--radius-s);
   color: var(--nav-item-color);
   line-height: var(--line-height-tight);
-  cursor: var(--cursor); /* Original cursor value */
+  cursor: var(--cursor);
   font-size: var(--nav-item-size);
 }
 
-/* Collapse icon container */
+/* Hover state for tree items */
+.tree-item-self:hover {
+  background-color: var(--nav-item-background-hover);
+  color: var(--nav-item-color-hover);
+}
+
+/* --- 3.3 Tree Item Components --- */
+
+/* Text content container */
+.tree-item-inner {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Container for icons/buttons on the right */
+.tree-item-flair-outer {
+  display: flex;
+  align-items: center;
+  margin-inline-start: var(--size-4-2);
+}
+
+/* Container for collapse icon */
 .tree-item-icon.collapse-icon {
-  /* Container for the collapse icon (triangle) */
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
-/* The SVG triangle icon itself */
+/* Triangle collapse icon */
 .tree-item-icon.collapse-icon svg.svg-icon {
   color: var(--nav-collapse-icon-color);
   stroke-width: var(--icon-s-stroke-width);
-  width: var(--size-4-3); /* Original size variable */
+  width: var(--size-4-3);
   height: var(--size-4-3);
   transition: transform 100ms ease-in-out;
 }
 
-/* Rotation for the collapsed state */
+/* Rotation for collapsed state */
 .tree-item-icon.collapse-icon.is-collapsed svg.svg-icon {
-  /* Applying rotation using multiple browser prefixes for compatibility */
   transform: rotate(calc(var(--direction, 1) * -1 * 90deg));
   -webkit-transform: rotate(calc(var(--direction, 1) * -1 * 90deg));
   -moz-transform: rotate(calc(var(--direction, 1) * -1 * 90deg));
@@ -91,462 +145,456 @@
   -o-transform: rotate(calc(var(--direction, 1) * -1 * 90deg));
 }
 
-/* Hover state for the item row */
-.tree-item-self:hover {
-  background-color: var(--nav-item-background-hover);
-  color: var(--nav-item-color-hover);
-}
-
-/* Text content container within the row */
-.tree-item-inner {
-  flex: 1; /* Allow text to take available space */
-  min-width: 0; /* Prevent overflow issues */
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Container for icons/buttons on the far right (e.g., delete in settings) */
-.tree-item-flair-outer {
-  display: flex;
-  align-items: center;
-  margin-inline-start: var(--size-4-2); /* Space before the flair */
-}
+/* --- 3.4 Tree Children --- */
 
 /* Container for child items */
 .tree-item-children {
-  padding-inline-start: var(--size-4-3); /* Indentation space */
-  border-inline-start: 1px solid var(--nav-indentation-guide-color); /* Vertical guide line */
-  /* Note: Alignment might depend on parent padding/margins */
+  padding-inline-start: var(--size-4-3);
+  border-inline-start: 1px solid var(--nav-indentation-guide-color);
 }
 
-/* Specific padding for nested folder items (adjusts indentation) */
-/* This selector relies on specific Obsidian classes */
+/* Nested folder items indentation */
 .tree-item-children .nav-folder > .tree-item-self.mod-collapsible {
-  padding-inline-start: var(--size-4-6); /* Increased padding for nesting */
+  padding-inline-start: var(--size-4-6);
 }
 
-/* Animation for removing nodes in the Settings Tab tree */
-.is-removing {
-  opacity: 0;
-  transform: translateY(-4px);
-  pointer-events: none;
-  transition: opacity 0.2s ease, transform 0.2s ease;
-}
+/* --- 3.5 Empty States --- */
 
-/* Message shown in empty tree containers */
+/* Message for empty tree containers */
 .nav-empty-state {
-    padding: var(--size-4-4);
-    text-align: center;
-    color: var(--text-muted);
+  padding: var(--size-4-4);
+  text-align: center;
+  color: var(--text-muted);
 }
 
 .nav-empty-state-text {
-    font-size: var(--font-ui-small);
+  font-size: var(--font-ui-small);
 }
 
-/* Center the 'No templates configured' message text */
+/* Centered empty message text */
 #template-paths-container .setting-item-description {
   width: 100%;
-  padding: 0; /* Remove specific padding added previously */
-  /* You might need to adjust line-height if it looks off without padding */
-  /* line-height: var(--line-height-normal); */
+  padding: 0;
 }
 
-/* Remove default padding/border ONLY from the setting-item holding the empty message */
-/* This targets a .setting-item that is a DIRECT child of the container */
+/* Remove padding/border from empty message setting item */
 #template-paths-container > .setting-item {
-  padding: 0 !important; /* Override default theme padding */
-  margin: 0 !important; /* Override default theme margin */
-  border: none !important; /* Remove default border if present */
-  /* Add some margin just to the description itself if needed after removing item padding */
-  /* For example: */
-  /* margin-block-start: var(--size-4-2); */
-  /* margin-block-end: var(--size-4-2); */
+  padding: 0 !important;
+  margin: 0 !important;
+  border: none !important;
 }
 
-/* Style for the static warning text within setting descriptions */
-.setting-warning-text {
-  display: block; /* Put the warning on its own line */
-  color: var(--text-error); /* Use standard error/warning text color */
-  font-size: var(--font-ui-smaller); /* Make it slightly smaller */
-  margin-top: var(--size-4-1); /* Add a small space above the warning */
-  /* If inside .setting-item-description, padding might be inherited, adjust if needed */
-  /* padding-left: 0; */
-}
+/* ===========================
+   4. BROWSER MODAL STYLES
+   =========================== */
 
-/* == Browser Modal Specific Styles == */
-/* Styles unique to the file/folder browser */
+/* --- 4.1 Selection Counter --- */
 
-/* Selection counter display */
+/* Base counter display */
 .selection-counter {
   display: flex;
   align-items: center;
   width: 100%;
   padding: var(--size-4-2) var(--size-4-3);
-  background-color: var(--background-primary); /* Original background */
+  background-color: var(--background-primary);
   border-radius: var(--radius-s);
-  box-shadow: var(--input-shadow); /* Original shadow */
+  box-shadow: var(--input-shadow);
   margin-bottom: var(--size-4-2);
   transition: background-color 0.3s ease, box-shadow 0.3s ease;
 }
 
+/* When items are selected */
 .selection-counter.has-selection {
-  background-color: rgba(var(--interactive-accent-rgb), 0.05); /* Original subtle accent background */
+  background-color: rgba(var(--interactive-accent-rgb), 0.05);
 }
 
+/* Counter text styles */
 .selection-text {
   font-size: var(--font-ui-small);
   color: var(--text-faint);
   transition: color 0.3s ease;
-  /* Including original vendor prefixes for transition */
   -webkit-transition: color 0.3s ease;
   -moz-transition: color 0.3s ease;
   -ms-transition: color 0.3s ease;
   -o-transition: color 0.3s ease;
 }
 
+/* Text when items are selected */
 .has-selection .selection-text {
-    color: var(--text-muted);
-    font-size: var(--font-ui-smaller); /* Original size change on selection */
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
 }
 
-/* Visual indication for selected items in the browser tree */
+/* --- 4.2 Item Selection Indicators --- */
+
+/* Visual indication for selected items */
 .is-selected > .tree-item-self {
-    background-color: rgba(var(--interactive-accent-rgb), 0.1); /* Original selection color */
-    transition: background-color 0.2s ease;
+  background-color: rgba(var(--interactive-accent-rgb), 0.1);
+  transition: background-color 0.2s ease;
 }
 
+/* Hover on selected items */
 .is-selected > .tree-item-self:hover {
-    background-color: rgba(var(--interactive-accent-rgb), 0.15); /* Original slightly darker hover */
+  background-color: rgba(var(--interactive-accent-rgb), 0.15);
 }
 
-/* Indication for items that were selected when the modal opened */
+/* Items that were selected when modal opened */
 .initially-selected > .tree-item-self {
-    color: var(--text-accent); /* Original style */
+  color: var(--text-accent);
 }
 
-/* Indication for folders with some, but not all, children selected */
+/* Folders with some, but not all, children selected */
 .is-partially-selected > .tree-item-self {
-    color: var(--text-accent); /* Original style for partial selection */
-    /* Note: No distinct background was previously defined */
+  color: var(--text-accent);
 }
 
-/* Container for the checkbox in the browser modal tree */
+/* --- 4.3 Checkboxes --- */
+
+/* Checkbox container */
 .tree-item-checkbox-container {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 24px; /* Original fixed width */
-  height: 100%; /* Take full height of the row */
-  margin-inline-start: auto; /* Push to the right */
+  width: 24px;
+  height: 100%;
+  margin-inline-start: auto;
 }
 
-/* Checkbox element itself */
+/* Checkbox element */
 .tree-item-checkbox {
-  margin: 0; /* Remove default input margins */
+  margin: 0;
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
-/* Highly specific selectors for the indeterminate checkbox state */
-.tree-item-checkbox:indeterminate,input[type="checkbox"][data-indeterminate="true"].tree-item-checkbox {
-  background-color: var(--checkbox-color) !important; /* Use !important to override competing styles */
+/* Hover state for checkboxes */
+.tree-item-checkbox:hover {
+  border-color: var(--checkbox-border-color-hover);
+}
+
+/* Focus state for checkboxes */
+.tree-item-checkbox:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.3);
+}
+
+/* Indeterminate checkbox state */
+.tree-item-checkbox:indeterminate,
+input[type="checkbox"][data-indeterminate="true"].tree-item-checkbox {
+  background-color: var(--checkbox-color) !important;
   border-color: var(--checkbox-color) !important;
   position: relative;
 }
 
-/* Multiple very specific selectors to ensure our styles win the specificity battle */
-.tree-item-checkbox:indeterminate::after, input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkbox::after {
-  /* Styling for the dash inside the indeterminate checkbox */
+/* Indeterminate checkbox dash */
+.tree-item-checkbox:indeterminate::after,
+input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkbox::after {
   content: "" !important;
   position: absolute !important;
   width: 8px !important;
   height: 1.5px !important;
-  background-color: var(--checkbox-marker-color) !important; /* Force our color variable */
+  background-color: var(--checkbox-marker-color) !important;
   left: 0 !important; 
   right: 0 !important; 
   top: 0 !important; 
-  bottom: 0 !important; /* Center the dash */
+  bottom: 0 !important;
   margin: auto !important;
-  /* Anti-aliasing helpers */
   will-change: transform !important;
   transform: translateZ(0) !important;
   -webkit-font-smoothing: antialiased !important;
   -moz-osx-font-smoothing: grayscale !important;
 }
 
-/* Hover state for the checkbox */
-.tree-item-checkbox:hover {
-  border-color: var(--checkbox-border-color-hover); /* Standard hover */
-}
+/* =================================
+   5. TEMPLATE APPLICATION STYLES
+   ================================= */
 
-/* Focus state for the checkbox */
-.tree-item-checkbox:focus {
-  outline: none; /* Default outline removed, relying on focus-visible */
-  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.3); /* Original focus shadow */
-}
+/* --- 5.1 Property Display --- */
 
-/* Animation used in browser modal (ensure this class is used in TS if needed) */
-@keyframes fade-in-up {
-    0% { opacity: 0; transform: translateY(10px); }
-    100% { opacity: 1; transform: translateY(0); }
-}
-
-
-/* == Template Application Modal Styles == */
-/* Styles for displaying properties in the template application modal */
-
-/* Line showing the property type */
+/* Line showing property type */
 .property-type-line {
-  display: block; /* Ensure it takes its own line */
+  display: block;
   color: var(--text-muted);
   font-size: var(--font-ui-smaller);
-  margin-bottom: var(--size-4-1); /* Space below Type line */
+  margin-bottom: var(--size-4-1);
 }
 
-/* Line showing the property value */
+/* Line showing property value */
 .property-value-line {
-  display: block; /* Ensure it takes its own line */
+  display: block;
 }
 
-/* Container for the interactive array parts (expand/collapse link) */
+/* --- 5.2 Array Properties --- */
+
+/* Container for array parts */
 .array-property-container {
-  display: inline-block; /* Keep inline with "Value: " prefix */
+  display: inline-block;
 }
 
-/* Styling for the expand/collapse link for arrays */
-.array-property-toggle-link { /* Base styles for the whole link container */
+/* Toggle link for arrays */
+.array-property-toggle-link {
   cursor: pointer;
-  color: var(--interactive-accent); /* Original accent color */
+  color: var(--interactive-accent);
   font-size: var(--font-ui-smaller);
   margin-left: var(--size-4-1);
   border-radius: var(--radius-s);
   transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.array-property-toggle-link:hover { /* Hover styles for the whole container */
-  color: var(--interactive-accent-hover); /* Original hover color */
+/* Hover state for toggle link */
+.array-property-toggle-link:hover {
+  color: var(--interactive-accent-hover);
   background-color: var(--background-modifier-hover);
 }
 
-/* Apply underline ONLY to the inner text span on container hover */
+/* Underline target on hover */
 .array-property-toggle-link:hover .underline-target {
   text-decoration: underline;
 }
 
-/* Container for the expanded list of array items */
+/* Expanded array container */
 .array-property-expanded-container {
-  display: block; /* Takes full width, appears below Type/Value */
-  margin-top: var(--size-4-1); /* Space above */
+  display: block;
+  margin-top: var(--size-4-1);
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
-  /* Animation applied dynamically */
   animation: fade-in-down 0.2s ease-out;
 }
 
-/* Utility class to hide elements (used for expand/collapse) */
-.is-hidden {
-  display: none !important;
-}
+/* --- 5.3 Clickable Links --- */
 
-/* Styling for clickable links within property values */
-/* Note: .property-value-link was the original class name */
+/* Clickable link styling */
 .property-value-link,
-.clickable-link-item { /* Including both for potential usage */
-  color: var(--text-accent); /* Standard link color */
-  cursor: pointer;          /* Indicate interactivity */
-  position: relative;       /* For positioning the icon */
-  display: inline-flex;     /* For better layout with icon */
-  align-items: center;      /* Center items vertically */
+.clickable-link-item {
+  color: var(--text-accent);
+  cursor: pointer;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
   border-radius: var(--radius-s);
 }
 
+/* Hover state for links */
 .property-value-link:hover,
 .clickable-link-item:hover {
-  color: var(--text-accent-hover); /* Hover color */
-  text-decoration: underline;      /* Underline on hover */
-  background-color: var(--background-modifier-hover); /* Original background on hover */
+  color: var(--text-accent-hover);
+  text-decoration: underline;
+  background-color: var(--background-modifier-hover);
 }
 
-/* Focus state for clickable links */
+/* Focus state for links */
 .property-value-link:focus-visible,
 .clickable-link-item:focus-visible {
-  outline: 2px solid var(--text-accent); /* Original outline */
-  outline-offset: 2px; /* Original offset */
+  outline: 2px solid var(--text-accent);
+  outline-offset: 2px;
 }
 
-/* Optional icon next to property value links (if used in TS) */
+/* Icon in property links */
 .property-link-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.8em; /* Original size */
+  font-size: 0.8em;
   color: var(--text-accent);
-  opacity: 0.8; /* Original opacity */
+  opacity: 0.8;
 }
 
+/* Hover state for link icons */
 .property-value-link:hover .property-link-icon,
 .clickable-link-item:hover .property-link-icon {
   opacity: 1;
 }
 
-/* Style for plain text values (non-links) */
+/* Plain text values */
 .property-value-text {
-  color: var(--text-normal); /* Default text color */
+  color: var(--text-normal);
 }
 
-/* Styling for individual items within an expanded array view */
+/* Link items in expanded arrays */
 .array-property-expanded-container .property-value-link,
 .array-property-expanded-container .clickable-link-item {
-  padding: 1px 2px; /* Original padding */
+  padding: 1px 2px;
   border-radius: var(--radius-s);
 }
 
-/* Keyframe animation used by array expansion */
-@keyframes fade-in-down {
-  from { opacity: 0; transform: translateY(-5px); }
-  to { opacity: 1; transform: translateY(0); }
+/* --- 5.4 Array Value Display --- */
+
+.array-property-collapsed-view, 
+.array-property-expanded-container {
+  display: inline;
 }
 
+.array-property-expanded-container {
+  word-break: break-word;
+  white-space: normal;
+}
 
-/* == Template Suggest Modal Styles == */
-/* Styles for the fuzzy suggestion modal used for template selection */
+.array-property-toggle-link {
+  margin-left: 5px;
+  color: #4a88e0;
+  cursor: pointer;
+  font-size: 0.9em;
+  white-space: nowrap;
+}
 
-/* FIX: Align icon and text horizontally for the special trigger item */
+.array-property-toggle-link .underline-target {
+  text-decoration: underline;
+}
+
+.array-property-toggle-link:hover {
+  color: #3a6eb0;
+}
+
+/* Multiline text display */
+.multiline-value {
+  white-space: pre-wrap;
+  display: block;
+  margin-top: 4px;
+  margin-left: 0;
+  font-family: monospace;
+  background-color: #f9f9f9;
+  padding: 5px;
+  border: 1px solid #eee;
+  border-radius: 3px;
+}
+
+/* ==============================
+   6. TEMPLATE SUGGEST STYLES
+   ============================== */
+
+/* Align icon and text for special trigger item */
 .template-suggestion-trigger .suggestion-content {
-  display: flex;        /* Arrange icon and text horizontally */
-  align-items: center;  /* Vertically center them */
-  gap: var(--size-4-2); /* Add standard small gap */
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-2);
 }
 
-/* Style the icon within the trigger item */
+/* Icon styling in trigger item */
 .template-suggestion-trigger .suggestion-icon svg {
-  /* Assuming standard Obsidian icon classes are used */
-  width: var(--icon-m); /* Standard icon size */
+  width: var(--icon-m);
   height: var(--icon-m);
   color: var(--icon-color);
 }
 
-/* Style the text within the trigger item */
+/* Text styling in trigger item */
 .template-suggestion-trigger .suggestion-title.is-trigger {
-  /* Specific styles for the trigger text if needed */
   color: var(--text-muted);
 }
 
+/* ==============================
+   7. ACCESSIBILITY & THEMING
+   ============================== */
 
-/* == Accessibility & Theming == */
-/* Styles related to focus, high contrast, and reduced motion */
+/* --- 7.1 Focus Indicators --- */
 
-/* Consistent focus indicator for keyboard navigation */
-/* Consolidating original rules for focus visibility */
+/* Consistent keyboard focus indicators */
 .tree-item-self:focus-visible,
 .clickable-icon:focus-visible,
-.property-value-link:focus-visible, /* Added from template app styles */
-.clickable-link-item:focus-visible, /* Added from template app styles */
-.tree-item-checkbox:focus-visible /* Added from browser modal styles */ {
+.property-value-link:focus-visible,
+.clickable-link-item:focus-visible,
+.tree-item-checkbox:focus-visible {
   outline: 2px solid var(--interactive-accent);
-  outline-offset: -2px; /* Kept original offset */
-  border-radius: var(--radius-s); /* Common radius */
+  outline-offset: -2px;
+  border-radius: var(--radius-s);
 }
 
-/* Enhanced visual feedback for focus (original rule) */
-.tree-item-self:focus-visible {
-  background-color: var(--background-modifier-hover);
-}
-
+/* Enhanced visual feedback for focus */
+.tree-item-self:focus-visible,
 .clickable-icon:focus-visible {
   background-color: var(--background-modifier-hover);
 }
 
-/* Hide default outline when focus is not triggered by keyboard */
+/* Hide default outline for non-keyboard focus */
 .tree-item-self:focus:not(:focus-visible),
 .clickable-icon:focus:not(:focus-visible),
-.property-value-link:focus:not(:focus-visible), /* Added */
-.clickable-link-item:focus:not(:focus-visible), /* Added */
-.tree-item-checkbox:focus:not(:focus-visible) /* Added */ {
+.property-value-link:focus:not(:focus-visible),
+.clickable-link-item:focus:not(:focus-visible),
+.tree-item-checkbox:focus:not(:focus-visible) {
   outline: none;
-  box-shadow: none; /* Remove original focus shadow if not keyboard */
+  box-shadow: none;
 }
 
+/* --- 7.2 High Contrast Mode --- */
 
-/* High contrast mode adjustments */
 @media (prefers-contrast: more) {
-  /* Make focus outline thicker in high contrast */
+  /* Thicker focus outlines */
   .tree-item-self:focus-visible,
   .clickable-icon:focus-visible,
-  .property-value-link:focus-visible, /* Added */
-  .clickable-link-item:focus-visible, /* Added */
-  .tree-item-checkbox:focus-visible /* Added */ {
+  .property-value-link:focus-visible,
+  .clickable-link-item:focus-visible,
+  .tree-item-checkbox:focus-visible {
     outline-width: 3px;
-    outline-offset: -3px; /* Kept original offset */
+    outline-offset: -3px;
   }
 
-  /* Make tree icons bolder */
+  /* Bolder tree icons */
   .tree-item-icon.collapse-icon svg.svg-icon {
     stroke-width: 3px;
   }
 
-  /* Make tree guide line thicker */
+  /* Thicker tree guide lines */
   .tree-item-children {
     border-inline-start-width: 2px;
   }
 }
 
-/* Respect user preference for reduced motion */
+/* --- 7.3 Reduced Motion --- */
+
 @media (prefers-reduced-motion: reduce) {
   /* Disable transitions and animations */
   .tree-item-self,
-  .is-selected > .tree-item-self, /* Added from browser styles */
+  .is-selected > .tree-item-self,
   .tree-item-icon.collapse-icon svg.svg-icon,
   .is-removing,
   .array-property-expanded-container,
-  .selection-counter, /* Added from browser styles */
-  .selection-text, /* Added from browser styles */
-  .clickable-link-item, /* Added from template app styles */
-  .property-value-link, /* Added from template app styles */
-  .collapse-icon /* Added from browser styles */ {
+  .selection-counter,
+  .selection-text,
+  .clickable-link-item,
+  .property-value-link,
+  .collapse-icon {
     transition: none !important;
     animation: none !important;
   }
 }
 
-/* -----------------
-   Bulk Editor Styles
-   ----------------- */
+/* ==============================
+   8. BULK EDITOR STYLES
+   ============================== */
 
-/* --- Properties List Styles --- */
+/* --- 8.1 Properties List Container --- */
+
 .properties-list-container {
-  border: 1px solid var(--background-modifier-border); /* Use theme variable */
-  border-radius: var(--radius-m); /* Use theme variable */
-  background-color: var(--background-secondary); /* Use theme variable (or primary if preferred) */
-  padding: var(--size-4-2); /* Use theme variable */
-  margin-bottom: var(--size-4-4); /* Use theme variable */
-  /* Add scrolling and height limits directly here */
-  min-height: 100px; /* Keep min-height */
-  max-height: 450px; /* Keep max-height */
-  overflow-y: auto; /* Add scrolling */
-  /* Add flex column to stack items and button */
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  background-color: var(--background-secondary);
+  padding: var(--size-4-2);
+  margin-bottom: var(--size-4-4);
+  min-height: 100px;
+  max-height: 450px;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
 }
 
-/* Style for loading/error message inside the container */
+/* Loading/error message container */
 .property-loading-container {
   padding: var(--size-4-4);
   text-align: center;
   color: var(--text-muted);
   font-style: italic;
-  /* Ensure it takes space while loading */
   min-height: 50px;
   display: flex;
   align-items: center;
   justify-content: center;
 }
+
 .property-loading-container.property-error {
   color: var(--text-error);
   font-style: normal;
 }
 
+/* --- 8.2 Property Item Header --- */
+
+/* Header setting item styling */
 .bulk-property-item-header-setting {
   padding-inline-start: var(--size-4-4);
   padding-inline-end: var(--size-4-4);
@@ -554,7 +602,7 @@
   padding-bottom: var(--size-4-2) !important;
 }
 
-/* Make the header setting item sticky within its scroll container */
+/* Sticky header */
 .properties-list-container .bulk-property-item-header-setting.setting-item {
   position: sticky;
   top: calc(-1 * var(--size-4-2));
@@ -566,37 +614,37 @@
   padding-bottom: var(--size-4-1);
 }
 
-/* Remove bottom border radius when the property item is expanded */
+/* Remove bottom radius when expanded */
 .properties-list-container .bulk-property-item:not(.is-collapsed) .bulk-property-item-header-setting.setting-item {
   border-bottom-left-radius: 0;
   border-bottom-right-radius: 0;
 }
 
-/* --- Header Hint Text Style --- */
+/* --- 8.3 Property Toggle Hint --- */
+
 .property-toggle-hint {
-  display: block; /* Ensures it takes its own line */
-  color: var(--interactive-accent); /* Standard muted color for hints */
-  font-size: var(--font-ui-smaller); /* Smaller font size */
-  /* Adjust margin-top for clear spacing below the stats rows */
-  margin-top: var(--size-4-2); /* Increased margin for clearer separation */
-  /* margin-bottom: var(--size-4-1); */ /* Optional: Add space below if needed */
-  cursor: default; /* Ensure no pointer cursor */
-  line-height: var(--line-height-tight); /* Use a tight line height */
-  padding: 0; /* Ensure no extra padding */
+  display: block;
+  color: var(--interactive-accent);
+  font-size: var(--font-ui-smaller);
+  margin-top: var(--size-4-2);
+  cursor: default;
+  line-height: var(--line-height-tight);
+  padding: 0;
 }
 
-/* Underline hint text when the main header setting item is hovered */
+/* Underline hint text on hover */
 .bulk-property-item-header-setting.setting-item:hover .property-toggle-hint {
   text-decoration: underline;
   cursor: pointer;
 }
 
-/* Change cursor to pointer on hover for the clickable header area */
+/* Clickable header cursor */
 .bulk-property-item-header-setting.setting-item {
   cursor: pointer;
 }
 
-/* Individual Property Item Styles */
+/* --- 8.4 Property Item Styles --- */
+
 .bulk-property-item {
   border: 1px solid #ccc;
   background-color: #fff;
@@ -608,6 +656,7 @@
   -o-border-radius: var(--radius-m);
 }
 
+/* Drag states */
 .bulk-property-item.dragging {
   opacity: 0.5;
   background-color: #e0e0e0;
@@ -617,7 +666,8 @@
   border-top: 2px solid #4a88e0;
 }
 
-/* Property Item Header Styles */
+/* --- 8.5 Property Header --- */
+
 .property-header {
   display: flex;
   align-items: center;
@@ -633,15 +683,14 @@
   z-index: 2;
 }
 
+/* Header stat row */
 .property-header-stat-row {
-  display: flex;         /* Arrange icon, label, value horizontally */
-  align-items: center;   /* Vertically align items */
-  gap: var(--size-4-1);  /* Add a small gap between items (adjust as needed) */
-  /* Optionally, adjust line height or margin if needed */
-  /* line-height: var(--line-height-tight); */
-  /* margin-bottom: var(--size-4-0); */ /* Tiny space between rows */
+  display: flex;
+  align-items: center;
+  gap: var(--size-4-1);
 }
 
+/* Property name */
 .property-name {
   font-weight: bold;
   flex-grow: 1;
@@ -651,6 +700,7 @@
   text-overflow: ellipsis;
 }
 
+/* Drag handle */
 .drag-handle {
   font-size: 1.2em;
   color: #aaa;
@@ -660,14 +710,97 @@
   flex-shrink: 0;
 }
 
-/* Property Item Content Area Styles */
+/* --- 8.6 Property Content --- */
+
 .property-content {
   padding: 10px 15px;
   transition: max-height 0.2s ease-out;
   overflow: hidden;
 }
 
-/* --- General Toggle Switch Style --- */
+/* --- 8.7 Property Value Input Layout --- */
+
+/* Container BELOW the static "Property Value" info */
+.dynamic-value-input-container {
+  margin-top: var(--size-4-2); /* Space above the input area */
+  margin-left: var(--size-4-4); /* Indent to align with setting descriptions */
+  margin-right: 0;
+  margin-bottom: var(--size-4-2); /* Space below input area */
+  position: relative; /* Needed for absolute positioning of error message */
+  padding-bottom: 1.5em; /* Reserve space for potential error message */
+}
+
+/* Style the raw input components */
+.dynamic-value-input-container input[type="text"],
+.dynamic-value-input-container textarea {
+    width: 100%;
+    /* Add standard input styling using variables */
+    background-color: var(--input-background);
+    border: 1px solid var(--input-border);
+    padding: var(--size-2-2) var(--size-4-2);
+    border-radius: var(--input-radius);
+    font-size: var(--font-ui-small); /* Or appropriate size */
+    line-height: var(--line-height-normal);
+    color: var(--text-normal);
+}
+.dynamic-value-input-container input[type="text"]:focus,
+.dynamic-value-input-container textarea:focus {
+    border-color: var(--input-border-focus);
+    box-shadow: 0 0 0 1px var(--input-border-focus);
+    outline: none;
+}
+
+/* Specific class for text area */
+.property-value-override-textarea {
+     resize: vertical;
+}
+
+/* Specific class for toggle */
+.dynamic-value-input-container .property-value-checkbox {
+   vertical-align: middle; /* Align toggle nicely if needed */
+}
+
+/* Style the static value display setting item */
+.property-value-display-setting.setting-item {
+     border-bottom: none !important;
+     padding-bottom: 0 !important;
+     margin-bottom: 0 !important;
+}
+
+/* --- Validation Styling --- */
+.dynamic-value-input-container input.is-invalid,
+.dynamic-value-input-container textarea.is-invalid {
+    border-color: var(--text-error) !important; /* Use !important cautiously */
+    box-shadow: 0 0 0 1px var(--text-error); /* Add focus-like ring */
+}
+
+.validation-error-message {
+    position: absolute;
+    bottom: 0; /* Position at bottom of reserved space */
+    left: 0;
+    font-size: var(--font-ui-smaller);
+    color: var(--text-error);
+    padding-top: var(--size-4-1);
+}
+
+/* Placeholder for list input */
+.list-input-placeholder {
+    font-style: italic;
+    color: var(--text-muted);
+    padding: var(--size-4-2);
+    border: 1px dashed var(--background-modifier-border);
+    border-radius: var(--radius-m);
+}
+ .list-input-placeholder pre {
+     margin-top: var(--size-4-1);
+     font-family: var(--font-monospace);
+     font-size: var(--font-ui-smaller);
+     white-space: pre-wrap;
+     word-break: break-all;
+ }
+
+/* --- 8.8 Toggle Switch Styles --- */
+
 .setting-toggle, .edit-enable-toggle {
   appearance: none;
   width: 32px;
@@ -693,18 +826,15 @@
   transition: transform 0.2s ease-in-out;
 }
 
-/* Style for the Add button (ensure it has some top margin) */
+/* --- 8.9 Add Property Button --- */
+
 .add-property-list-item {
-  /* ... (keep existing styles for background, border, cursor etc.) ... */
-  background-color: var(--background-modifier-hover); /* Example using theme variable */
+  background-color: var(--background-modifier-hover);
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-s);
   color: var(--text-muted);
-  /* Add margin to separate from the list items */
   margin-top: var(--size-4-2);
-  /* Ensure it doesn't stretch if container is flex */
   flex-shrink: 0;
-  /* Keep other styles like padding, text-align, font-weight, etc. */
   display: flex;
   align-items: center;
   padding: 8px 10px;
@@ -714,145 +844,56 @@
   font-weight: bold;
   justify-content: center;
 }
+
 .add-property-list-item:hover {
-background-color: var(--background-modifier-hover-darker); /* Adjust theme variable if needed */
-border-color: var(--background-modifier-border-hover);
-color: var(--text-normal);
-}
-.add-property-list-item span {
-margin-right: var(--size-4-2);
-font-weight: bold;
-}
-
-/* --- Bulk Editor Value Input Styles --- */
-
-/* Wrapper for textarea and internal button */
-.bulk-value-wrapper {
-  position: relative;
-  margin-top: var(--size-4-1);
-  margin-bottom: var(--size-4-2);
-}
-
-.bulk-value-wrapper textarea.bulk-value-textarea.input {
-  width: 100%;
-  box-sizing: border-box;
-  resize: none;
-  overflow-y: hidden;
-  font-size: var(--metadata-input-font-size);
-  line-height: var(--line-height-normal);
-  padding: var(--size-4-1) var(--size-4-2);
-  min-height: fit-content;
-  border: var(--input-border-width) solid var(--background-modifier-border);
-  border-radius: var(--input-radius);
-  background-color: var(--input-background);
+  background-color: var(--background-modifier-hover-darker);
+  border-color: var(--background-modifier-border-hover);
   color: var(--text-normal);
-  font-family: inherit;
-  transition: border-color 0.15s ease-in-out, box-shadow 0.15s ease-in-out;
 }
 
-/* MORE SPECIFIC selector for the focus state */
-.bulk-value-wrapper textarea.bulk-value-textarea.input:focus {
-  border: var(--input-border-width) solid var(--background-modifier-border);
-  outline: none;
+.add-property-list-item span {
+  margin-right: var(--size-4-2);
+  font-weight: bold;
 }
 
-/* Style the button positioned inside (selector remains the same) */
-.bulk-value-select-button {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  padding: 2px;
-  border-radius: var(--radius-s);
-  cursor: pointer;
-  color: var(--icon-color);
-  opacity: 0.6;
-  transition: background-color 0.2s ease;
-  -webkit-transition: opacity 0.2s ease, background-color 0.2s ease;
-  -moz-transition: opacity 0.2s ease, background-color 0.2s ease;
-  -ms-transition: opacity 0.2s ease, background-color 0.2s ease;
-  -o-transition: opacity 0.2s ease, background-color 0.2s ease;
+/* --- 8.10 Warning Messages --- */
+
+/* Type consistency warning */
+.type-consistency-warning,
+.value-consistency-warning {
+  display: block;
+  color: var(--text-error);
+  font-size: var(--font-ui-smaller);
+  margin-top: var(--size-4-1);
 }
 
-.bulk-value-select-button svg {
-   width: var(--icon-s);
-   height: var(--icon-s);
-   stroke-width: var(--icon-stroke-width);
+/* Warning text in settings */
+.setting-warning-text {
+  display: block;
+  color: var(--text-error);
+  font-size: var(--font-ui-smaller);
+  margin-top: var(--size-4-1);
 }
 
-.bulk-value-select-button:hover,
-.bulk-value-select-button:focus-visible /* Show clearly on focus */
- {
-  opacity: 1;
-  background-color: var(--background-modifier-hover);
-}
+/* --- 8.11 Input Styling --- */
 
-.bulk-value-select-button:focus-visible {
-     outline: 2px solid var(--interactive-accent);
-     outline-offset: 1px;
-}
-.bulk-value-select-button:focus:not(:focus-visible) {
-    outline: none;
-}
-
-/* --- Bulk Editor Type Consistency Warning Style --- */
-
-.type-consistency-warning {
-  display: block; /* Or inline-block if preferred */
-  color: var(--text-error); /* Standard warning/error color */
-  font-size: var(--font-ui-smaller); /* Match other descriptions */
-  margin-top: var(--size-4-1); /* Optional spacing */
-}
-
-/* Optional: Style for the disabled input if needed */
-.most-consistent-type-input:disabled {
-  /* Example: Ensure background matches theme */
+/* Disabled inputs */
+.most-consistent-type-input:disabled,
+.na-placeholder-input:disabled {
   background-color: var(--background-secondary);
   color: var(--text-disabled);
   cursor: not-allowed;
 }
 
-/* --- Bulk Editor Value Consistency Warning Style --- */
-
-.value-consistency-warning {
-  display: block; /* Or inline-block if preferred */
-  color: var(--text-error); /* Standard warning/error color */
-  font-size: var(--font-ui-smaller); /* Match other descriptions */
-  margin-top: var(--size-4-1); /* Optional spacing */
-}
-
-/* --- Bulk Editor Consistency Warning Styles --- */
-
-.type-consistency-warning,
-.value-consistency-warning { /* Apply to both */
-  display: block; /* Or inline-block if preferred */
-  color: var(--text-error); /* Standard warning/error color */
-  font-size: var(--font-ui-smaller); /* Match other descriptions */
-  margin-top: var(--size-4-1); /* Optional spacing */
-}
-
-/* --- Bulk Editor Dropdown Option Truncation --- */
+/* Dropdown option truncation */
 .most-consistent-value-dropdown option {
-  /* Ensure text doesn't wrap and shows ellipsis if too long */
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  /* You might need to set a max-width on the select/option if ellipsis doesn't work */
-  /* max-width: 200px; */ /* Example */
 }
 
-/* Optional: Style for the disabled N/A text input */
-.na-placeholder-input:disabled {
-    /* background-color: var(--background-secondary-alt); */ /* Slightly different background? */
-    /* color: var(--text-faint); */ /* Fainter text? */
-    cursor: not-allowed;
-}
+/* --- 8.12 Inconsistent Files Section --- */
 
-/* --- Inconsistent Files Section Styles --- */
 .inconsistent-files-container {
   position: relative;
   border: 1px solid #eee;
@@ -861,7 +902,7 @@ font-weight: bold;
   margin-top: 10px;
 }
 
-/* Filter/Order Row */
+/* Filter/order row */
 .filter-order-row {
   display: flex;
   align-items: center;
@@ -893,7 +934,7 @@ font-weight: bold;
   min-width: 100px;
 }
 
-/* Controls for Files */
+/* Controls for files */
 .inconsistent-files-controls {
   display: flex;
   margin-bottom: 8px;
@@ -907,6 +948,8 @@ font-weight: bold;
   overflow-y: auto;
 }
 
+/* --- 8.13 Inconsistent File Items --- */
+
 .inconsistent-file-item {
   border: 1px solid #ddd;
   border-radius: 3px;
@@ -918,6 +961,7 @@ font-weight: bold;
   margin-bottom: 0;
 }
 
+/* File item header */
 .file-item-header {
   display: flex;
   align-items: center;
@@ -931,6 +975,7 @@ font-weight: bold;
   border-top-right-radius: 2px;
 }
 
+/* File view icon */
 .file-view-icon {
   width: 16px;
   height: 16px;
@@ -943,6 +988,7 @@ font-weight: bold;
   opacity: 1;
 }
 
+/* File item content */
 .file-item-content {
   padding: 8px 8px 5px 8px;
   font-size: 0.85em;
@@ -963,14 +1009,14 @@ font-weight: bold;
   font-size: 0.95em;
 }
 
-/* Visual feedback for excluded state */
+/* Excluded state */
 .inconsistent-file-item.is-excluded .file-item-header,
 .inconsistent-file-item.is-excluded .file-item-content {
   opacity: 0.5;
   background-color: #f5f5f5;
 }
 
-/* For file header exclude toggle */
+/* File header exclude toggle */
 .file-header-exclude-toggle.setting-item {
   padding: 0;
   border: none;
@@ -985,50 +1031,4 @@ font-weight: bold;
 
 .file-header-exclude-toggle .setting-item-control {
   min-width: auto;
-}
-
-/**
- * Additional CSS for Array Value Display
- */
-
- .array-property-collapsed-view, 
-.array-property-expanded-container {
-    display: inline;
-}
-
-.is-hidden {
-    display: none !important;
-}
-
-.array-property-expanded-container {
-    word-break: break-word;
-    white-space: normal;
-}
-
-.array-property-toggle-link {
-    margin-left: 5px;
-    color: #4a88e0;
-    cursor: pointer;
-    font-size: 0.9em;
-    white-space: nowrap;
-}
-
-.array-property-toggle-link .underline-target {
-    text-decoration: underline;
-}
-
-.array-property-toggle-link:hover {
-    color: #3a6eb0;
-}
-
-.multiline-value {
-    white-space: pre-wrap;
-    display: block;
-    margin-top: 4px;
-    margin-left: 0;
-    font-family: monospace;
-    background-color: #f9f9f9;
-    padding: 5px;
-    border: 1px solid #eee;
-    border-radius: 3px;
 }
