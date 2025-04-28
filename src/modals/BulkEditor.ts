@@ -1090,84 +1090,276 @@ export class BulkEditor extends Modal {
             state.overrideValue = value || null;
         });
         
-        // 7. Create List input (pill-based UI)
         const listContainer = valueContainer.createDiv({
             cls: 'input-container list-input-container'
         });
-        
-        // Create the pill container
-        const pillContainer = listContainer.createDiv({
-            cls: 'pill-container'
+
+        // Create the combined input container with existing styling
+        const combinedInputContainer = listContainer.createDiv({
+            cls: 'combined-pill-input-container'
         });
-        
-        // Create the input field for new items
-        const listInputWrapper = listContainer.createDiv({
-            cls: 'list-input-wrapper'
+
+        // This will be our input management area
+        const inputArea = combinedInputContainer.createDiv({
+            cls: 'inline-input-area'
         });
-        
-        const listInputEl = listInputWrapper.createEl('input', {
-            cls: 'list-input',
+
+        // Create a hidden input for focusing and capturing keyboard input
+        let hiddenInput = inputArea.createEl('input', {
+            cls: 'hidden-focus-input',
             attr: {
                 type: 'text',
                 placeholder: 'Add item (press Enter)'
             }
         });
-        
+
         // Parse initial list items
         let listItems: string[] = [];
+        let editingIndex: number = -1; // Track which pill is being edited (-1 = none)
+        let focusedPillIndex: number = -1; // NEW: Track which pill is focused for deletion via Backspace
+
         if (Array.isArray(initialValue)) {
             listItems = initialValue.map(item => typeof item === 'string' ? item : String(item));
         } else if (typeof initialValue === 'string' && initialValue) {
-            listItems = initialValue.split(',').map(item => item.trim());
+            listItems = initialValue.split(',').map(item => item.trim()).filter(s => s); // Ensure empty strings are filtered
         }
-        
-        // Keep track of list items
-        const updateListItems = (items: string[]) => {
-            // Update state
-            state.overrideValue = items.length ? items : null;
-            
-            // Update UI
-            pillContainer.empty();
-            
-            // Create pills for each item
-            items.forEach((item, index) => {
-                const pill = pillContainer.createDiv({
-                    cls: 'pill-item'
-                });
-                
-                // Text span to prevent overflow and allow for proper styling
-                pill.createSpan({
-                    cls: 'pill-text',
-                    text: item
-                });
-                
-                // Add remove button
-                const removeBtn = pill.createSpan({
-                    cls: 'pill-remove',
-                    text: '×'
-                });
-                
-                // Add click handler to remove button
-                this.plugin.registerDomEvent(removeBtn, 'click', (e) => {
-                    e.stopPropagation();
-                    const newItems = [...items];
-                    newItems.splice(index, 1);
-                    updateListItems(newItems);
-                });
+
+        // Function to remove focus from all pills
+        const clearPillFocus = () => {
+            inputArea.querySelectorAll('.inline-pill-item.is-focused').forEach(pill => {
+                pill.removeClass('is-focused');
             });
+            focusedPillIndex = -1;
         };
-        
-        // Initial render of pills
-        updateListItems(listItems);
-        
-        // Handle Enter key to add new items
-        this.plugin.registerDomEvent(listInputEl, 'keydown', (e: KeyboardEvent) => {
-            if (e.key === 'Enter' && listInputEl.value.trim()) {
+
+        // Function to update the display
+        const updatePillDisplay = () => {
+            // Clear the input area first
+            inputArea.empty();
+            clearPillFocus(); // Clear focus when redrawing
+
+            // Create the hidden input first
+            const newHiddenInput = inputArea.createEl('input', {
+                cls: 'hidden-focus-input',
+                attr: {
+                    type: 'text',
+                    placeholder: listItems.length ? '' : 'Add item (press Enter)'
+                }
+            });
+
+            // Add event listeners to the hidden input
+            this.plugin.registerDomEvent(newHiddenInput, 'keydown', handleKeyDown);
+            this.plugin.registerDomEvent(newHiddenInput, 'focus', () => {
+                combinedInputContainer.addClass('is-focused');
+                clearPillFocus(); // Clear pill focus when input gets focus
+            });
+            this.plugin.registerDomEvent(newHiddenInput, 'blur', (e) => {
+                 // Delay check to allow clicks on pills/buttons
+                setTimeout(() => {
+                    // Check if the new focus target is within the component
+                    const relatedTarget = (e.relatedTarget as HTMLElement);
+                    if (!combinedInputContainer.contains(relatedTarget)) {
+                        combinedInputContainer.removeClass('is-focused');
+                        finishEditing();
+                        clearPillFocus();
+                    }
+                }, 50); // Short delay
+            });
+
+            // Set focus back if we were focused
+            if (document.activeElement === hiddenInput) {
+                newHiddenInput.focus();
+            }
+
+            // Replace the reference
+            hiddenInput = newHiddenInput;
+
+            // Add each pill
+            listItems.forEach((item, index) => {
+                if (index === editingIndex) {
+                    // This pill is being edited
+                    const editInput = inputArea.createEl('input', {
+                        cls: 'editing-pill-input',
+                        attr: {
+                            type: 'text',
+                            value: item
+                        }
+                    });
+
+                    // Focus and select all text
+                    editInput.focus();
+                    editInput.select();
+
+                    // Handle editing completion
+                    this.plugin.registerDomEvent(editInput, 'keydown', (e: KeyboardEvent) => {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            finishEditing(editInput.value.trim());
+                            hiddenInput.focus(); // <--- KEEP or ADD this line
+                        } else if (e.key === 'Escape') {
+                            e.preventDefault();
+                            finishEditing(); // Cancel edit, keeps original value before edit started
+                            hiddenInput.focus(); // <--- ADD this line
+                        }
+                    });
+
+                    this.plugin.registerDomEvent(editInput, 'blur', () => {
+                         // Finish editing when blurring the input
+                        finishEditing((inputArea.querySelector('.editing-pill-input') as HTMLInputElement)?.value);
+                         // Don't immediately focus hiddenInput, wait for potential clicks elsewhere
+                    });
+
+                } else {
+                    // Regular pill display
+                    const pill = inputArea.createDiv({
+                        cls: 'inline-pill-item'
+                    });
+                     // Add focused class if this pill is the one marked for deletion
+                    if (index === focusedPillIndex) {
+                        pill.addClass('is-focused');
+                    }
+
+                    // Text span for the content
+                    const textSpan = pill.createSpan({
+                        cls: 'pill-text',
+                        text: item
+                    });
+
+                    // --- Click Handling for Focus ---
+                    this.plugin.registerDomEvent(pill, 'click', (e) => {
+                        e.stopPropagation(); // Prevent container click handler
+
+                        // If already focused, do nothing on single click
+                        if (focusedPillIndex === index) {
+                            // Keep focus on hidden input for consistency
+                            hiddenInput.focus();
+                            return;
+                        }
+
+                        // Otherwise, set focus to this pill
+                        clearPillFocus(); // Remove focus from others
+                        pill.addClass('is-focused');
+                        focusedPillIndex = index; // Mark this as focused
+                        editingIndex = -1; // Ensure not in edit mode
+                        hiddenInput.focus(); // Keep focus on the hidden input
+                    });
+
+                    // --- NEW Double Click Handling for Edit ---
+                    this.plugin.registerDomEvent(pill, 'dblclick', (e) => {
+                        e.stopPropagation(); // Prevent container click handler
+
+                        // Enter edit mode for this pill
+                        editingIndex = index;
+                        focusedPillIndex = -1; // Remove deletion focus when editing
+                        updatePillDisplay(); // Re-render to show input
+                        // Focus will be handled internally by the edit input creation
+                    });
+
+                    // Add remove button
+                    const removeBtn = pill.createSpan({
+                        cls: 'pill-remove',
+                        text: '×',
+                        attr: { title: 'Remove item' } // Accessibility
+                    });
+
+                    // Handle removal
+                    this.plugin.registerDomEvent(removeBtn, 'click', (e) => {
+                        e.stopPropagation();
+                        listItems.splice(index, 1);
+                        editingIndex = -1; // Ensure not editing after removal
+                        focusedPillIndex = -1; // Clear focus
+                        updatePillDisplay();
+                        updateStateValue();
+                        hiddenInput.focus(); // <--- KEEP or ADD this line
+                    });
+                }
+            });
+
+            // Move hidden input to the end for proper focus and input capture
+            if (hiddenInput.parentElement) {
+                hiddenInput.parentElement.appendChild(hiddenInput);
+            }
+        };
+
+        // Function to update state value
+        const updateStateValue = () => {
+            // Filter out empty strings before saving, unless the list should allow them
+            const cleanedList = listItems.filter(item => item.trim().length > 0);
+            state.overrideValue = cleanedList.length ? cleanedList : null;
+        };
+
+        // Function to finish editing
+        const finishEditing = (newValue?: string) => {
+            if (editingIndex >= 0) {
+                if (newValue !== undefined) {
+                    const trimmedValue = newValue.trim();
+                    if (trimmedValue) {
+                        listItems[editingIndex] = trimmedValue;
+                    } else {
+                        // Remove if editing resulted in an empty string
+                        listItems.splice(editingIndex, 1);
+                    }
+                }
+                // If newValue is undefined, it means blur/escape occurred, keep original value or handle as cancel
+                editingIndex = -1;
+                updatePillDisplay(); // Re-render immediately
+                updateStateValue();
+            }
+        };
+
+        // Handle keyboard input on the hidden input
+        const handleKeyDown = (e: KeyboardEvent) => {
+            const targetInput = e.target as HTMLInputElement;
+            const value = targetInput.value.trim();
+
+            if (e.key === 'Enter' && value) {
                 e.preventDefault();
-                const newItems = [...listItems, listInputEl.value.trim()];
-                listItems = newItems;
-                updateListItems(newItems);
-                listInputEl.value = '';
+                listItems.push(value);
+                targetInput.value = ''; // Clear input after adding
+                editingIndex = -1; // Ensure not editing
+                focusedPillIndex = -1; // Clear focus
+                updatePillDisplay();
+                updateStateValue();
+                hiddenInput.focus();
+            } else if (e.key === 'Backspace' && targetInput.value === '' && listItems.length > 0) {
+                 e.preventDefault(); // Prevent default backspace navigation
+
+                 if (focusedPillIndex === listItems.length - 1) {
+                    // Second backspace: Remove the focused pill
+                    listItems.pop(); // Remove last item
+                    focusedPillIndex = -1; // Reset focus
+                    updatePillDisplay();
+                    updateStateValue();
+                    hiddenInput.focus();
+                } else {
+                     // First backspace: Focus the last pill
+                     clearPillFocus(); // Clear any other focus
+                     focusedPillIndex = listItems.length - 1;
+                     const lastPillEl = inputArea.querySelector('.inline-pill-item:last-of-type');
+                     if (lastPillEl) {
+                         lastPillEl.addClass('is-focused');
+                     }
+                     // Optionally, briefly show focus visually without full redraw if preferred
+                     // updatePillDisplay(); // Or just add class like above
+                 }
+            } else {
+                 // Any other key press should remove the focus state from pills
+                 if (focusedPillIndex !== -1) {
+                     clearPillFocus();
+                     // updatePillDisplay(); // Optionally redraw to ensure focus is visually gone
+                 }
+            }
+        };
+
+        // Initialize the display
+        updatePillDisplay();
+
+        // Handle click on the container to focus the hidden input
+        this.plugin.registerDomEvent(combinedInputContainer, 'click', (e) => {
+             // Only focus hidden input if click is not on a pill itself
+            if (e.target === combinedInputContainer || e.target === inputArea) {
+                 hiddenInput.focus();
+                 clearPillFocus(); // Clear pill focus when container/input area is clicked
             }
         });
         
@@ -1181,11 +1373,20 @@ export class BulkEditor extends Modal {
      * Shows the appropriate input container based on the property type
      */
     private updateInputVisibility(container: HTMLElement, type: string, key: string) {
+        const state = this.propertiesState.get(key);
+        const stats = this.propertyConsistency.get(key);
         // Hide all input containers
         container.querySelectorAll('.input-container').forEach(el => {
             el.addClass('is-hidden');
         });
-        
+
+        // Guard clause if state or stats are missing
+        if (!state || !stats) {
+            // Default to text input if essential info is missing
+            container.querySelector('.text-input-container')?.removeClass('is-hidden');
+            return;
+        }
+
         // Show the appropriate container
         switch (type) {
             case 'checkbox':
@@ -1203,25 +1404,25 @@ export class BulkEditor extends Modal {
             case 'list':
                 container.querySelector('.list-input-container')?.removeClass('is-hidden');
                 break;
-            case 'multitext':
-                container.querySelector('.multiline-input-container')?.removeClass('is-hidden');
-                break;
+            // REMOVED explicit 'multitext' case as we are treating it within 'text'
             case 'text':
             default:
-                // Check if the content appears to be multiline
-                const state = this.propertiesState.get(key);
-                let value = state?.overrideValue;
-                
-                // If no override value, try to get from stats
-                if (value === null || value === undefined) {
-                    const stats = this.propertyConsistency.get(key);
-                    if (stats && stats.value.total > 0) {
-                        value = stats.value.mostCommonValue ?? stats.value.firstEncounteredValue;
-                    }
+                // Determine if *any* unique value suggests multiline is appropriate for this text property
+                let showMultiline = false;
+                if (stats.value && Array.isArray(stats.value.allUniqueValues)) {
+                    // Check if any unique value is a string containing a newline
+                    showMultiline = stats.value.allUniqueValues.some(val => typeof val === 'string' && val.includes('\n'));
                 }
-                
-                // Check if the content contains newlines or is explicitly marked as multitext
-                if (typeof value === 'string' && (value.includes('\n') || value === 'multitext')) {
+
+                // Also consider the override value if it exists
+                if (!showMultiline && state.overrideValue !== null && state.overrideValue !== undefined) {
+                   if (typeof state.overrideValue === 'string' && state.overrideValue.includes('\n')) {
+                        showMultiline = true;
+                   }
+                }
+
+                // Show textarea if any value is multiline, otherwise show single-line input
+                if (showMultiline) {
                     container.querySelector('.multiline-input-container')?.removeClass('is-hidden');
                 } else {
                     container.querySelector('.text-input-container')?.removeClass('is-hidden');
