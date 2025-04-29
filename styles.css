@@ -1077,6 +1077,7 @@ textarea.property-value-multitext:focus {
 .combined-pill-input-container {
   display: flex;
   padding: 4px 8px;
+  min-height: 34px !important;
   background-color: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 4px;
@@ -1104,7 +1105,8 @@ textarea.property-value-multitext:focus {
 }
 
 .hidden-focus-input {
-  flex: 1;
+  min-width: 5px !important;
+  flex: 1 !important;
   min-width: 60px;
   background: transparent !important;
   border: none !important;
@@ -1128,14 +1130,28 @@ textarea.property-value-multitext:focus {
   color: var(--text-normal);
 }
 
+/* Enhanced styles for editing input to make it more stable */
 .editing-pill-input {
-  background-color: var(--background-secondary);
-  border: 1px solid var(--interactive-accent);
-  border-radius: 12px;
-  padding: 1px 6px;
-  font-size: var(--font-ui-smaller);
-  outline: none;
-  max-width: 150px;
+  background-color: var(--background-primary) !important;
+  border: 2px solid var(--interactive-accent) !important;
+  border-radius: 12px !important;
+  padding: 2px 8px !important;
+  font-size: var(--font-ui-small) !important;
+  outline: none !important;
+  min-width: 120px !important;
+  max-width: 220px !important;
+  height: auto !important;
+  box-shadow: 0 0 0 2px var(--interactive-accent), 0 2px 8px rgba(0, 0, 0, 0.2) !important;
+  margin: 2px 0 !important;
+  transition: none !important; /* Disable transitions to prevent flickering */
+  z-index: 100 !important; /* Ensure it appears above other elements */
+  position: relative !important;
+}
+
+/* Visual indicator for pill that's about to be edited */
+.inline-pill-item.is-editing {
+  background-color: var(--background-modifier-hover-plus) !important;
+  border-color: var(--interactive-accent) !important;
 }
 
 .inline-pill-item {
@@ -1166,17 +1182,27 @@ textarea.property-value-multitext:focus {
 
 /* Focus state for inline pills */
 .inline-pill-item.is-focused {
-  background-color: var(--pill-background, var(--background-modifier-hover));
-  border-color: var(--pill-border-color, var(--interactive-accent));
-  color: var(--pill-color, var(--text-accent));
-  box-shadow: 0 0 0 1px var(--pill-border-color, var(--interactive-accent));
-  border-radius: var(--pill-radius);
+  background-color: var(--interactive-accent) !important; 
+  color: var(--text-on-accent) !important;
+  box-shadow: 0 0 0 2px var(--interactive-accent) !important;
+  border-radius: 12px !important;
+  border: none !important;
+  font-weight: bold !important;
 }
 
-/* Optional: Style for the editing input to match focused pill */
-.editing-pill-input {
-   border-color: var(--pill-border-color, var(--interactive-accent));
-   box-shadow: 0 0 0 1px var(--pill-border-color, var(--interactive-accent));
+/* Ensure text and remove button have proper contrast in focused state */
+.inline-pill-item.is-focused .pill-text {
+  color: var(--text-on-accent) !important;
+}
+
+.inline-pill-item.is-focused .pill-remove {
+  color: var(--text-on-accent) !important;
+  opacity: 0.8;
+}
+
+.inline-pill-item.is-focused .pill-remove:hover {
+  background-color: rgba(255, 255, 255, 0.3) !important;
+  opacity: 1;
 }
 
 .inline-pill-item .pill-text {
