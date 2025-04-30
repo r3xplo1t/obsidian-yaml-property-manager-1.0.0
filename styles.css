@@ -986,7 +986,7 @@ textarea.is-invalid {
   box-shadow: 0 0 0 1px var(--text-error);
 }
 
-/* Input styling to match screenshot */
+/* Input styling */
 .input-container input[type="text"],
 .input-container textarea {
   width: 100%;
@@ -1030,229 +1030,126 @@ textarea.property-value-multitext:focus {
   margin: 0;
 }
 
-.pill-item {
-  --icon-size: var(--icon-xs);
-  --icon-stroke: var(--icon-xs-stroke-width);
+/* List input placeholder styles */
+.list-input-container {
+  width: 100%;
+  padding: 0;
+  margin: 0;
+}
+
+/* List input styles */
+.list-input-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.pills-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--size-2-1);
+  min-height: 30px;
+  padding: 4px 0;
+}
+
+.list-pill {
   display: flex;
   align-items: center;
-  background-color: var(--pill-background);
-  border: var(--pill-border-width) solid var(--pill-border-color);
-  border-radius: var(--pill-radius);
-  color: var(--pill-color);
-  cursor: var(--cursor);
-  font-weight: var(--pill-weight);
-  padding: var(--pill-padding-y) 0;
-  line-height: 1;
-  max-width: calc(100% - var(--size-2-3) - 1ch);
-  gap: var(--size-2-1);
-  position: relative;
+  padding: 3px 8px;
+  font-size: var(--font-ui-small);
+  max-width: 200px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.list-pill:not(:has(.pill-edit-input)){
+  background-color: var(--background-modifier-hover);
+  border: 1px solid transparent;
+  border-radius: var(--radius-s);
+}
+
+.list-pill:not(:has(.pill-edit-input)):hover {
+  border: var(--pill-border-width, 1px) solid var(--pill-border-color, var(--interactive-accent));
+  border-radius: var(--pill-radius, var(--radius-s));
 }
 
 .pill-text {
-  max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .pill-remove {
-  margin-left: 4px;
-  font-size: 14px;
+  margin-left: 3px;
   cursor: pointer;
+  /* font-size: 14px; */
+  font-weight: bold;
   color: var(--text-muted);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 16px;
-  height: 16px;
-  border-radius: 50%;
+  /* height: 16px; */
+  /* border-radius: 50%; */
 }
 
 .pill-remove:hover {
-  background-color: rgba(var(--text-error-rgb), 0.1);
   color: var(--text-error);
+  background-color: rgba(var(--text-error-rgb), 0.1);
 }
 
-/* Inline Pills for List Input (replaces separate pill container and input) */
-.combined-pill-input-container {
+.list-input-container {
   display: flex;
-  padding: 4px 8px;
-  min-height: 34px !important;
-  background-color: var(--background-primary);
+  align-items: center;
   border: 1px solid var(--background-modifier-border);
   border-radius: 4px;
-  width: 100%;
-  cursor: text;
-}
-
-.combined-pill-input-container.is-focused {
-  border-color: var(--interactive-accent);
-  box-shadow: 0 0 0 1px var(--interactive-accent);
-}
-
-.combined-pill-input-container:focus-within {
-    border-color: var(--interactive-accent);
-    box-shadow: 0 0 0 1px var(--interactive-accent);
-}
-
-.inline-input-area {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  width: 100%;
-  min-height: 24px;
-}
-
-.hidden-focus-input {
-  min-width: 5px !important;
-  flex: 1 !important;
-  min-width: 60px;
-  background: transparent !important;
-  border: none !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  outline: none !important;
-  font-size: var(--font-ui-small);
-  color: var(--text-normal);
-}
-
-.hidden-focus-input:focus {
-  flex: 1;
-  min-width: 60px;
-  background: transparent !important;
-  border: none !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-  margin: 0 !important;
-  outline: none !important;
-  font-size: var(--font-ui-small);
-  color: var(--text-normal);
-}
-
-/* Enhanced styles for editing input to make it more stable */
-.editing-pill-input {
-  background-color: var(--background-primary) !important;
-  border: 2px solid var(--interactive-accent) !important;
-  border-radius: 12px !important;
-  padding: 2px 8px !important;
-  font-size: var(--font-ui-small) !important;
-  outline: none !important;
-  min-width: 120px !important;
-  max-width: 220px !important;
-  height: auto !important;
-  box-shadow: 0 0 0 2px var(--interactive-accent), 0 2px 8px rgba(0, 0, 0, 0.2) !important;
-  margin: 2px 0 !important;
-  transition: none !important; /* Disable transitions to prevent flickering */
-  z-index: 100 !important; /* Ensure it appears above other elements */
-  position: relative !important;
-}
-
-/* Visual indicator for pill that's about to be edited */
-.inline-pill-item.is-editing {
-  background-color: var(--background-modifier-hover-plus) !important;
-  border-color: var(--interactive-accent) !important;
-}
-
-.inline-pill-item {
-
-  display: flex;
-  align-items: center;
-  background-color: var(--pill-background);
-  color: var(--pill-color);
-  cursor: var(--cursor);
-  padding: var(--pill-padding-y) 0;
-  line-height: 1;
-  max-width: calc(100% - var(--size-2-3) - 1ch);
-  gap: var(--size-2-1);
-  position: relative;
-  padding: 3px 6px; /* Adjust padding as needed */
-  transition: background-color 0.15s ease, border-color 0.15s ease, border-radius 0.15s ease, box-shadow 0.15s ease;
-}
-
-/* Hover state for inline pills */
-.inline-pill-item:hover {
-  background-color: var(--pill-background, var(--background-modifier-hover)); /* Use provided variable or fallback */
-  border-color: var(--pill-border-color, var(--interactive-accent)); /* Use provided variable or fallback */
-  color: var(--pill-color, var(--text-accent)); /* Use provided variable or fallback */
-  cursor: var(--cursor, pointer); /* Use provided variable or fallback */
-  box-shadow: 0 0 0 1px var(--pill-border-color, var(--interactive-accent));
-  border-radius: var(--pill-radius);
-}
-
-/* Focus state for inline pills */
-.inline-pill-item.is-focused {
-  background-color: var(--interactive-accent) !important; 
-  color: var(--text-on-accent) !important;
-  box-shadow: 0 0 0 2px var(--interactive-accent) !important;
-  border-radius: 12px !important;
-  border: none !important;
-  font-weight: bold !important;
-}
-
-/* Ensure text and remove button have proper contrast in focused state */
-.inline-pill-item.is-focused .pill-text {
-  color: var(--text-on-accent) !important;
-}
-
-.inline-pill-item.is-focused .pill-remove {
-  color: var(--text-on-accent) !important;
-  opacity: 0.8;
-}
-
-.inline-pill-item.is-focused .pill-remove:hover {
-  background-color: rgba(255, 255, 255, 0.3) !important;
-  opacity: 1;
-}
-
-.inline-pill-item .pill-text {
-  font-weight: var(--pill-weight);
-  font-size: var(--font-ui-small);
-  color: var(--pill-color);
-  cursor: pointer;
-  max-width: 120px;
+  background-color: var(--background-primary);
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  padding: 5px;
 }
 
-.inline-pill-item .pill-remove {
-  margin-left: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  display: inline-flex;
+.list-add-input {
+  flex: 1;
+  border: none !important;
+  background: transparent !important;
+  padding: 6px 8px !important;
+  min-height: 34px;
+  font-size: var(--font-ui-small);
+  color: var(--text-normal);
+  outline: none !important;
+  box-shadow: none !important;
+  margin: 0 !important;
+}
+
+.list-add-button {
+  display: flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  background-color: var(--background-modifier-border);
+  color: var(--text-normal);
+  border: none;
+  border-radius: var(--radius-s);
+  font-size: 24px;
+  color: var(--text-muted) !important;
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
 }
 
-.inline-pill-item .pill-remove:hover {
-  background-color: rgba(255, 255, 255, 0.2);
+.list-add-button:hover {
+  background-color: var(--interactive-hover);
+  color: var(--text-normal);
 }
 
-/* Container for pills inside the input */
-.inline-pill-container {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    max-width: 100%;
-}
-
-/* Input element inside the container */
-.inline-list-input {
-    flex: 1;
-    min-width: 50px;
-    background: transparent;
-    border: none;
-    padding: 4px;
-    margin: 2px;
-    color: var(--text-normal);
-    font-size: var(--font-ui-small);
-}
-
-.inline-list-input:focus {
-    outline: none;
-    box-shadow: none;
+.pill-edit-input {
+  width: 100%;
+  min-width: 100px;
+  max-width: 180px;
+  background-color: var(--background-primary);
+  padding: 3px 8px;
+  font-size: var(--font-ui-small);
+  outline: none;
 }
