@@ -1090,12 +1090,13 @@ export class BulkEditor extends Modal {
             state.overrideValue = value || null;
         });
         
-        const listContainer = valueContainer.createDiv({
+        // Create list input
+        const listInputContainer = valueContainer.createDiv({
             cls: 'input-container list-input-container'
         });
 
         // Create the combined input container with existing styling
-        const combinedInputContainer = listContainer.createDiv({
+        const combinedInputContainer = listInputContainer.createDiv({
             cls: 'combined-pill-input-container'
         });
 
@@ -1134,16 +1135,13 @@ export class BulkEditor extends Modal {
 
         // Function to update the display
         const updatePillDisplay = () => {
+            console.log(`%cDEBUG: updatePillDisplay - Called. Current editingIndex: ${editingIndex}`, 'color: green;'); // <-- ADD LOG
+
             // Save current state before clearing
             const wasInputFocused = document.activeElement === hiddenInput;
-            const currentFocusedIndex = focusedPillIndex;
-            const currentEditingIndex = editingIndex;
             
             // Clear the input area first
             inputArea.empty();
-            
-            // Don't automatically clear focus during redraw
-            // clearPillFocus(); - This line is removed
 
             // Create the hidden input first
             const newHiddenInput = inputArea.createEl('input', {
@@ -1158,12 +1156,9 @@ export class BulkEditor extends Modal {
             this.plugin.registerDomEvent(newHiddenInput, 'keydown', handleKeyDown);
             this.plugin.registerDomEvent(newHiddenInput, 'focus', () => {
                 combinedInputContainer.addClass('is-focused');
-                // Don't clear pill focus when input gets focus - this allows
-                // both the input and a pill to be focused simultaneously
-                // clearPillFocus(); - This line is removed
             });
             this.plugin.registerDomEvent(newHiddenInput, 'blur', (e) => {
-                 // Delay check to allow clicks on pills/buttons
+                // Delay check to allow clicks on pills/buttons
                 setTimeout(() => {
                     // Check if the new focus target is within the component
                     const relatedTarget = (e.relatedTarget as HTMLElement);
@@ -1195,6 +1190,27 @@ export class BulkEditor extends Modal {
                             'data-edit-index': index.toString() // Track which item is being edited
                         }
                     });
+                    console.log(`%cDEBUG: updatePillDisplay - Rendered editInput for index ${index}`, 'color: green; font-style: italic;'); // <-- ADD LOG
+
+                    // --- Attach KEYDOWN listener immediately ---
+                    this.plugin.registerDomEvent(editInput, 'keydown', (e: KeyboardEvent) => {
+                        // Check if the input element still exists before processing
+                        if (!document.body.contains(editInput)) return;
+
+                        if (e.key === 'Enter') {
+                            console.log(`%cDEBUG: Keydown Enter on index ${index}`, 'color: magenta;'); // Add log
+                            e.preventDefault();
+                            finishEditing(editInput.value.trim());
+                        } else if (e.key === 'Escape') {
+                            console.log(`%cDEBUG: Keydown Escape on index ${index}`, 'color: magenta;'); // Add log
+                            e.preventDefault();
+                            finishEditing(); // Finish without saving
+                        } else if (e.key === 'Tab') {
+                            // Tab likely triggers blur anyway, but handle explicitly if needed
+                            console.log(`%cDEBUG: Keydown Tab on index ${index}`, 'color: magenta;'); // Add log
+                            finishEditing(editInput.value.trim());
+                        }
+                    });
                 
                     // Register event handlers first before focusing
                     
@@ -1210,21 +1226,71 @@ export class BulkEditor extends Modal {
                             finishEditing(editInput.value.trim());
                         }
                     });
-                
-                    // Use a more robust blur handler with a flag to prevent premature exit
-                    let isProcessingBlur = false;
-                    
-                    // Handles when input loses focus - saves changes
-                    this.plugin.registerDomEvent(editInput, 'blur', () => {
-                        finishEditing(editInput.value.trim());
+
+                    // --- FOCUS logic using requestAnimationFrame ---
+                    requestAnimationFrame(() => {
+                        requestAnimationFrame(() => {
+                             if (document.body.contains(editInput)) {
+                                try {
+                                    console.log(`%cDEBUG: RAF - Attempting focus for index ${index}`, 'color: orange;');
+                                    editInput.focus();
+                                    editInput.select();
+                                    console.log(`%cDEBUG: RAF - Focus attempt finished for index ${index}. Attaching blur listener NOW.`, 'color: orange;');
+
+                                    // *** Attach the BLUR listener HERE, AFTER focus ***
+                                    this.plugin.registerDomEvent(editInput, 'blur', (e: FocusEvent) => {
+                                        // Check if the input element still exists before processing blur
+                                        if (!document.body.contains(editInput)) {
+                                            console.log(`%cDEBUG: Blur event on removed input for index ${index}. Ignoring.`, 'color: grey;');
+                                            return;
+                                        }
+
+                                        console.log(`%cDEBUG: Blur event fired for index ${index}. Related target:`, 'color: purple;', e.relatedTarget);
+                                        const relatedTarget = e.relatedTarget as HTMLElement | null;
+                                        const parentContainer = editInput.closest('.combined-pill-input-container');
+
+                                        // Only finish editing if focus moves outside the component,
+                                        // or if focus leaves the window (relatedTarget is null)
+                                        if (!parentContainer || !parentContainer.contains(relatedTarget)) {
+                                             console.log(`%cDEBUG: Blur target is outside container for index ${index}. Finishing edit.`, 'color: purple; font-weight: bold;');
+                                             // Use another RAF to ensure state updates cleanly after blur
+                                             requestAnimationFrame(() => {
+                                                // Check editingIndex AGAIN before finishing, in case state changed rapidly
+                                                if (editingIndex === index) {
+                                                    finishEditing(editInput.value.trim());
+                                                } else {
+                                                     console.log(`%cDEBUG: Blur - editingIndex changed (${editingIndex}) before finishEditing for index ${index}. Aborting finish.`, 'color: purple;');
+                                                }
+                                             });
+                                        } else {
+                                             console.log(`%cDEBUG: Blur target is inside container for index ${index}. Not finishing edit.`, 'color: purple;');
+                                        }
+                                    });
+                                    // *** End of attached BLUR listener ***
+
+                                } catch (err) {
+                                    console.warn("Failed to focus or select the edit input:", err);
+                                }
+                            } else {
+                                 console.log(`%cDEBUG: RAF - editInput for index ${index} not in body during focus attempt.`, 'color: orange; font-style: italic;');
+                            }
+                        });
                     });
+                    
+                    // Focus on the edit input after it's created
+                    setTimeout(() => {
+                        if (document.body.contains(editInput)) {
+                            editInput.focus();
+                            editInput.select();
+                        }
+                    }, 50);
 
                 } else {
                     // Regular pill display
                     const pill = inputArea.createDiv({
                         cls: 'inline-pill-item'
                     });
-                     // Add focused class if this pill is the one marked for deletion
+                    // Add focused class if this pill is the one marked for deletion
                     if (index === focusedPillIndex) {
                         pill.addClass('is-focused');
                     }
@@ -1253,13 +1319,14 @@ export class BulkEditor extends Modal {
                     });
 
                     // --- Enhanced Double Click Handling for Edit ---
-                    this.plugin.registerDomEvent(pill, 'dblclick', (e) => {
+                    this.plugin.registerDomEvent(pill, 'dblclick', (e: MouseEvent) => {
+                        console.log(`%cDEBUG: DblClick - Fired for index ${index}`, 'color: blue; font-weight: bold;'); // <-- ADD LOG
                         e.stopPropagation();
                         e.preventDefault();
-                        
-                        // Always enter edit mode on double-click
+
                         editingIndex = index;
                         focusedPillIndex = -1;
+                        console.log(`%cDEBUG: DblClick - Set editingIndex to ${editingIndex}. Calling updatePillDisplay...`, 'color: blue;'); // <-- ADD LOG
                         updatePillDisplay();
                     });
 
@@ -1278,7 +1345,7 @@ export class BulkEditor extends Modal {
                         focusedPillIndex = -1; // Clear focus
                         updatePillDisplay();
                         updateStateValue();
-                        hiddenInput.focus(); // <--- KEEP or ADD this line
+                        hiddenInput.focus();
                     });
                 }
             });
@@ -1299,6 +1366,7 @@ export class BulkEditor extends Modal {
         // Completes editing and updates state
         const finishEditing = (newValue?: string) => {
             if (editingIndex < 0 || editingIndex >= listItems.length) return;
+            console.log(`%cDEBUG: finishEditing - Called. Current editingIndex: ${editingIndex}. New value: ${newValue}`, 'color: red;'); // <-- ADD LOG
             
             if (newValue !== undefined) {
                 const trimmedValue = newValue.trim();
@@ -1310,16 +1378,51 @@ export class BulkEditor extends Modal {
             }
             
             editingIndex = -1;
+            console.log(`%cDEBUG: finishEditing - Reset editingIndex to ${editingIndex}. Calling updatePillDisplay...`, 'color: red;'); // <-- ADD LOG
             updateStateValue();
             updatePillDisplay();
             hiddenInput.focus();
         };
 
-        // Handle keyboard input on the hidden input
+        // Handle keyboard input on the hidden input - UPDATED WITH NEW FUNCTIONALITY
         const handleKeyDown = (e: KeyboardEvent) => {
             const targetInput = e.target as HTMLInputElement;
             const value = targetInput.value.trim();
 
+            // NEW FUNCTIONALITY: If a pill is focused and the user types a printable character,
+            // automatically enter edit mode for that pill
+            if (focusedPillIndex !== -1 && 
+                e.key.length === 1 && 
+                !e.ctrlKey && !e.altKey && !e.metaKey) {
+                
+                // Prevent default to avoid adding the character to the hidden input
+                e.preventDefault();
+                
+                // Get the current value of the focused pill
+                const focusedPillValue = listItems[focusedPillIndex];
+                
+                // Start editing with the current value
+                editingIndex = focusedPillIndex;
+                focusedPillIndex = -1;
+                
+                // Update the display to show the edit input
+                updatePillDisplay();
+                
+                // Find the edit input and add the typed character
+                setTimeout(() => {
+                    const editInput = inputArea.querySelector('.editing-pill-input') as HTMLInputElement;
+                    if (editInput) {
+                        editInput.value = focusedPillValue + e.key;
+                        editInput.focus();
+                        // Position the cursor at the end
+                        editInput.selectionStart = editInput.selectionEnd = editInput.value.length;
+                    }
+                }, 50);
+                
+                return;
+            }
+
+            // Rest of the original handler logic
             if (e.key === 'Enter' && value) {
                 e.preventDefault();
                 listItems.push(value);
@@ -1330,9 +1433,9 @@ export class BulkEditor extends Modal {
                 updateStateValue();
                 hiddenInput.focus();
             } else if (e.key === 'Backspace' && targetInput.value === '' && listItems.length > 0) {
-                 e.preventDefault(); // Prevent default backspace navigation
+                e.preventDefault(); // Prevent default backspace navigation
 
-                 if (focusedPillIndex === listItems.length - 1) {
+                if (focusedPillIndex === listItems.length - 1) {
                     // Second backspace: Remove the focused pill
                     listItems.pop(); // Remove last item
                     focusedPillIndex = -1; // Reset focus
@@ -1340,22 +1443,19 @@ export class BulkEditor extends Modal {
                     updateStateValue();
                     hiddenInput.focus();
                 } else {
-                     // First backspace: Focus the last pill
-                     clearPillFocus(); // Clear any other focus
-                     focusedPillIndex = listItems.length - 1;
-                     const lastPillEl = inputArea.querySelector('.inline-pill-item:last-of-type');
-                     if (lastPillEl) {
-                         lastPillEl.addClass('is-focused');
-                     }
-                     // Optionally, briefly show focus visually without full redraw if preferred
-                     // updatePillDisplay(); // Or just add class like above
-                 }
+                    // First backspace: Focus the last pill
+                    clearPillFocus(); // Clear any other focus
+                    focusedPillIndex = listItems.length - 1;
+                    const lastPillEl = inputArea.querySelector('.inline-pill-item:last-of-type');
+                    if (lastPillEl) {
+                        lastPillEl.addClass('is-focused');
+                    }
+                }
             } else {
-                 // Any other key press should remove the focus state from pills
-                 if (focusedPillIndex !== -1) {
-                     clearPillFocus();
-                     // updatePillDisplay(); // Optionally redraw to ensure focus is visually gone
-                 }
+                // Any other key press should remove the focus state from pills
+                if (focusedPillIndex !== -1 && e.key !== 'Backspace') {
+                    clearPillFocus();
+                }
             }
         };
 
@@ -1364,15 +1464,20 @@ export class BulkEditor extends Modal {
 
         // Handle click on the container to focus the hidden input
         this.plugin.registerDomEvent(combinedInputContainer, 'click', (e) => {
+            // *** ADD THIS CHECK ***: If we are currently editing a pill, ignore clicks on the container background
+            if (editingIndex !== -1) {
+                return;
+            }
+            // *** END OF ADDED CHECK ***
+
             // Only focus hidden input if click is not on a pill itself
             if (e.target === combinedInputContainer || e.target === inputArea) {
                 // Only clear focus if clicking directly on the container/input area background
-                // This prevents losing focus when clicking between pills
                 if (e.target === combinedInputContainer || e.target === inputArea) {
                     clearPillFocus();
                 }
-                
-                // Focus the hidden input with a tiny delay to prevent focus race conditions
+
+                // Focus the hidden input with a tiny delay
                 setTimeout(() => {
                     if (hiddenInput && document.body.contains(hiddenInput)) {
                         hiddenInput.focus();
@@ -1380,7 +1485,6 @@ export class BulkEditor extends Modal {
                 }, 10);
             }
         });
-        
         // Show only the input for the current type
         this.updateInputVisibility(valueContainer, actualType, key);
         
