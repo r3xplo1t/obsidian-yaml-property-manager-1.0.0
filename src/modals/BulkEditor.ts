@@ -739,12 +739,11 @@ export class BulkEditor extends Modal {
             const iconText = (stats.type.consistent === stats.type.total) ? '✓' : '⚠';
             statusRow.createSpan({ cls: `property-header-stat-icon ${iconClass}`, text: iconText });
             const labelSpan = statusRow.createSpan({ cls: 'property-header-stat-label' });
-            labelSpan.appendText(`Most common type found in <span class="math-inline">\{stats\.type\.consistent\}/</span>{stats.type.total} files.`);
+            labelSpan.appendText(`Most common type found in ${stats.type.consistent}/${stats.type.total} files.`);
         } else {
             typeDescEl.createSpan({ text: 'Property not found in any selected file.', cls: 'text-muted' });
         }
         // --- End Property Type Description ---
-
 
         // --- Static Property Value Info Display ---
         const propertyValueDisplaySetting = new Setting(container)
@@ -778,16 +777,6 @@ export class BulkEditor extends Modal {
         propertyValueDisplaySetting.settingEl.addClass('property-value-display-setting');
         // --- End Static Property Value Info Display ---
 
-
-        // --- Container for Dynamic Value Input Control ---
-        // This div will be populated by updateValueControl
-        const valueControlContainer = container.createDiv();
-        valueControlContainer.addClass('dynamic-value-input-container');
-        // Add class based on initial type for styling
-        const initialActualType = state.changeType || mostCommonTypeValue || 'text';
-        valueControlContainer.addClass(`value-input-container-${initialActualType}`);
-
-
         // --- Link Type Dropdown onChange to Update Control ---
         propertyTypeSetting.addDropdown(dropdown => {
             const filteredTypes = mostCommonTypeValue
@@ -805,494 +794,9 @@ export class BulkEditor extends Modal {
                 .onChange(value => {
                     const newType = value || null;
                     state.changeType = newType;
-                    // Update CSS class on container
-                    valueControlContainer.className = 'dynamic-value-input-container'; // Reset classes
-                    valueControlContainer.addClass(`value-input-container-${newType || mostCommonTypeValue || 'text'}`);
-                    // Call the update function
-                    this.updateValueControl(valueControlContainer, key, newType);
                 });
             return dropdown;
         });
-
-        // Initial setup of the value control
-        this.updateValueControl(valueControlContainer, key, state.changeType);
-
-    } // End of createPropertyDetailsSection
-
-    private updateValueControl(
-        valueControlContainer: HTMLElement,
-        key: string,
-        selectedType: string | null
-    ): void {
-        const state = this.propertiesState.get(key);
-        const stats = this.propertyConsistency.get(key);
-        if (!state || !stats) return;
-    
-        const mostCommonTypeValue = stats.type.mostCommonType;
-        const actualType = selectedType || mostCommonTypeValue || 'text';
-        
-        // Determine initial value
-        let initialValue: any = '';
-        if (state.overrideValue !== null && state.overrideValue !== undefined) {
-            initialValue = state.overrideValue;
-        } else if (stats.value.total > 0) {
-            initialValue = stats.value.mostCommonValue ?? stats.value.firstEncounteredValue;
-        }
-        
-        // Check if the container is already created
-        const existingContainer = valueControlContainer.querySelector('.unified-property-editor');
-        
-        if (!existingContainer) {
-            // First time - create the container
-            this.createUnifiedEditor(valueControlContainer, key, actualType, initialValue);
-        } else {
-            // Container exists - just update its type
-            this.updateUnifiedEditor(existingContainer as HTMLElement, key, actualType);
-        }
-    }
-
-    /**
-     * Creates a unified property editor container
-     */
-    private createUnifiedEditor(
-        container: HTMLElement, 
-        key: string,
-        initialType: string | null,
-        initialValue: any
-    ): HTMLElement {
-        const state = this.propertiesState.get(key);
-        if (!state) return container;
-        
-        // Create main editor container
-        const editorContainer = container.createDiv({
-            cls: 'unified-property-editor',
-            attr: { 'data-type': initialType || 'text' }
-        });
-        
-        // Format value based on type
-        const formattedValue = this.formatValueForType(initialType || 'text', initialValue);
-        
-        // Create the input container
-        this.createEditorInputForType(editorContainer, key, initialType || 'text', formattedValue);
-        
-        return editorContainer;
-    }
-
-    /**
-     * Updates the unified editor when the property type changes
-     */
-    private updateUnifiedEditor(
-        container: HTMLElement,
-        key: string,
-        newType: string
-    ): void {
-        const state = this.propertiesState.get(key);
-        if (!state) return;
-        
-        // Update data-type attribute
-        container.setAttribute('data-type', newType);
-        
-        // Format current value for new type
-        const currentValue = state.overrideValue;
-        const formattedValue = this.formatValueForType(newType, currentValue);
-        
-        // Create new input for the selected type
-        this.createEditorInputForType(container, key, newType, formattedValue);
-    }
-
-    /**
-     * Formats a value appropriately for the given property type
-     */
-    private formatValueForType(type: string, value: any): string {
-        if (value === null || value === undefined) return '';
-        
-        switch (type) {
-            case 'checkbox':
-                return typeof value === 'boolean' ? String(value) : 
-                    (typeof value === 'string' && value.toLowerCase() === 'true' ? 'true' : 'false');
-            case 'number':
-                return typeof value === 'number' ? String(value) : 
-                    (typeof value === 'string' && !isNaN(Number(value)) ? value : '');
-            case 'date':
-                return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : '';
-            case 'datetime':
-                return typeof value === 'string' && /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(value) ? value : '';
-            case 'list':
-                return Array.isArray(value) ? value.join(', ') : 
-                    (typeof value === 'string' ? value : '');
-            case 'text':
-            default:
-                return typeof value === 'string' ? value : String(value);
-        }
-    }
-
-    /**
-     * Creates the appropriate input element based on property type
-     */
-    private createEditorInputForType(
-        container: HTMLElement,
-        key: string,
-        type: string,
-        value: string
-    ): void {
-        const state = this.propertiesState.get(key);
-        if (!state) return;
-        
-        // Clear container first (for type changes)
-        container.empty();
-        
-        switch (type) {
-            case 'checkbox':
-                this.createCheckboxInput(container, key, value === 'true');
-                break;
-            case 'list':
-                this.createListInput(container, key, value);
-                break;
-            case 'text':
-                this.createTextInput(container, key, value);
-                break;
-            case 'number':
-                this.createStandardInput(container, key, value, 'number');
-                break;
-            case 'date':
-                this.createStandardInput(container, key, value, 'date', 'YYYY-MM-DD');
-                break;
-            case 'datetime':
-                this.createStandardInput(container, key, value, 'datetime', 'YYYY-MM-DD HH:MM');
-                break;
-            default:
-                this.createStandardInput(container, key, value, 'text');
-                break;
-        }
-    }
-
-    /**
-     * Creates a standard text input field
-     */
-    private createStandardInput(
-        container: HTMLElement,
-        key: string,
-        value: string,
-        inputType: string,
-        placeholder: string = ''
-    ): HTMLInputElement {
-        const state = this.propertiesState.get(key);
-        
-        // Create input wrapper for consistent styling
-        const inputWrapper = container.createDiv({ cls: 'unified-input-wrapper' });
-        
-        // Create actual input element
-        const input = inputWrapper.createEl('input', {
-            cls: 'unified-input',
-            attr: {
-                type: 'text',
-                value: value,
-                placeholder: placeholder,
-                'data-input-type': inputType
-            }
-        });
-        
-        // Add input handler
-        this.plugin.registerDomEvent(input, 'input', (e) => {
-            if (state) {
-                // Format and validate value based on type
-                if (inputType === 'number') {
-                    const numValue = input.value.trim();
-                    if (numValue === '') {
-                        state.overrideValue = null;
-                    } else if (!isNaN(Number(numValue))) {
-                        state.overrideValue = Number(numValue);
-                    } else {
-                        state.overrideValue = numValue; // Keep as string if invalid
-                        input.classList.add('is-invalid');
-                        return;
-                    }
-                } else {
-                    state.overrideValue = input.value || null;
-                }
-                
-                input.classList.remove('is-invalid');
-            }
-        });
-        
-        return input;
-    }
-
-    /**
-     * Creates a text input that can expand to multiline
-     */
-    private createTextInput(
-        container: HTMLElement,
-        key: string,
-        value: string
-    ): void {
-        const state = this.propertiesState.get(key);
-        if (!state) return;
-        
-        // Determine if we should use multiline from the start
-        const isMultiline = value.includes('\n');
-        
-        if (isMultiline) {
-            this.createMultilineInput(container, key, value);
-        } else {
-            const inputWrapper = container.createDiv({ cls: 'unified-input-wrapper' });
-            
-            const input = inputWrapper.createEl('input', {
-                cls: 'unified-input',
-                attr: {
-                    type: 'text',
-                    value: value,
-                    'data-input-type': 'text'
-                }
-            });
-            
-            // Handle input changes
-            this.plugin.registerDomEvent(input, 'input', (e) => {
-                if (state) {
-                    state.overrideValue = input.value || null;
-                }
-            });
-            
-            // Handle Enter to expand to multiline
-            this.plugin.registerDomEvent(input, 'keydown', (e) => {
-                if (e.key === 'Enter') {
-                    e.preventDefault();
-                    
-                    // Switch to multiline mode
-                    container.empty();
-                    this.createMultilineInput(container, key, input.value + '\n');
-                }
-            });
-        }
-    }
-
-    /**
-     * Creates a multiline text input
-     */
-    private createMultilineInput(
-        container: HTMLElement,
-        key: string,
-        value: string
-    ): HTMLTextAreaElement {
-        const state = this.propertiesState.get(key);
-        
-        const textareaWrapper = container.createDiv({ cls: 'unified-textarea-wrapper' });
-        
-        const textarea = textareaWrapper.createEl('textarea', {
-            cls: 'unified-textarea',
-            attr: {
-                'data-input-type': 'multiline',
-                placeholder: 'Enter text...'
-            }
-        });
-        
-        // Set value
-        textarea.value = value;
-        
-        // Auto-resize function
-        const autoResize = () => {
-            textarea.style.height = 'auto';
-            const newHeight = Math.min(Math.max(60, textarea.scrollHeight), 300);
-            textarea.style.height = `${newHeight}px`;
-            textarea.style.overflowY = textarea.scrollHeight > 300 ? 'auto' : 'hidden';
-        };
-        
-        // Initial resize after DOM update
-        setTimeout(autoResize, 0);
-        
-        // Add change handler with auto-resize
-        this.plugin.registerDomEvent(textarea, 'input', () => {
-            if (state) {
-                state.overrideValue = textarea.value || null;
-            }
-            autoResize();
-        });
-        
-        return textarea;
-    }
-
-    /**
-     * Creates a checkbox input for boolean properties
-     */
-    private createCheckboxInput(
-        container: HTMLElement,
-        key: string,
-        isChecked: boolean
-    ): void {
-        const state = this.propertiesState.get(key);
-        if (!state) return;
-        
-        const checkboxWrapper = container.createDiv({ cls: 'unified-checkbox-wrapper' });
-        
-        const checkbox = checkboxWrapper.createEl('input', {
-            cls: 'unified-checkbox',
-            attr: {
-                type: 'checkbox',
-                'data-input-type': 'checkbox'
-            }
-        });
-        
-        // Set initial state
-        checkbox.checked = isChecked;
-        
-        // Add change handler
-        this.plugin.registerDomEvent(checkbox, 'change', () => {
-            if (state) {
-                state.overrideValue = checkbox.checked;
-            }
-        });
-        
-        // Add label for better clickability
-        const label = checkboxWrapper.createEl('label', { 
-            cls: 'unified-checkbox-label',
-            text: '' // Empty label, just for styling/clicking
-        });
-        
-        // Connect label to checkbox
-        label.htmlFor = checkbox.id = `property-checkbox-${key}`;
-    }
-
-    /**
-     * Creates a list input with minimal pills
-     */
-    private createListInput(
-        container: HTMLElement,
-        key: string,
-        value: string
-    ): void {
-        const state = this.propertiesState.get(key);
-        if (!state) return;
-        
-        // Parse list items
-        let items: string[] = [];
-        if (Array.isArray(state.overrideValue)) {
-            items = [...state.overrideValue];
-        } else if (value) {
-            items = value.split(',').map(item => item.trim()).filter(item => item);
-        }
-        
-        // Create list wrapper
-        const listWrapper = container.createDiv({ cls: 'unified-list-wrapper' });
-        
-        // Create pills container
-        const pillsContainer = listWrapper.createDiv({ cls: 'unified-pills-container' });
-        
-        // Create input container
-        const inputWrapper = listWrapper.createDiv({ cls: 'unified-input-wrapper' });
-        
-        // Create input for adding new items
-        const input = inputWrapper.createEl('input', {
-            cls: 'unified-input',
-            attr: {
-                type: 'text',
-                placeholder: 'Add item (press Enter)',
-                'data-input-type': 'list'
-            }
-        });
-        
-        // Function to update pills display
-        const updatePills = () => {
-            // Clear container
-            pillsContainer.empty();
-            
-            // Create pills for each item
-            items.forEach((item, index) => {
-                const pill = pillsContainer.createSpan({ cls: 'unified-pill' });
-                
-                // Text content
-                pill.createSpan({ cls: 'pill-text', text: item });
-                
-                // Remove button (X)
-                const removeBtn = pill.createSpan({ cls: 'pill-remove', text: '×' });
-                
-                // Remove item on click
-                this.plugin.registerDomEvent(removeBtn, 'click', (e) => {
-                    e.stopPropagation();
-                    items.splice(index, 1);
-                    updatePills();
-                    updateState();
-                    // Focus back to input
-                    input.focus();
-                });
-                
-                // Edit on click
-                this.plugin.registerDomEvent(pill, 'click', (e) => {
-                    if (e.target === removeBtn) return; // Don't edit if clicking remove button
-                    
-                    // Add editing class
-                    pill.addClass('is-editing');
-                    
-                    // Replace pill content with input
-                    pill.empty();
-                    
-                    const editInput = pill.createEl('input', {
-                        cls: 'pill-edit-input',
-                        attr: { type: 'text', value: item }
-                    });
-                    
-                    // Focus the input
-                    editInput.focus();
-                    editInput.select();
-                    
-                    // Save edit
-                    const saveEdit = () => {
-                        const newValue = editInput.value.trim();
-                        if (newValue) {
-                            items[index] = newValue;
-                        } else {
-                            items.splice(index, 1);
-                        }
-                        updatePills();
-                        updateState();
-                        // Focus back to main input
-                        input.focus();
-                    };
-                    
-                    // Save on Enter/Escape
-                    this.plugin.registerDomEvent(editInput, 'keydown', (e) => {
-                        if (e.key === 'Enter') {
-                            e.preventDefault();
-                            saveEdit();
-                        } else if (e.key === 'Escape') {
-                            e.preventDefault();
-                            updatePills(); // Cancel edit
-                            input.focus();
-                        }
-                    });
-                    
-                    // Save on blur
-                    this.plugin.registerDomEvent(editInput, 'blur', saveEdit);
-                });
-            });
-        };
-        
-        // Update state function
-        const updateState = () => {
-            if (state) {
-                state.overrideValue = items.length ? [...items] : null;
-            }
-        };
-        
-        // Add new item
-        const addItem = () => {
-            const newItem = input.value.trim();
-            if (newItem) {
-                items.push(newItem);
-                input.value = '';
-                updatePills();
-            }
-        };
-        
-        // Add item on Enter
-        this.plugin.registerDomEvent(input, 'keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                addItem();
-            }
-        });
-        
-        // Initial display
-        updatePills();
     }
     
     /**
@@ -2157,7 +1661,6 @@ export class BulkEditor extends Modal {
     
     /**
      * Processes an existing property value based on the property state and file actions.
-     * Handles type conversions and overrides.
      */
     private processPropertyValue(key: string, filePath: string, currentValue: any): any | undefined {
         const state = this.propertiesState.get(key);
@@ -2185,82 +1688,9 @@ export class BulkEditor extends Modal {
         }
 
         // --- Property is ENABLED for editing ---
-
-        let newValue = currentValue; // Start with current value
-        const stats = this.propertyConsistency.get(key);
-        // Determine the target type based on user selection or detection
-        const targetType = state.changeType ||
-                       (stats ? stats.type.mostCommonType : null) ||
-                       this.plugin.propertyTypeService.detectPropertyType(currentValue) ||
-                       'text';
-
-        // Check if there's an override value specified by the user
-        const hasOverride = state.overrideValue !== null && state.overrideValue !== undefined;
-
-        if (hasOverride) {
-            // Use the override value, attempting conversion based on targetType
-            const override = state.overrideValue;
-
-            switch (targetType) {
-                case 'checkbox':
-                    // Convert override to boolean ('true'/'false' string or existing boolean)
-                    if (typeof override === 'boolean') {
-                        newValue = override;
-                    } else {
-                        newValue = String(override).toLowerCase() === 'true';
-                    }
-                    break;
-                case 'number':
-                    // Convert override to number; handle invalid input
-                    if (typeof override === 'number') {
-                        newValue = override;
-                    } else {
-                        const num = Number(String(override).trim());
-                        // Keep invalid string override *as string*? Or use default?
-                        // Let's default to 0 for invalid numbers on apply for now.
-                        newValue = !isNaN(num) ? num : 0;
-                    }
-                    break;
-                case 'date':
-                case 'datetime':
-                    // Store as string, potentially validate format here if needed
-                    // For now, assume string from validation step is acceptable
-                    newValue = String(override).trim() || null; // Store empty as null? Or ""? Let's use ""
-                    if (newValue === "") newValue = null; // Treat empty override as null maybe? Or keep ""? Stick with "" for now.
-                    newValue = String(override).trim();
-                    // TODO: Add final moment.js validation if desired
-                    break;
-                case 'list':
-                    // Expect overrideValue to be string[] from custom component
-                    if (Array.isArray(override)) {
-                        newValue = [...override]; // Use the array directly
-                    } else {
-                        // Fallback: if somehow it's still a string, parse it
-                        newValue = String(override).split(',').map((s: string) => s.trim()).filter(s => s);
-                    }
-                    break;
-                case 'text':
-                default: // Treat 'multitext' as text
-                    newValue = String(override); // Ensure it's a string
-                    break;
-            }
-        } else {
-            // No override value - potentially apply type change to existing value?
-            // This part is tricky - if type changes but no override is given, what should happen?
-            // Option A: Keep existing value as-is (simplest)
-            // Option B: Try to convert existing value to new type (complex, lossy)
-            // Let's stick with Option A for now: If no override, only type metadata changes, not value.
-            // The applyProperties logic using processFrontMatter handles type hints later if needed.
-            newValue = currentValue;
-
-            // However, if the *only* change is the type dropdown, ensure value fits?
-            // Maybe this logic belongs solely in how Obsidian handles frontmatter changes.
-            // Let's keep it simple: no override = keep current value structure.
-        }
-
-        return newValue;
+        return currentValue;
     }
-    
+
     /**
      * Determines the value for a property that is missing from a file, based on state.
      */
@@ -2275,20 +1705,15 @@ export class BulkEditor extends Modal {
 
         const fileActions = state.fileActions.get(filePath) || { type: false, value: false, add: false };
         const stats = this.propertyConsistency.get(key);
+        
         // Determine target type: user override > detected > default guess
         const targetType = state.changeType ||
                         (stats ? stats.type.mostCommonType : null) ||
                         getDefaultTypeForKey(key); // Guess type based on key
 
-        // Should we add this property? Check based on enabled state and actions
+        // Should we add this property?
         let shouldAdd = false;
-        if (state.enabled) {
-            // If editing is enabled, add if an override value exists, OR if fileAction.add is true?
-            // Let's simplify: Add if an override exists, OR if action is 'add_if_missing' implicitly?
-            // Let's default to adding if override exists, otherwise respect disabled actions.
-            shouldAdd = state.overrideValue !== null && state.overrideValue !== undefined;
-            // TODO: Revisit if fileActions.add should also trigger adding without an override value? Maybe not.
-        } else {
+        if (!state.enabled) {
             // If editing is disabled, check the action for disabled properties
             const action = state.disabledAction === 'global'
                 ? this.globalSettings.disabledAction
@@ -2300,46 +1725,8 @@ export class BulkEditor extends Modal {
             return undefined; // Don't add the property
         }
 
-        // --- Determine the value to add ---
-        const hasOverride = state.overrideValue !== null && state.overrideValue !== undefined;
-        let valueToAdd: any;
-
-        if (hasOverride) {
-            // Use the override value, converting based on targetType
-            const override = state.overrideValue;
-            switch (targetType) {
-                case 'checkbox':
-                    if (typeof override === 'boolean') { valueToAdd = override; }
-                    else { valueToAdd = String(override).toLowerCase() === 'true'; }
-                    break;
-                case 'number':
-                    if (typeof override === 'number') { valueToAdd = override; }
-                    else {
-                        const num = Number(String(override).trim());
-                        valueToAdd = !isNaN(num) ? num : 0; // Default invalid numbers to 0 when adding
-                    }
-                    break;
-                case 'date':
-                case 'datetime':
-                    valueToAdd = String(override).trim();
-                    // TODO: Final validation?
-                    break;
-                case 'list':
-                    if (Array.isArray(override)) { valueToAdd = [...override]; }
-                    else { valueToAdd = String(override).split(',').map((s: string) => s.trim()).filter(s => s); }
-                    break;
-                case 'text':
-                default:
-                    valueToAdd = String(override);
-                    break;
-            }
-        } else {
-            // No override, add empty value based on the target type
-            // (This path is mainly hit if state was disabled with action 'add_if_missing')
-            valueToAdd = getEmptyValueForType(targetType);
-        }
-
-        return valueToAdd;
+        // Add empty value based on the target type
+        return getEmptyValueForType(targetType);
     }
 
     onClose() {
