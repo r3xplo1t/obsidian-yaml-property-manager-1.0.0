@@ -954,202 +954,192 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
   min-width: auto;
 }
 
-/* --- 8.14 Unified Value Container --- */
+/* ===========================
+   8.14 UNIFIED EDITOR STYLES
+   =========================== */
 
-.unified-value-container {
+/* Main container */
+.unified-property-editor {
+  width: 100%;
   position: relative;
-  width: 100%;
-  margin: 0;
-  padding: 0;
-}
-
-.input-container {
-  width: 100%;
-  margin: 0;
-  padding: 0;
-}
-
-.is-hidden {
-  display: none !important;
-}
-
-/* Validation styling */
-.validation-error-message {
-  color: var(--text-error);
-  font-size: var(--font-ui-smaller);
-  margin-top: 4px;
-}
-
-input.is-invalid,
-textarea.is-invalid {
-  border-color: var(--text-error) !important;
-  box-shadow: 0 0 0 1px var(--text-error);
-}
-
-/* Input styling */
-.input-container input[type="text"],
-.input-container textarea {
-  width: 100%;
-  background-color: var(--background-primary);
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 4px;
-  padding: 6px 8px;
   font-size: var(--font-ui-small);
 }
 
-/* Multiline text input - much more specific to override Obsidian defaults */
-textarea.property-value-multitext {
-  display: block;
-  width: 100% !important;
-  resize: vertical !important;
-  transition: max-height 0.2s ease;
-  overflow-y: auto !important;
-  min-height: 60px;
-  white-space: pre-wrap !important;
-  word-break: break-word;
-  line-height: 1.5;
-  font-family: var(--font-text) !important;
-  padding: 8px !important;
+/* Input wrappers */
+.unified-input-wrapper {
+  width: 100%;
+  position: relative;
+  margin-bottom: 2px;
+}
+
+/* Basic input styling */
+.unified-input {
+  width: 100%;
+  padding: 8px;
   background-color: var(--background-primary);
   border: 1px solid var(--background-modifier-border);
   border-radius: 4px;
   color: var(--text-normal);
-  margin: 0;
+  font-size: var(--font-ui-small);
+  line-height: 1.5;
+  transition: all 0.2s ease;
 }
 
-textarea.property-value-multitext:focus {
-  border-color: var(--input-border-focus);
-  box-shadow: 0 0 0 1px var(--input-border-focus);
+.unified-input:focus {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
   outline: none;
 }
 
-/* Ensure multiline containers show properly */
-.multiline-input-container {
+/* Multiline textarea */
+.unified-textarea-wrapper {
   width: 100%;
-  padding: 0;
-  margin: 0;
+  position: relative;
 }
 
-/* List input placeholder styles */
-.list-input-container {
+.unified-textarea {
   width: 100%;
-  padding: 0;
-  margin: 0;
+  min-height: 60px;
+  max-height: 300px;
+  padding: 8px;
+  background-color: var(--background-primary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 4px;
+  color: var(--text-normal);
+  font-size: var(--font-ui-small);
+  line-height: 1.5;
+  resize: vertical;
+  transition: all 0.2s ease;
 }
 
-/* List input styles */
-.list-input-wrapper {
+.unified-textarea:focus {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+  outline: none;
+}
+
+/* Invalid state */
+.unified-input.is-invalid,
+.unified-textarea.is-invalid {
+  border-color: var(--text-error);
+  box-shadow: 0 0 0 1px var(--text-error);
+}
+
+/* Checkbox styling */
+.unified-checkbox-wrapper {
   display: flex;
-  flex-direction: column;
+  align-items: center;
   gap: 8px;
-  width: 100%;
-}
-
-.pills-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--size-2-1);
-  min-height: 30px;
   padding: 4px 0;
 }
 
-.list-pill {
+.unified-checkbox {
+  position: relative;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 3px;
+  background-color: var(--background-primary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.unified-checkbox:checked {
+  background-color: var(--interactive-accent);
+  border-color: var(--interactive-accent);
+}
+
+.unified-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 1px;
+  width: 5px;
+  height: 10px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.unified-checkbox:focus {
+  box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.2);
+  outline: none;
+}
+
+.unified-checkbox-label {
+  cursor: pointer;
+  user-select: none;
+}
+
+/* List items styling */
+.unified-list-wrapper {
+  width: 100%;
   display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.unified-pills-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 2px 0;
+  min-height: 28px;
+  width: 100%;
+}
+
+.unified-pill {
+  display: inline-flex;
   align-items: center;
-  padding: 3px 8px;
-  font-size: var(--font-ui-small);
-  max-width: 200px;
-  overflow: hidden;
+  gap: 4px;
+  padding: 2px 0;
   cursor: pointer;
-  transition: border-color 0.15s ease;
 }
 
-.list-pill:not(:has(.pill-edit-input)){
-  background-color: var(--background-modifier-hover);
-  border: 1px solid transparent;
-  border-radius: var(--radius-s);
+.unified-pill .pill-text {
+  color: var(--text-normal);
 }
 
-.list-pill:not(:has(.pill-edit-input)):hover {
-  border: var(--pill-border-width, 1px) solid var(--pill-border-color, var(--interactive-accent));
-  border-radius: var(--pill-radius, var(--radius-s));
+/* Only highlight pill background when editing */
+.unified-pill.is-editing {
+  background-color: var(--background-secondary);
+  border-radius: 3px;
+  padding: 2px 4px;
 }
 
-.pill-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.unified-pill:hover .pill-text {
+  text-decoration: underline;
 }
 
-.pill-remove {
-  margin-left: 3px;
-  cursor: pointer;
-  /* font-size: 14px; */
-  font-weight: bold;
+.unified-pill .pill-remove {
   color: var(--text-muted);
+  cursor: pointer;
+  font-size: 16px;
+  width: 16px;
+  height: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  /* height: 16px; */
-  /* border-radius: 50%; */
+  border-radius: 50%;
 }
 
-.pill-remove:hover {
+.unified-pill .pill-remove:hover {
   color: var(--text-error);
-  background-color: rgba(var(--text-error-rgb), 0.1);
-}
-
-.list-input-container {
-  display: flex;
-  align-items: center;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 4px;
-  background-color: var(--background-primary);
-  overflow: hidden;
-  padding: 5px;
-}
-
-.list-add-input {
-  flex: 1;
-  border: none !important;
-  background: transparent !important;
-  padding: 6px 8px !important;
-  min-height: 34px;
-  font-size: var(--font-ui-small);
-  color: var(--text-normal);
-  outline: none !important;
-  box-shadow: none !important;
-  margin: 0 !important;
-}
-
-.list-add-button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  background-color: var(--background-modifier-border);
-  color: var(--text-normal);
-  border: none;
-  border-radius: var(--radius-s);
-  font-size: 24px;
-  color: var(--text-muted) !important;
-  cursor: pointer;
-  transition: background-color 0.15s ease, color 0.15s ease;
-}
-
-.list-add-button:hover {
-  background-color: var(--interactive-hover);
-  color: var(--text-normal);
+  background-color: var(--background-modifier-hover);
 }
 
 .pill-edit-input {
+  background: transparent;
+  border: none;
   width: 100%;
-  min-width: 100px;
-  max-width: 180px;
-  background-color: var(--background-primary);
-  padding: 3px 8px;
+  min-width: 60px;
   font-size: var(--font-ui-small);
+  color: var(--text-normal);
+  padding: 0;
+  margin: 0;
+}
+
+.pill-edit-input:focus {
   outline: none;
 }
