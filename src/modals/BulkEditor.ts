@@ -169,7 +169,7 @@ export class BulkEditor extends Modal {
             await this.loadProperties(); // This will append items to this.propertiesListContainer
             loadingEl.remove();
             this.updateExpandCollapseButtonState();
-
+            
             // Re-append the add button to ensure it's at the bottom after loading
             this.propertiesListContainer.appendChild(addPropertyBtn);
 
@@ -283,6 +283,13 @@ export class BulkEditor extends Modal {
                         this.updateAllExpansionState(this.globalSettings.expandAll);
                         // Update the button itself
                         this.updateExpandCollapseButtonState();
+                        // Resize all editors
+                        setTimeout(() => {
+                            if (!this.propertiesListContainer) return;
+                            this.propertiesListContainer.querySelectorAll('.property-value-editor').forEach(el => {
+                                this.autoResizeEditableDiv(el as HTMLElement);
+                            });
+                        }, 10);
                     });
             })
             .settingEl.setAttrs({ id: 'expandCollapseAllContainer' }); // Keep ID if needed
@@ -319,6 +326,25 @@ export class BulkEditor extends Modal {
                 toggle.checked = enabled;
             }
         });
+        
+        // Process links in all editors after toggling all
+        if (this.propertiesListContainer) {
+            const editors = this.propertiesListContainer.querySelectorAll('.property-value-editor');
+            editors.forEach(editor => {
+                if (editor instanceof HTMLElement) {
+                    // Find the property key for this editor
+                    const propertyItem = editor.closest('.bulk-property-item');
+                    if (propertyItem && propertyItem.id.startsWith('prop-')) {
+                        const key = propertyItem.id.substring(5); // Remove 'prop-' prefix
+                        const state = this.propertiesState.get(key);
+                        const editorType = state?.changeType || 
+                                         this.propertyConsistency.get(key)?.type.mostCommonType || 
+                                         'text';
+                        this.processLinksInEditor(editor, editorType);
+                    }
+                }
+            });
+        }
     }
     
     /**
@@ -588,6 +614,20 @@ export class BulkEditor extends Modal {
                 .onChange(value => {
                     state.enabled = value;
                     this.updateMasterEnableToggleState();
+
+                    // Process links in all property editors when toggling
+                    const propertyContent = propertyItem.querySelector('.property-content');
+                    if (propertyContent) {
+                        const editors = propertyContent.querySelectorAll('.property-value-editor');
+                        editors.forEach(editor => {
+                            if (editor instanceof HTMLElement) {
+                                const editorType = state.changeType || 
+                                                stats?.type.mostCommonType || 
+                                                'text';
+                                this.processLinksInEditor(editor, editorType);
+                            }
+                        });
+                    }
                 });
              toggle.toggleEl.parentElement?.addClass('edit-toggle-control-wrapper');
         });
@@ -642,25 +682,36 @@ export class BulkEditor extends Modal {
         this.plugin.registerDomEvent(propertyHeaderSetting.settingEl, 'click', (e: MouseEvent) => {
             // Ignore clicks on controls
             if (controlEl.contains(e.target as Node)) { return; }
-
+        
             // Toggle state
             state.expanded = !state.expanded;
-
-            // Find the hint span dynamically if needed, though the 'hintSpan' variable should still be in scope
-            const currentHintSpan = propertyHeaderSetting.descEl.querySelector('.property-toggle-hint'); // More robust way to find it
-
+        
+            // Find the hint span dynamically if needed
+            const currentHintSpan = propertyHeaderSetting.descEl.querySelector('.property-toggle-hint');
+        
             // Update UI
             if (state.expanded) {
                 propertyItem.classList.remove('is-collapsed');
                 contentContainer.style.display = '';
                 propertyHeaderSetting.settingEl.setAttribute('aria-expanded', 'true');
-                if (currentHintSpan) currentHintSpan.textContent = 'Toggle to hide options.'; // Update hint text
+                if (currentHintSpan) currentHintSpan.textContent = 'Toggle to hide options.';
+                
+                // Resize all contenteditable elements when they become visible
+                setTimeout(() => {
+                    const editors = contentContainer.querySelectorAll('.property-value-editor');
+                    editors.forEach(editor => {
+                        if (editor instanceof HTMLElement) {
+                            this.autoResizeEditableDiv(editor);
+                        }
+                    });
+                }, 0);
             } else {
                 propertyItem.classList.add('is-collapsed');
                 contentContainer.style.display = 'none';
                 propertyHeaderSetting.settingEl.setAttribute('aria-expanded', 'false');
-                if (currentHintSpan) currentHintSpan.textContent = 'Toggle to display options.'; // Update hint text
+                if (currentHintSpan) currentHintSpan.textContent = 'Toggle to display options.';
             }
+            
             // Update the global expand/collapse button state if necessary
             this.updateExpandCollapseButtonState();
         });
@@ -671,8 +722,8 @@ export class BulkEditor extends Modal {
                 if (e.target instanceof HTMLElement && controlEl.contains(e.target) && e.target.closest('.checkbox-container')) { return; }
                 // Allow toggling if focus is anywhere else in the header, except controls
                 if (!controlEl.contains(e.target as Node)) {
-                e.preventDefault();
-                propertyHeaderSetting.settingEl.click(); // Simulate click to trigger expansion logic
+                    e.preventDefault();
+                    propertyHeaderSetting.settingEl.click(); // This will trigger the click handler above
                 }
             }
         });
@@ -692,14 +743,12 @@ export class BulkEditor extends Modal {
             .setDesc('Overrides global setting if the edit toggle above is off.')
             .addDropdown(dropdown => {
                 dropdown
-                    .addOption('global', 'Use Global Setting (Default)')
-                    .addOption('keep', 'Keep Existing')
-                    .addOption('remove', 'Remove Property')
-                    .addOption('add_if_missing', 'Add Empty if Missing')
-                    .setValue(state.disabledAction)
-                    .onChange(value => {
-                        state.disabledAction = value as 'global' | 'keep' | 'remove' | 'add_if_missing';
-                    });
+                .setValue(state.changeType || '')
+                .onChange(value => {
+                    const newType = value || null;
+                    state.changeType = newType;
+                    this.updateValueControl(valueControlContainer, key, newType);
+                });
             });
 
         // --- Apply Order for This Property ---
@@ -739,11 +788,12 @@ export class BulkEditor extends Modal {
             const iconText = (stats.type.consistent === stats.type.total) ? '✓' : '⚠';
             statusRow.createSpan({ cls: `property-header-stat-icon ${iconClass}`, text: iconText });
             const labelSpan = statusRow.createSpan({ cls: 'property-header-stat-label' });
-            labelSpan.appendText(`Most common type found in ${stats.type.consistent}/${stats.type.total} files.`);
+            labelSpan.appendText(`Most common type found in <span class="math-inline">\{stats\.type\.consistent\}/</span>{stats.type.total} files.`);
         } else {
             typeDescEl.createSpan({ text: 'Property not found in any selected file.', cls: 'text-muted' });
         }
         // --- End Property Type Description ---
+
 
         // --- Static Property Value Info Display ---
         const propertyValueDisplaySetting = new Setting(container)
@@ -777,6 +827,16 @@ export class BulkEditor extends Modal {
         propertyValueDisplaySetting.settingEl.addClass('property-value-display-setting');
         // --- End Static Property Value Info Display ---
 
+
+        // --- Container for Dynamic Value Input Control ---
+        // This div will be populated by updateValueControl
+        const valueControlContainer = container.createDiv();
+        valueControlContainer.addClass('dynamic-value-input-container');
+        // Add class based on initial type for styling
+        const initialActualType = state.changeType || mostCommonTypeValue || 'text';
+        valueControlContainer.addClass(`value-input-container-${initialActualType}`);
+
+
         // --- Link Type Dropdown onChange to Update Control ---
         propertyTypeSetting.addDropdown(dropdown => {
             const filteredTypes = mostCommonTypeValue
@@ -794,9 +854,430 @@ export class BulkEditor extends Modal {
                 .onChange(value => {
                     const newType = value || null;
                     state.changeType = newType;
+                    // Update CSS class on container
+                    valueControlContainer.className = 'dynamic-value-input-container'; // Reset classes
+                    valueControlContainer.addClass(`value-input-container-${newType || mostCommonTypeValue || 'text'}`);
+                    // Call the update function
+                    this.updateValueControl(valueControlContainer, key, newType);
                 });
             return dropdown;
         });
+
+        this.createUnifiedValueContainer(valueControlContainer, key, state.changeType || mostCommonTypeValue || 'text');
+
+        // Initial setup of the value control
+        this.updateValueControl(valueControlContainer, key, state.changeType);
+
+    } // End of createPropertyDetailsSection
+
+    /**
+     * Updates the unified editor's value when the property type changes.
+     */
+    private updateValueControl(
+        valueControlContainer: HTMLElement, // The container div holding the editor
+        key: string,
+        selectedType: string | null
+        ): void {
+        const state = this.propertiesState.get(key);
+        const stats = this.propertyConsistency.get(key);
+        if (!state || !stats) return;
+
+        // Find the editor div within the container
+        const editor = valueControlContainer.querySelector('.property-value-editor') as HTMLElement | null;
+        if (!editor) {
+            console.error(`Editor not found for property ${key}`);
+            return;
+        }
+
+        const mostCommonTypeValue = stats.type.mostCommonType;
+        const actualType = selectedType || mostCommonTypeValue || 'text';
+
+        // Update container classes for the new type
+        valueControlContainer.className = 'dynamic-value-input-container'; // Reset classes
+        valueControlContainer.addClass(`value-input-container-${actualType}`);
+
+        // Determine the value to display - prioritize override, then stats
+        let valueToDisplay: any;
+        if (state.overrideValue !== null && state.overrideValue !== undefined) {
+            valueToDisplay = state.overrideValue;
+        } else if (stats.value.total > 0) {
+            valueToDisplay = stats.value.mostCommonValue ?? stats.value.firstEncounteredValue;
+        } else {
+            valueToDisplay = null;
+        }
+
+        // Format the value using formatValuePreview to remove syntax characters
+        const formattedValue = formatValuePreview(valueToDisplay, actualType);
+
+        // Update the editor's content and placeholder
+        editor.textContent = formattedValue;
+        editor.setAttribute('placeholder', `Enter ${actualType} value...`);
+
+        // Process links in the editor
+        this.processLinksInEditor(editor, actualType);
+
+        // Resize the editor based on the new content
+        this.autoResizeEditableDiv(editor);
+    }
+
+    /**
+     * Creates a unified value container with appropriate input based on property type.
+     */
+    private createUnifiedValueContainer(
+        container: HTMLElement,
+        key: string,
+        initialType: string | null
+        ): HTMLElement {
+        const state = this.propertiesState.get(key);
+        const stats = this.propertyConsistency.get(key);
+        if (!state || !stats) return container;
+
+        const mostCommonTypeValue = stats.type.mostCommonType;
+        const actualType = initialType || mostCommonTypeValue || 'text';
+        const hasValueData = stats.value.total > 0;
+
+        // --- Create the unified container DIV ---
+        const valueContainer = container.createDiv({
+            cls: 'unified-value-container'
+        });
+        
+        // Add type-specific class to container
+        valueContainer.addClass(`value-container-type-${actualType}`);
+
+        // --- Determine Initial Value and Format for Display ---
+        let rawInitialValue: any = '';
+        if (state.overrideValue !== null && state.overrideValue !== undefined) {
+            rawInitialValue = state.overrideValue;
+        } else if (hasValueData) {
+            rawInitialValue = stats.value.mostCommonValue ?? stats.value.firstEncounteredValue;
+        }
+
+        // Format the value using formatValuePreview to remove syntax characters
+        const formattedValue = formatValuePreview(rawInitialValue, actualType);
+
+        // --- Create appropriate input element based on type ---
+        if (actualType === 'checkbox') {
+            // Create checkbox input for checkbox type
+            const checkboxContainer = valueContainer.createDiv({
+                cls: 'checkbox-input-container'
+            });
+            
+            const checkboxInput = checkboxContainer.createEl('input', {
+                type: 'checkbox',
+                cls: 'property-value-checkbox',
+                attr: { 
+                    tabindex: '0'
+                }
+            });
+            
+            // Set initial value for checkbox
+            const initialBoolValue = typeof rawInitialValue === 'boolean' 
+                ? rawInitialValue 
+                : String(rawInitialValue).toLowerCase() === 'true';
+            checkboxInput.checked = initialBoolValue;
+            
+            // Add change event listener for checkbox
+            this.plugin.registerDomEvent(checkboxInput, 'change', () => {
+                state.overrideValue = checkboxInput.checked;
+            });
+            
+            // Focus/blur handlers
+            this.plugin.registerDomEvent(checkboxInput, 'focus', () => {
+                this.autoResizeEditableDiv(checkboxContainer);
+            });
+            
+            this.plugin.registerDomEvent(checkboxInput, 'blur', () => {
+                this.autoResizeEditableDiv(checkboxContainer);
+            });
+            
+        } else {
+            // Create contenteditable div for other types
+            const propertyValueDiv = valueContainer.createDiv({
+                cls: 'metadata-input-longtext property-value-editor',
+                attr: {
+                    contenteditable: 'true',
+                    spellcheck: 'true',
+                    tabindex: '0',
+                    placeholder: this.getPlaceholderForType(actualType)
+                }
+            });
+            
+            // Set initial text content with the formatted value
+            propertyValueDiv.textContent = formattedValue;
+            
+            // Process any links in the initial content
+            this.processLinksInEditor(propertyValueDiv, actualType);
+
+            // --- Add Input Event Listener ---
+            this.plugin.registerDomEvent(propertyValueDiv, 'input', () => {
+                // Store the raw text value in the state
+                if (propertyValueDiv.textContent !== null) {
+                    state.overrideValue = propertyValueDiv.textContent;
+                }
+                
+                // Only restrict multi-line input for non-text types
+                if (actualType !== 'text') {
+                    // Remove newlines from text content
+                    if (propertyValueDiv.textContent) {
+                        propertyValueDiv.textContent = propertyValueDiv.textContent.replace(/\n/g, '');
+                        state.overrideValue = propertyValueDiv.textContent;
+                    }
+                }
+                
+                // Convert any link spans back to plain text during editing
+                const linkSpans = propertyValueDiv.querySelectorAll('.metadata-link');
+                if (linkSpans.length > 0) {
+                    linkSpans.forEach(span => {
+                        const textNode = document.createTextNode(span.textContent || '');
+                        span.parentNode?.replaceChild(textNode, span);
+                    });
+                    state.overrideValue = propertyValueDiv.textContent;
+                }
+                
+                // Resize on input
+                this.autoResizeEditableDiv(propertyValueDiv);
+            });
+            
+            // --- Focus/blur event listeners ---
+            this.plugin.registerDomEvent(propertyValueDiv, 'focus', () => {
+                // When focused, convert any link spans to plain text to allow editing
+                const linkSpans = propertyValueDiv.querySelectorAll('.metadata-link');
+                if (linkSpans.length > 0) {
+                    linkSpans.forEach(span => {
+                        const textNode = document.createTextNode(span.textContent || '');
+                        span.parentNode?.replaceChild(textNode, span);
+                    });
+                }
+                
+                this.autoResizeEditableDiv(propertyValueDiv);
+            });
+            
+            this.plugin.registerDomEvent(propertyValueDiv, 'blur', () => {
+                // Convert list type values back to arrays
+                if (actualType === 'list' && propertyValueDiv.textContent) {
+                    state.overrideValue = propertyValueDiv.textContent
+                        .split(',')
+                        .map(item => item.trim())
+                        .filter(item => item.length > 0);
+                }
+                
+                // Check if the content is still a valid link after editing
+                this.processLinksInEditor(propertyValueDiv, actualType);
+                
+                // Ensure we resize AFTER all content processing is done
+                setTimeout(() => {
+                    this.autoResizeEditableDiv(propertyValueDiv);
+                }, 0);
+            });
+            
+            // --- Type-specific event handlers ---
+            if (actualType !== 'text') {
+                this.plugin.registerDomEvent(propertyValueDiv, 'keydown', (e: KeyboardEvent) => {
+                    // Prevent Enter key for single-line types
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        
+                        // Special handling for list type
+                        if (actualType === 'list') {
+                            document.execCommand('insertText', false, ', ');
+                        }
+                    }
+                });
+            }
+            
+            // Initial size calculation
+            this.autoResizeEditableDiv(propertyValueDiv);
+        }
+
+        return valueContainer;
+    }
+
+    /**
+     * Returns the appropriate placeholder text based on property type.
+     */
+    private getPlaceholderForType(type: string): string {
+        switch (type) {
+            case 'text':
+            case 'list':
+            case 'number':
+                return 'Empty';
+            case 'date':
+                return 'YYYY-MM-DD';
+            case 'datetime':
+                return 'YYYY-MM-DD HH:MM';
+            case 'checkbox':
+                return ''; // Checkbox doesn't need a placeholder
+            default:
+                return `Enter ${type} value...`;
+        }
+    }
+
+    /**
+     * Processes text content in the editor to identify and make links clickable.
+     * Now with improved cursor position handling.
+     */
+    private processLinksInEditor(element: HTMLElement, type: string): void {
+        // Skip if this is not a link-compatible type, or if content has multiple lines
+        if ((type !== 'text' && type !== 'list') || 
+            (element.textContent && element.textContent.includes('\n'))) {
+            return;
+        }
+        
+        // Get the current content
+        const currentContent = element.textContent || '';
+        
+        // Process based on type
+        if (type === 'text') {
+            // For text fields, ONLY make the entire content clickable if it's a valid URL
+            // Use a stricter URL validation to prevent partial links from being recognized
+            if (this.isValidUrl(currentContent)) {
+                // Only modify the DOM if needed
+                if (!element.querySelector('.metadata-link') || 
+                    element.querySelector('.metadata-link')?.textContent !== currentContent) {
+                    
+                    // Clear the element
+                    element.innerHTML = '';
+                    
+                    // Create a clickable link element
+                    const linkElement = this.createClickableLinkElement(currentContent);
+                    element.appendChild(linkElement);
+                }
+            } else {
+                // If it's not a valid URL anymore, make sure to convert any link spans back to plain text
+                const linkSpans = element.querySelectorAll('.metadata-link');
+                if (linkSpans.length > 0) {
+                    // Replace each link span with its text content
+                    linkSpans.forEach(span => {
+                        const textNode = document.createTextNode(span.textContent || '');
+                        span.parentNode?.replaceChild(textNode, span);
+                    });
+                }
+            }
+        } else if (type === 'list') {
+            // List processing remains the same...
+        }
+    }
+
+    /**
+     * Checks if a string is a valid URL with a stricter validation
+     */
+    private isValidUrl(text: string): boolean {
+        // More comprehensive URL validation regex
+        const urlRegex = /^(https?:\/\/)(www\.)?([a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+)(\/[^\s]*)?$/;
+        return urlRegex.test(text);
+    }
+    
+    /**
+     * Creates a clickable link element for the editor
+     */
+    private createClickableLinkElement(link: string): HTMLElement {
+        // Create the link element
+        const linkElement = document.createElement('span');
+        linkElement.className = 'metadata-link';
+        linkElement.textContent = link;
+        
+        // Add click handler
+        this.plugin.registerDomEvent(linkElement, 'click', (e: MouseEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleLinkClick(this.app, link, e);
+        });
+        
+        return linkElement;
+    }
+
+    /**
+     * Counts the actual visual lines in a contenteditable element.
+     * Accounts for both \n characters and block elements like <div>, <p>, etc.
+     */
+    private countVisualLines(element: HTMLElement): number {
+        // Get the computed line height
+        const computedStyle = window.getComputedStyle(element);
+        let lineHeight = parseInt(computedStyle.lineHeight);
+        if (isNaN(lineHeight)) {
+            const fontSize = parseInt(computedStyle.fontSize);
+            lineHeight = Math.round(fontSize * 1.5);
+        }
+        
+        // Create a clone to measure without affecting the original
+        const clone = element.cloneNode(true) as HTMLElement;
+        clone.style.position = 'absolute';
+        clone.style.visibility = 'hidden';
+        clone.style.height = 'auto';
+        clone.style.width = element.offsetWidth + 'px';
+        document.body.appendChild(clone);
+        
+        // Get the height of the content
+        const contentHeight = clone.scrollHeight;
+        document.body.removeChild(clone);
+        
+        // Get padding
+        const paddingTop = parseInt(computedStyle.paddingTop) || 0;
+        const paddingBottom = parseInt(computedStyle.paddingBottom) || 0;
+        
+        // Calculate the actual content height without padding
+        const textHeight = contentHeight - paddingTop - paddingBottom;
+        
+        // Estimate the number of lines
+        const lines = Math.max(1, Math.round(textHeight / lineHeight));
+        
+        return lines;
+    }
+
+    /**
+     * Automatically adjusts the height of a contenteditable div based on its content.
+     */
+    private autoResizeEditableDiv(element: HTMLElement): void {
+        // Use the new method to count visual lines
+        const lineCount = this.countVisualLines(element);
+        
+        // Get computed style for measurements
+        const computedStyle = window.getComputedStyle(element);
+        
+        // Get line height
+        let lineHeight = parseInt(computedStyle.lineHeight);
+        if (isNaN(lineHeight)) {
+            const fontSize = parseInt(computedStyle.fontSize);
+            lineHeight = Math.round(fontSize * 1.5);
+        }
+        
+        // Calculate padding
+        const paddingTop = parseInt(computedStyle.paddingTop) || 0;
+        const paddingBottom = parseInt(computedStyle.paddingBottom) || 0;
+        
+        // Minimum height
+        const minHeight = 32;
+        
+        // Get current focus state
+        const isFocused = document.activeElement === element;
+        
+        // For when focused: show all content
+        if (isFocused) {
+            // Reset height to auto to get true content height
+            element.style.height = 'auto';
+            const contentHeight = element.scrollHeight;
+            element.style.height = `${Math.max(minHeight, contentHeight)}px`;
+            element.style.maxHeight = 'none';
+            element.style.overflowY = 'hidden';
+        } 
+        // For when not focused:
+        else {
+            // Calculate height based on actual line count
+            if (lineCount <= 3) {
+                // Show all lines (1-3) by calculating exact height needed
+                const exactHeight = Math.max(minHeight, 
+                    (lineCount * lineHeight) + paddingTop + paddingBottom);
+                element.style.height = `${exactHeight}px`;
+                element.style.maxHeight = `${exactHeight}px`;
+                element.style.overflowY = 'hidden';
+            } else {
+                // More than 3 lines: show exactly 3 lines with scrollbar
+                const threeLineHeight = (3 * lineHeight) + paddingTop + paddingBottom;
+                element.style.height = `${threeLineHeight}px`;
+                element.style.maxHeight = `${threeLineHeight}px`;
+                element.style.overflowY = 'auto';
+            }
+        }
     }
     
     /**
@@ -1661,6 +2142,7 @@ export class BulkEditor extends Modal {
     
     /**
      * Processes an existing property value based on the property state and file actions.
+     * Handles type conversions and overrides.
      */
     private processPropertyValue(key: string, filePath: string, currentValue: any): any | undefined {
         const state = this.propertiesState.get(key);
@@ -1688,9 +2170,125 @@ export class BulkEditor extends Modal {
         }
 
         // --- Property is ENABLED for editing ---
-        return currentValue;
-    }
 
+        let newValue = currentValue; // Start with current value
+        const stats = this.propertyConsistency.get(key);
+        // Determine the target type based on user selection or detection
+        const targetType = state.changeType ||
+                       (stats ? stats.type.mostCommonType : null) ||
+                       this.plugin.propertyTypeService.detectPropertyType(currentValue) ||
+                       'text';
+
+        // Check if there's an override value specified by the user
+        const hasOverride = state.overrideValue !== null && state.overrideValue !== undefined;
+
+        if (hasOverride) {
+            // Use the override value, attempting conversion based on targetType
+            const override = state.overrideValue;
+
+            switch (targetType) {
+                case 'checkbox':
+                    // Convert override to boolean ('true'/'false' string or existing boolean)
+                    if (typeof override === 'boolean') {
+                        newValue = override;
+                    } else {
+                        newValue = String(override).toLowerCase() === 'true';
+                    }
+                    break;
+                case 'number':
+                    // Convert override to number; handle invalid input
+                    if (typeof override === 'number') {
+                        newValue = override;
+                    } else {
+                        const num = Number(String(override).trim());
+                        // Keep invalid string override *as string*? Or use default?
+                        // Let's default to 0 for invalid numbers on apply for now.
+                        newValue = !isNaN(num) ? num : 0;
+                    }
+                    break;
+                case 'date':
+                case 'datetime':
+                    // Store as string, potentially validate format here if needed
+                    // For now, assume string from validation step is acceptable
+                    newValue = String(override).trim() || null; // Store empty as null? Or ""? Let's use ""
+                    if (newValue === "") newValue = null; // Treat empty override as null maybe? Or keep ""? Stick with "" for now.
+                    newValue = String(override).trim();
+                    // TODO: Add final moment.js validation if desired
+                    break;
+                case 'list':
+                    // Expect overrideValue to be string[] from custom component
+                    if (Array.isArray(override)) {
+                        newValue = [...override]; // Use the array directly
+                    } else {
+                        // Fallback: if somehow it's still a string, parse it
+                        newValue = String(override).split(',').map((s: string) => s.trim()).filter(s => s);
+                    }
+                    break;
+                case 'text':
+                default: // Treat 'multitext' as text
+                    newValue = String(override); // Ensure it's a string
+                    break;
+            }
+        } else {
+            // No override value - potentially apply type change to existing value?
+            // This part is tricky - if type changes but no override is given, what should happen?
+            // Option A: Keep existing value as-is (simplest)
+            // Option B: Try to convert existing value to new type (complex, lossy)
+            // Let's stick with Option A for now: If no override, only type metadata changes, not value.
+            // The applyProperties logic using processFrontMatter handles type hints later if needed.
+            newValue = currentValue;
+
+            // However, if the *only* change is the type dropdown, ensure value fits?
+            // Maybe this logic belongs solely in how Obsidian handles frontmatter changes.
+            // Let's keep it simple: no override = keep current value structure.
+        }
+
+        // --- Add Parsing Logic Here ---
+        // If the newValue came from the textarea override, parse it based on targetType
+        if (hasOverride && typeof newValue === 'string') { // Ensure we're parsing the string from the textarea
+            const stringValue = newValue as string; // Explicitly type as string
+            switch (targetType) {
+                case 'number':
+                    const parsedNum = Number(stringValue.trim());
+                    // Keep invalid input as string or use null/0? Let's keep the string for now.
+                    newValue = !isNaN(parsedNum) ? parsedNum : stringValue; // Keep original string if invalid
+                    break;
+                case 'checkbox':
+                    newValue = stringValue.trim().toLowerCase() === 'true';
+                    break;
+                case 'list':
+                    // Split by comma, trim whitespace, filter empty strings
+                    newValue = stringValue.split(',')
+                                     .map(s => s.trim())
+                                     .filter(s => s.length > 0);
+                    // If the result is an empty array, represent it as such, not null
+                    if (newValue.length === 0 && stringValue.trim() === '') {
+                        // If the original string was empty/whitespace, result is empty array
+                        newValue = [];
+                    } else if (newValue.length === 0 && stringValue.trim() !== '') {
+                         // If original string wasn't empty but parsing resulted in empty
+                         // (e.g., just commas), maybe keep original string or single element array?
+                         // Let's default to an empty array for simplicity.
+                         newValue = [];
+                    }
+                    break;
+                case 'date':
+                case 'datetime':
+                    // Keep as string, Obsidian handles parsing/validation if format is correct
+                    newValue = stringValue.trim();
+                    break;
+                case 'text':
+                default:
+                    // Already a string, no further parsing needed
+                    newValue = stringValue;
+                    break;
+            }
+        }
+       // --- End Parsing Logic ---
+
+       return newValue;
+   }
+    
     /**
      * Determines the value for a property that is missing from a file, based on state.
      */
@@ -1705,15 +2303,20 @@ export class BulkEditor extends Modal {
 
         const fileActions = state.fileActions.get(filePath) || { type: false, value: false, add: false };
         const stats = this.propertyConsistency.get(key);
-        
         // Determine target type: user override > detected > default guess
         const targetType = state.changeType ||
                         (stats ? stats.type.mostCommonType : null) ||
                         getDefaultTypeForKey(key); // Guess type based on key
 
-        // Should we add this property?
+        // Should we add this property? Check based on enabled state and actions
         let shouldAdd = false;
-        if (!state.enabled) {
+        if (state.enabled) {
+            // If editing is enabled, add if an override value exists, OR if fileAction.add is true?
+            // Let's simplify: Add if an override exists, OR if action is 'add_if_missing' implicitly?
+            // Let's default to adding if override exists, otherwise respect disabled actions.
+            shouldAdd = state.overrideValue !== null && state.overrideValue !== undefined;
+            // TODO: Revisit if fileActions.add should also trigger adding without an override value? Maybe not.
+        } else {
             // If editing is disabled, check the action for disabled properties
             const action = state.disabledAction === 'global'
                 ? this.globalSettings.disabledAction
@@ -1725,8 +2328,40 @@ export class BulkEditor extends Modal {
             return undefined; // Don't add the property
         }
 
-        // Add empty value based on the target type
-        return getEmptyValueForType(targetType);
+        // --- Determine the value to add ---
+        const hasOverride = state.overrideValue !== null && state.overrideValue !== undefined;
+        let valueToAdd: any;
+
+        if (hasOverride) {
+            const stringValue = state.overrideValue as string; // It's always a string from textarea
+            switch (targetType) {
+                case 'number':
+                    const parsedNum = Number(stringValue.trim());
+                    valueToAdd = !isNaN(parsedNum) ? parsedNum : null; // Add null if invalid number? Or 0? Let's use null.
+                    break;
+                case 'checkbox':
+                    valueToAdd = stringValue.trim().toLowerCase() === 'true';
+                    break;
+                case 'list':
+                    valueToAdd = stringValue.split(',')
+                                     .map(s => s.trim())
+                                     .filter(s => s.length > 0);
+                    break;
+                case 'date':
+                case 'datetime':
+                    valueToAdd = stringValue.trim(); // Add as string
+                    break;
+                case 'text':
+                default:
+                    valueToAdd = stringValue; // Add as string
+                    break;
+            }
+        } else {
+            // No override, add empty value based on the target type
+            valueToAdd = getEmptyValueForType(targetType);
+        }
+
+        return valueToAdd;
     }
 
     onClose() {
