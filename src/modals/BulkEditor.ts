@@ -1,11 +1,17 @@
-import { App, Modal, TFile, Setting, ButtonComponent, DropdownComponent, ToggleComponent, Notice, setIcon, setTooltip, TextComponent, TextAreaComponent, FuzzySuggestModal /*, prepareSimpleSearch */ } from 'obsidian';
+import { App, Modal, TFile, Setting, ButtonComponent, ExtraButtonComponent, DropdownComponent, ToggleComponent, Notice, setIcon, setTooltip, TextComponent, TextAreaComponent, FuzzySuggestModal, moment } from 'obsidian';
 import YAMLPropertyManagerPlugin from '../../main';
 import type { PropertyWithType } from '../PropertyTypeService';
-import { formatValuePreview, formatInputValue, isPotentialLink, handleLinkClick, parseValueLinks } from '../commonHelpers';
+import { formatValuePreview, formatInputValue, isPotentialLink, handleLinkClick, parseValueLinks, debounce } from '../commonHelpers';
 import { PROPERTY_TYPES } from '../constants';
 import { getEmptyValueForType, getDefaultTypeForKey } from '../commonHelpers';
 
-// Define interfaces for the state tracking
+// =================================================================
+// SECTION: Type Definitions & Interfaces
+// =================================================================
+
+/**
+ * Defines the state tracking for each property
+ */
 interface PropertyState {
     key: string;
     enabled: boolean;
@@ -23,7 +29,9 @@ interface PropertyState {
     }>;
 }
 
-/* Interface for property consistency statistics */
+/**
+ * Defines statistics for property consistency across files
+ */
 interface PropertyConsistencyStats {
     property: { total: number; present: number };
     type: { total: number; consistent: number; mostCommonType: string | null };
@@ -36,15 +44,21 @@ interface PropertyConsistencyStats {
     };
 }
 
-// Helper class for Note Suggestions
+// =================================================================
+// SECTION: Helper Classes
+// =================================================================
+
+/**
+ * Modal for suggesting notes from vault
+ */
 class NoteSuggestModal extends FuzzySuggestModal<TFile> {
-    onChooseSuggestionAction: (result: TFile | null) => void; // Allow null if closed without selection
-    onCloseExtra: () => void; // Callback for cleanup
+    onChooseSuggestionAction: (result: TFile | null) => void; 
+    onCloseExtra: () => void; 
 
     constructor(app: App, onChooseAction: (result: TFile | null) => void, onCloseCleanup: () => void) {
         super(app);
         this.onChooseSuggestionAction = onChooseAction;
-        this.onCloseExtra = onCloseCleanup; // Store cleanup action
+        this.onCloseExtra = onCloseCleanup;
         this.setPlaceholder("Search notes...");
     }
 
@@ -53,36 +67,402 @@ class NoteSuggestModal extends FuzzySuggestModal<TFile> {
     }
 
     getItemText(item: TFile): string {
-        return item.basename; // Display only basename
+        return item.basename;
     }
 
     onChooseItem(item: TFile, evt: MouseEvent | KeyboardEvent): void {
         this.onChooseSuggestionAction(item);
-        // No need to call onCloseExtra here, onClose will handle it
     }
 
-    // Override onClose to ensure cleanup happens
     onClose() {
-        super.onClose(); // Call parent onClose
-        this.onCloseExtra(); // Perform our cleanup
+        super.onClose();
+        this.onCloseExtra();
     }
 }
+
+/**
+ * Modal for suggesting existing property values
+ */
+class ExistingValueSuggestModal extends FuzzySuggestModal<any> {
+    values: any[];
+    propertyKey: string;
+    onChooseValue: (value: any) => void;
+
+    constructor(app: App, values: any[], propertyKey: string, onChoose: (value: any) => void) {
+        super(app);
+        this.values = values;
+        this.propertyKey = propertyKey;
+        this.onChooseValue = onChoose;
+        this.setPlaceholder(`Select existing value for ${propertyKey}...`);
+    }
+
+    getItems(): any[] {
+        return this.values;
+    }
+
+    getItemText(item: any): string {
+        return formatValuePreview(item);
+    }
+
+    onChooseItem(item: any, evt: MouseEvent | KeyboardEvent): void {
+        this.onChooseValue(item);
+    }
+}
+
+/**
+ * Standardized toggle handler to ensure consistent behavior and appearance
+ */
+class ToggleHandler {
+    private component: ToggleComponent;
+    private toggleEl: HTMLElement;
+    private inputEl: HTMLInputElement | null = null;
+    private isUpdating: boolean = false;
+    
+    constructor(
+        component: ToggleComponent, 
+        onChange: (value: boolean) => void,
+        plugin: YAMLPropertyManagerPlugin
+    ) {
+        this.component = component;
+        
+        // Get the actual toggle element (not the entire container)
+        this.toggleEl = component.toggleEl;
+        this.inputEl = this.toggleEl.querySelector('input[type="checkbox"]');
+        
+        // Clear default onChange to avoid duplicate handling
+        component.onChange(() => {});
+        
+        // Find the proper toggle area - usually a div with class checkbox-container
+        const toggleContainer = this.toggleEl.closest('.checkbox-container') || this.toggleEl;
+
+        // Ensure toggleContainer is an HTMLElement before registering the event
+        if (toggleContainer instanceof HTMLElement) {
+            // Add click handler ONLY to the toggle container, not the entire setting
+            plugin.registerDomEvent(toggleContainer, 'click', (e: MouseEvent) => {
+                // Skip if toggle is disabled
+                if (this.isDisabled()) {
+                    return;
+                }
+                
+                // Check if click is directly on the checkbox input
+                const target = e.target as HTMLElement;
+                const isCheckboxClick = target.tagName === 'INPUT' && 
+                                      (target as HTMLInputElement).type === 'checkbox';
+                
+                // For other clicks, ensure they're within the toggle container
+                // and not on some other control that might be nearby
+                if (!isCheckboxClick && !toggleContainer.contains(target)) {
+                    return;
+                }
+                
+                if (isCheckboxClick) {
+                    // For direct checkbox clicks, wait for checkbox state to update
+                    setTimeout(() => {
+                        if (!this.isUpdating && this.inputEl) {
+                            this.isUpdating = true;
+                            try {
+                                onChange(this.inputEl.checked);
+                            } finally {
+                                this.isUpdating = false;
+                            }
+                        }
+                    }, 0);
+                    return;
+                }
+                
+                // For clicks on the toggle container (not the checkbox itself)
+                e.preventDefault();
+                e.stopPropagation();
+                
+                // Toggle the checkbox state
+                if (this.inputEl) {
+                    const newState = !this.inputEl.checked;
+                    this.setValue(newState, false); // Update visual state immediately
+                    
+                    // Call the onChange callback
+                    if (!this.isUpdating) {
+                        this.isUpdating = true;
+                        try {
+                            onChange(newState);
+                        } finally {
+                            this.isUpdating = false;
+                        }
+                    }
+                }
+            });
+        }
+    }
+    
+    /**
+     * Gets the current checked state of the toggle
+     */
+    getValue(): boolean {
+        // Prioritize the actual input element state if available
+        return this.inputEl ? this.inputEl.checked : this.component.getValue();
+    }
+    
+    /**
+     * Sets the checked state of the toggle and updates visual appearance
+     */
+    setValue(value: boolean, skipCallback: boolean = false): this {
+        if (this.isUpdating) return this;
+        
+        this.isUpdating = true;
+        try {
+            // Update the component state (which updates the input)
+            this.component.setValue(value);
+            
+            // Also update visual state directly to ensure consistency
+            this.updateVisualState(value);
+            
+        } finally {
+            this.isUpdating = false;
+        }
+        return this;
+    }
+    
+    /**
+     * Sets the disabled state of the toggle
+     */
+    setDisabled(disabled: boolean): this {
+        // Update the input element
+        if (this.inputEl) {
+            this.inputEl.disabled = disabled;
+        }
+        
+        // Get toggle container
+        const toggleContainer = this.toggleEl.closest('.checkbox-container') || this.toggleEl;
+        
+        // Get parent setting item if exists
+        const settingItem = this.toggleEl.closest('.setting-item');
+        
+        // Update classes for visual state
+        if (disabled) {
+            if (toggleContainer instanceof HTMLElement) {
+                toggleContainer.classList.add('is-disabled');
+            }
+            if (settingItem instanceof HTMLElement) {
+                settingItem.classList.add('setting-disabled');
+            }
+        } else {
+            if (toggleContainer instanceof HTMLElement) {
+                toggleContainer.classList.remove('is-disabled');
+            }
+            if (settingItem instanceof HTMLElement) {
+                settingItem.classList.remove('setting-disabled');
+            }
+        }
+        
+        return this;
+    }
+    
+    /**
+     * Checks if the toggle is currently disabled
+     */
+    isDisabled(): boolean {
+        const toggleContainer = this.toggleEl.closest('.checkbox-container') || this.toggleEl;
+        
+        return (toggleContainer instanceof HTMLElement && toggleContainer.classList.contains('is-disabled')) || 
+               !!(this.toggleEl.closest('.setting-disabled')) ||
+               !!(this.inputEl && this.inputEl.disabled);
+    }
+
+    /**
+     * Checks if this toggle handler is still valid and attached to the DOM
+     */
+    isValid(): boolean {
+        return this.toggleEl && this.toggleEl.isConnected;
+    }
+
+    /**
+     * Clean up resources when the toggle is no longer needed
+     */
+    dispose(): void {
+        // Nothing to clean up in this implementation since 
+        // plugin.registerDomEvent handles cleanup automatically when the plugin is unloaded
+        // This method is provided for API consistency
+    }
+    
+    /**
+     * Updates the visual state of the toggle to ensure
+     * UI elements match the actual state
+     */
+    private updateVisualState(checked: boolean): void {
+        try {
+            // Update the input element
+            if (this.inputEl) {
+                this.inputEl.checked = checked;
+            }
+            
+            // Find and update the checkbox container
+            const container = this.toggleEl.closest('.checkbox-container') || 
+                            this.toggleEl.querySelector('.checkbox-container');
+            if (container instanceof HTMLElement) {
+                if (checked) {
+                    container.classList.add('is-enabled');
+                } else {
+                    container.classList.remove('is-enabled');
+                }
+            }
+            
+            // Find and update the indicator if it exists
+            const indicator = container instanceof HTMLElement ? container.querySelector('.checkbox-indicator') : null;
+            if (indicator instanceof HTMLElement) {
+                if (checked) {
+                    indicator.classList.add('is-enabled');
+                } else {
+                    indicator.classList.remove('is-enabled');
+                }
+            }
+        } catch (error) {
+            console.error('Error updating toggle visual state:', error);
+        }
+    }
+
+    /**
+     * Gets the toggle element
+     */
+    getElement(): HTMLElement {
+        return this.toggleEl;
+    }
+}
+
+/**
+ * Manages relationships between a master toggle and its dependent toggles
+ */
+class ToggleRelationship {
+    private masterToggle: ToggleHandler;
+    private individualToggles: ToggleHandler[] = [];
+    private isUpdating: boolean = false;
+    
+    /**
+     * Creates a new toggle relationship
+     * @param masterToggle The master toggle that controls the group
+     */
+    constructor(masterToggle: ToggleHandler) {
+        this.masterToggle = masterToggle;
+    }
+    
+    /**
+     * Adds an individual toggle that will be controlled by the master
+     * @param toggle The toggle to add to the relationship
+     * @returns This instance for chaining
+     */
+    addIndividualToggle(toggle: ToggleHandler): this {
+        this.individualToggles.push(toggle);
+        return this;
+    }
+    
+    /**
+     * Updates all individual toggles based on the master toggle state
+     * with batched DOM updates for performance
+     */
+    updateFromMaster(value: boolean): void {
+        if (this.isUpdating) return;
+        
+        this.isUpdating = true;
+        try {
+            // For large sets of toggles, we can optimize by batching updates
+            if (this.individualToggles.length > 20) {
+                // First update all data models
+                this.individualToggles.forEach(toggle => {
+                    // Update value without immediately updating the DOM
+                    toggle.setValue(value, true);
+                });
+                
+                // Then force a single reflow by reading a layout property
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                const forceReflow = document.body.offsetHeight;
+                
+                // Now update the visual state of all toggles at once
+                this.individualToggles.forEach(toggle => {
+                    const element = toggle.getElement();
+                    if (element) {
+                        const input = element.querySelector('input[type="checkbox"]');
+                        if (input instanceof HTMLInputElement) {
+                            input.checked = value;
+                        }
+                    }
+                });
+            } else {
+                // For small sets, just update each toggle normally
+                this.individualToggles.forEach(toggle => {
+                    toggle.setValue(value);
+                });
+            }
+        } finally {
+            this.isUpdating = false;
+        }
+    }
+    
+    /**
+     * Updates the master toggle based on the state of all individual toggles
+     */
+    updateFromIndividual(): void {
+        if (this.isUpdating) return;
+        
+        this.isUpdating = true;
+        try {
+            // Check if all individual toggles are in the same state
+            const allOn = this.individualToggles.length > 0 && 
+                         this.individualToggles.every(toggle => toggle.getValue());
+            
+            // Update master toggle
+            this.masterToggle.setValue(allOn);
+        } finally {
+            this.isUpdating = false;
+        }
+    }
+    
+    /**
+     * Gets all individual toggles in this relationship
+     */
+    getIndividualToggles(): ToggleHandler[] {
+        return [...this.individualToggles];
+    }
+    
+    /**
+     * Gets the master toggle
+     */
+    getMasterToggle(): ToggleHandler {
+        return this.masterToggle;
+    }
+    
+    /**
+     * Removes an individual toggle from the relationship
+     * @param toggle The toggle to remove
+     * @returns Whether the toggle was found and removed
+     */
+    removeIndividualToggle(toggle: ToggleHandler): boolean {
+        const index = this.individualToggles.indexOf(toggle);
+        if (index >= 0) {
+            this.individualToggles.splice(index, 1);
+            return true;
+        }
+        return false;
+    }
+}
+
+// =================================================================
+// SECTION: Main BulkEditor Class
+// =================================================================
 
 export class BulkEditor extends Modal {
     plugin: YAMLPropertyManagerPlugin;
     files: TFile[];
 
+    // UI Elements
     private expandCollapseButton: ButtonComponent | null = null;
-
-    private propertyToggles: Array<{
-        key: string,
-        dropdown: DropdownComponent
-    }> = [];
-
-    // Element references for UI updates
-    private enableDisableToggle: ToggleComponent | null = null;
+    private propertyToggles: Array<{ key: string, dropdown: DropdownComponent }> = [];
+    private enableDisableToggle: ToggleHandler | null = null;
     private applyButton: ButtonComponent | null = null;
     private propertiesListContainer: HTMLElement | null = null;
+    private fileToggleComponents: Map<string, {excludeAllToggle: ToggleHandler, fileToggles: ToggleHandler[]}> = new Map();
+    private excludeAllToggleElement: Map<string, HTMLInputElement> = new Map();
+    private isUpdatingFromIndividualToggle = false;
+    private addAllMissingToggles: Map<string, ToggleHandler> = new Map();
+    private applyValueToAllToggles: Map<string, ToggleHandler> = new Map();
+    private overwriteAllValuesToggles: Map<string, ToggleHandler> = new Map();
 
     // State tracking
     private globalSettings = {
@@ -94,13 +474,19 @@ export class BulkEditor extends Modal {
 
     private propertiesState: Map<string, PropertyState> = new Map();
     private propertyConsistency: Map<string, PropertyConsistencyStats> = new Map();
-    
-    // File property cache (to avoid repeated processing)
     private fileProperties: Map<string, Record<string, PropertyWithType>> = new Map();
-
-    // Drag and drop tracking
     private draggedItem: HTMLElement | null = null;
     private propertyOrder: string[] = [];
+
+    // Toggle management using standardized handlers
+    private propertyToggleHandlers: Map<string, ToggleHandler> = new Map();
+    private toggleRelationships: Map<string, ToggleRelationship> = new Map();
+
+    // Debounced function to update value counter
+    private debouncedUpdateValueCounter = debounce((propertyKey: string, inputValue: any, targetType: string) => {
+        const count = this.calculateValueCount(propertyKey, inputValue);
+        this.updateValueCounterUI(propertyKey, count);
+    }, 300);
 
     constructor(app: App, plugin: YAMLPropertyManagerPlugin, files: TFile[]) {
         super(app);
@@ -108,18 +494,25 @@ export class BulkEditor extends Modal {
         this.files = files;
     }
 
+    // =================================================================
+    // SECTION: Modal Lifecycle Methods
+    // =================================================================
+
+    /**
+     * Initialize the modal when opened
+     */
     async onOpen() {
         const { contentEl } = this;
         contentEl.empty();
         
         // Main header
         new Setting(contentEl)
-        .setName('Bulk Property Editor')
-        .setHeading();
+            .setName('Bulk Property Editor')
+            .setHeading();
     
         // Add description
         new Setting(contentEl)
-        .setDesc(`Editing properties across ${this.files.length} ${this.files.length === 1 ? 'file' : 'files'}.`);
+            .setDesc(`Editing properties across ${this.files.length} ${this.files.length === 1 ? 'file' : 'files'}.`);
             
         // Create the main sections
         const controlsSection = contentEl.createDiv({ 
@@ -132,53 +525,46 @@ export class BulkEditor extends Modal {
         
         // Properties list header
         new Setting(contentEl)
-        .setName('Properties List')
-        .setHeading();
+            .setName('Properties List')
+            .setHeading();
         
         // Add expand/collapse all toggle
         this.createExpandCollapseButton(contentEl);
         
-        // Properties list container (this becomes the main list area)
+        // Properties list container
         const propertiesContainer = contentEl.createDiv({
-            cls: 'properties-list-container', // Keep this class
-            // Add the ID and scrolling directly here
+            cls: 'properties-list-container',
             attr: { id: 'propertiesList' }
         });
-        // Point the class member variable to this container
         this.propertiesListContainer = propertiesContainer;
 
-        // REMOVED: No longer creating the inner .properties-list div
-        // this.propertiesListContainer = propertiesContainer.createDiv({ ... });
-
-        // Loading indicator (create directly in the container)
+        // Loading indicator
         const loadingEl = this.propertiesListContainer.createEl('div', {
             cls: 'property-loading-container',
             text: 'Loading properties...'
         });
 
-        // Add new property button (append *inside* the container now)
-        const addPropertyBtn = this.propertiesListContainer.createDiv({ // Append here
+        // Add new property button
+        const addPropertyBtn = this.propertiesListContainer.createDiv({
             cls: 'add-property-list-item',
             attr: { id: 'addPropertyBtn' }
         });
         addPropertyBtn.innerHTML = '<span>+</span> Add New Property';
-        this.plugin.registerDomEvent(addPropertyBtn, 'click', this.handleAddProperty.bind(this)); // Use registerDomEvent
+        this.plugin.registerDomEvent(addPropertyBtn, 'click', this.handleAddProperty.bind(this));
         
         try {
             // Load and display properties
-            await this.loadProperties(); // This will append items to this.propertiesListContainer
+            await this.loadProperties();
             loadingEl.remove();
             this.updateExpandCollapseButtonState();
             
             // Re-append the add button to ensure it's at the bottom after loading
             this.propertiesListContainer.appendChild(addPropertyBtn);
-
         } catch (error) {
             console.error('Error loading properties:', error);
             loadingEl.setText('Error loading properties. Please try again.');
             loadingEl.addClass('property-error');
-            // Also ensure Add button is visible even on error
-             this.propertiesListContainer.appendChild(addPropertyBtn);
+            this.propertiesListContainer.appendChild(addPropertyBtn);
         }
 
         // Button container at the bottom of the modal
@@ -201,32 +587,57 @@ export class BulkEditor extends Modal {
                 this.plugin.navigateToModal(this, 'main');
             });
     }
-    
+
+    /**
+     * Clean up when modal is closed
+     */
+    onClose() {
+        const { contentEl } = this;
+        contentEl.empty();
+    }
+
+    // =================================================================
+    // SECTION: UI Creation Methods
+    // =================================================================
+
     /**
      * Creates the global options section at the top of the modal
      */
     private createGlobalOptionsSection(container: HTMLElement) {
         // Global Options Header
         new Setting(container)
-        .setName('Global Options')
-        .setHeading();
+            .setName('Global Options')
+            .setHeading();
         
         // Enable/Disable All Edits
         new Setting(container)
             .setName('Enable/Disable All Edits')
             .setDesc('Toggle to apply change for all properties below.')
             .addToggle(toggle => {
-                this.enableDisableToggle = toggle
-                    .setValue(this.globalSettings.enableAll)
-                    .onChange(value => {
+                // Create a standardized toggle handler
+                this.enableDisableToggle = new ToggleHandler(
+                    toggle,
+                    (value) => {
                         this.globalSettings.enableAll = value;
                         this.updateAllPropertyToggles(value);
-                    });
+                    },
+                    this.plugin
+                );
+                
+                // Set initial value
+                this.enableDisableToggle.setValue(this.globalSettings.enableAll);
+                
                 return toggle;
             });
+
+        // Create a toggle relationship for the master enable toggle
+        if (this.enableDisableToggle) {
+            const enableRelationship = new ToggleRelationship(this.enableDisableToggle);
+            this.toggleRelationships.set('global-enable', enableRelationship);
+        }
             
         // Action for Disabled Properties
-        const disabledActionSetting = new Setting(container)
+        new Setting(container)
             .setName('Action for Disabled Properties')
             .setDesc('Choose what happens to properties whose individual edit toggle is off.')
             .addDropdown(dropdown => {
@@ -240,26 +651,36 @@ export class BulkEditor extends Modal {
                     });
                 return dropdown;
             });
-    
-        // Add the note to the description
-        disabledActionSetting.descEl.createEl('br');
-        disabledActionSetting.descEl.createSpan({
-            cls: 'setting-description-note',
-            text: "Note: Option 'Add Empty if Missing' uses the already defined property type. If doesn't exist, defaults to 'Text' type."
-        });
             
         // Apply Custom Order
-        new Setting(container)
+        const applyOrderSetting = new Setting(container)
             .setName('Apply Custom Order')
-            .setDesc('Apply the manually dragged order of properties below.')
-            .addToggle(toggle => {
+            .addToggle((toggle: ToggleComponent) => {
                 toggle
                     .setValue(this.globalSettings.applyCustomOrder)
-                    .onChange(value => {
+                    .onChange((value: boolean) => {
                         this.globalSettings.applyCustomOrder = value;
                     });
-                return toggle;
             });
+
+        // Access the description element AFTER creating the setting and controls
+        const applyOrderDescEl = applyOrderSetting.descEl;
+        applyOrderDescEl.empty();
+
+        // Add the first line as a span
+        applyOrderDescEl.createSpan({
+            text: 'Apply the manually dragged order of properties below.',
+            cls: 'setting-item-description'
+        });
+
+        // Add a line break
+        applyOrderDescEl.createEl('br');
+
+        // Add the second line as a span
+        applyOrderDescEl.createSpan({
+            text: 'Alternatively, enable ordering for specific properties in their settings below.',
+            cls: 'setting-item-description'
+        });
     }
     
     /**
@@ -267,22 +688,18 @@ export class BulkEditor extends Modal {
      */
     private createExpandCollapseButton(container: HTMLElement) {
         new Setting(container)
-            .setName('Expand/Collapse All') // Keep Name/Desc for context
+            .setName('Expand/Collapse All')
             .setDesc('Toggle expansion state for all properties below.')
-            .addButton(button => { // Use addButton instead of addToggle
-                // Store the button component instance
+            .addButton(button => {
                 this.expandCollapseButton = button;
 
-                // Initial state will be set after properties load
-                button.setButtonText("Expand All") // Default text
-                    .setTooltip('Expand all properties') // Default tooltip
+                button.setButtonText("Expand All")
+                    .setTooltip('Expand all properties')
                     .onClick(() => {
-                        // Toggle the global state
                         this.globalSettings.expandAll = !this.globalSettings.expandAll;
-                        // Update the UI of individual properties
                         this.updateAllExpansionState(this.globalSettings.expandAll);
-                        // Update the button itself
                         this.updateExpandCollapseButtonState();
+                        
                         // Resize all editors
                         setTimeout(() => {
                             if (!this.propertiesListContainer) return;
@@ -292,83 +709,1658 @@ export class BulkEditor extends Modal {
                         }, 10);
                     });
             })
-            .settingEl.setAttrs({ id: 'expandCollapseAllContainer' }); // Keep ID if needed
+            .settingEl.setAttrs({ id: 'expandCollapseAllContainer' });
     }
 
     /**
-     * Updates the Expand/Collapse All button text and tooltip based on the current state.
+     * Creates a single property item in the list
      */
-    private updateExpandCollapseButtonState() {
-        if (!this.expandCollapseButton) return;
+    private renderPropertyItem(key: string) {
+        if (!this.propertiesListContainer) return;
 
-        if (this.globalSettings.expandAll) {
-            this.expandCollapseButton.setButtonText("Collapse All");
-            this.expandCollapseButton.setTooltip('Collapse all properties');
-        } else {
-            this.expandCollapseButton.setButtonText("Expand All");
-            this.expandCollapseButton.setTooltip('Expand all properties');
-        }
-    }
-    
-    /**
-     * Updates all property toggle states based on the master toggle
-     */
-    private updateAllPropertyToggles(enabled: boolean) {
-        // Update each property's enabled state
-        this.propertiesState.forEach((state, key) => {
-            state.enabled = enabled;
+        const state = this.propertiesState.get(key);
+        const stats = this.propertyConsistency.get(key);
+
+        if (!state || !stats) return;
+
+        // Create property item container
+        const propertyItem = this.propertiesListContainer.createDiv({
+            cls: `bulk-property-item ${state.expanded ? '' : 'is-collapsed'}`,
+            attr: { id: `prop-${key}` }
         });
+
+        // Header section using Setting Component
+        const propertyHeaderSetting = new Setting(propertyItem);
+        propertyHeaderSetting.settingEl.addClass('bulk-property-item-header-setting');
+
+        // Property Name
+        propertyHeaderSetting.setName(key);
+
+        // ARIA attributes
+        propertyHeaderSetting.settingEl.setAttrs({
+            'aria-expanded': state.expanded.toString(),
+            'role': 'button',
+            'tabindex': '0'
+        });
+
+        // Status Text moved to Description Area
+        const descEl = propertyHeaderSetting.descEl;
+        descEl.empty();
+        descEl.addClass('bulk-property-stats-description');
+
+        // Controls Area
+        const controlEl = propertyHeaderSetting.controlEl;
+        controlEl.addClass('bulk-property-item-header-controls');
+
+        // Revert button
+        propertyHeaderSetting.addExtraButton(button => {
+            button
+                .setIcon('rotate-ccw')
+                .setTooltip(`Revert all changes for property "${key}"`)
+                .onClick(async () => {
+                    if (!state) return;
+
+                    if (!await this.confirmRevert(`Revert all edits for property "${key}"?`)) {
+                        return;
+                    }
+
+                    // Reset State
+                    state.overrideValue = null;
+                    state.changeType = null;
+                    state.disabledAction = 'global';
+                    state.applyOrder = true;
+                    state.excludedFiles.clear();
+                    state.fileActions.clear();
+
+                    // Refresh UI Elements
+                    const propertyItemEl = this.propertiesListContainer?.querySelector(`#prop-${key}`);
+                    if (!propertyItemEl) return;
+
+                    // Reset Type Dropdown
+                    const typeDropdown = propertyItemEl.querySelector('.setting-item select') as HTMLSelectElement | null;
+                    if (typeDropdown) typeDropdown.value = '';
+
+                    // Reset Value Input
+                    const valueControlContainer = propertyItemEl.querySelector('.dynamic-value-input-container') as HTMLElement | null;
+                    if (valueControlContainer) {
+                        const definedType = this.getObsidianDefinedType(key);
+                        const originalEffectiveType = definedType || stats?.type.mostCommonType || 'text';
+                        this.updateValueControl(valueControlContainer, key, null);
+                        valueControlContainer.className = 'dynamic-value-input-container';
+                        valueControlContainer.addClass(`value-input-container-${originalEffectiveType}`);
+                    }
+
+                    // Reset Apply Order Toggle
+                    const applyOrderToggleEl = propertyItemEl.querySelector('[data-setting-type="apply-order-toggle"] input[type="checkbox"]') as HTMLInputElement | null;
+                    if (applyOrderToggleEl) {
+                        applyOrderToggleEl.checked = state.applyOrder;
+                    }
+
+                    // Reset Disabled Action Dropdown
+                    const disabledActionDropdownEl = propertyItemEl.querySelector('[data-setting-type="disabled-action-dropdown"] select') as HTMLSelectElement | null;
+                    if (disabledActionDropdownEl) {
+                        disabledActionDropdownEl.value = state.disabledAction;
+                    }
+
+                    // Reset Inconsistent Files List
+                    this.refreshInconsistentFilesUI(propertyItemEl, key);
+
+                    // Update Value Counter
+                    const resetValue = stats?.value.mostCommonValue ?? stats?.value.firstEncounteredValue;
+                    const resetValueCount = this.calculateValueCount(key, resetValue);
+                    this.updateValueCounterUI(key, resetValueCount);
+
+                    // Update Edit Enabled Toggle
+                    const editToggle = propertyHeaderSetting.controlEl.querySelector('.edit-toggle-control-wrapper input[type="checkbox"]') as HTMLInputElement | null;
+                    if(editToggle) {
+                        state.enabled = true;
+                        editToggle.checked = true;
+                        this.updateMasterEnableToggleState();
+                    }
+
+                    new Notice(`Reverted changes for property "${key}"`);
+                });
+        });
+
+        // Edit Enabled Toggle
+        propertyHeaderSetting.addToggle(toggle => {
+            // Create standardized toggle handler
+            const handler = new ToggleHandler(
+                toggle,
+                (value) => {
+                    state.enabled = value;
+                    this.updateMasterEnableToggleState();
+
+                    // Process links in all property editors when toggling
+                    const propertyContent = propertyItem.querySelector('.property-content');
+                    if (propertyContent) {
+                        const editors = propertyContent.querySelectorAll('.property-value-editor');
+                        editors.forEach(editor => {
+                            if (editor instanceof HTMLElement) {
+                                const editorType = state.changeType || 
+                                                stats?.type.mostCommonType || 
+                                                'text';
+                                this.processLinksInEditor(editor, editorType);
+                            }
+                        });
+                    }
+                },
+                this.plugin
+            );
+            
+            // Set initial value and tooltip
+            handler.setValue(state.enabled);
+            toggle.setTooltip(`Toggle editing for ${key} property`);
+            
+            // Add class for styling
+            toggle.toggleEl.parentElement?.addClass('edit-toggle-control-wrapper');
+            
+            // Store reference for later use
+            this.propertyToggleHandlers.set(key, handler);
+        });
+
+        // Drag Handle
+        const dragHandle = controlEl.createSpan({
+            cls: 'drag-handle', text: '☰',
+            attr: { draggable: 'true', title: `Drag to reorder ${key} property` }
+        });
+
+        // Helper function to add a status row
+        const addStatusRow = (label: string, value: string, isConsistent: boolean) => {
+            const row = descEl.createDiv({ cls: 'property-header-stat-row' });
+            row.createSpan({
+                cls: `property-header-stat-icon ${isConsistent ? 'is-consistent' : 'is-inconsistent'}`,
+                text: isConsistent ? '✓' : '⚠'
+            });
+            row.createSpan({ cls: 'property-header-stat-label', text: `${label}: ` });
+            row.createSpan({ cls: 'property-header-stat-value', text: value });
+        };
+
+        // Add status rows
+        addStatusRow(
+            'Property',
+            `${stats.property.present}/${stats.property.total}`,
+            stats.property.present === stats.property.total
+        );
+        addStatusRow(
+            'Value',
+            `${stats.value.consistent}/${stats.type.total}`,
+            stats.value.consistent === stats.type.total
+        );
+
+        // Dynamic Hint Text Span
+        const hintSpan = descEl.createSpan({ cls: 'property-toggle-hint' });
+        hintSpan.textContent = state.expanded ? 'Click to hide options.' : 'Click to display options.';
+
+        // Content Section
+        const contentContainer = propertyItem.createDiv({ cls: 'property-content' });
+        this.createPropertyDetailsSection(contentContainer, key);
+        this.createInconsistentFilesSection(contentContainer, key);
+
+        // Event Handlers
+        this.plugin.registerDomEvent(propertyHeaderSetting.settingEl, 'click', (e: MouseEvent) => {
+            // Ignore clicks on controls
+            if (controlEl.contains(e.target as Node)) { return; }
         
-        // Update the UI
-        const propertyToggles = this.propertiesListContainer?.querySelectorAll('.edit-enable-toggle') || [];
-        propertyToggles.forEach(toggle => {
-            if (toggle instanceof HTMLInputElement) {
-                toggle.checked = enabled;
+            // Toggle state
+            state.expanded = !state.expanded;
+        
+            // Find the hint span dynamically if needed
+            const currentHintSpan = propertyHeaderSetting.descEl.querySelector('.property-toggle-hint');
+        
+            // Update UI
+            if (state.expanded) {
+                propertyItem.classList.remove('is-collapsed');
+                propertyHeaderSetting.settingEl.setAttribute('aria-expanded', 'true');
+                if (currentHintSpan) currentHintSpan.textContent = 'Toggle to hide options.';
+                
+                // Resize all contenteditable elements when they become visible
+                setTimeout(() => {
+                    const editors = contentContainer.querySelectorAll('.property-value-editor');
+                    editors.forEach(editor => {
+                        if (editor instanceof HTMLElement) {
+                            this.autoResizeEditableDiv(editor);
+                        }
+                    });
+                }, 0);
+            } else {
+                propertyItem.classList.add('is-collapsed');
+                propertyHeaderSetting.settingEl.setAttribute('aria-expanded', 'false');
+                if (currentHintSpan) currentHintSpan.textContent = 'Click to display options.';
+            }
+            
+            this.updateExpandCollapseButtonState();
+        });
+
+        this.plugin.registerDomEvent(propertyHeaderSetting.settingEl, 'keydown', (e: KeyboardEvent) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                // Prevent toggling if focus is on the actual checkbox toggle in controls
+                if (e.target instanceof HTMLElement && controlEl.contains(e.target) && e.target.closest('.checkbox-container')) { return; }
+                // Allow toggling if focus is anywhere else in the header, except controls
+                if (!controlEl.contains(e.target as Node)) {
+                    e.preventDefault();
+                    propertyHeaderSetting.settingEl.click();
+                }
             }
         });
-        
-        // Process links in all editors after toggling all
-        if (this.propertiesListContainer) {
-            const editors = this.propertiesListContainer.querySelectorAll('.property-value-editor');
-            editors.forEach(editor => {
-                if (editor instanceof HTMLElement) {
-                    // Find the property key for this editor
-                    const propertyItem = editor.closest('.bulk-property-item');
-                    if (propertyItem && propertyItem.id.startsWith('prop-')) {
-                        const key = propertyItem.id.substring(5); // Remove 'prop-' prefix
-                        const state = this.propertiesState.get(key);
-                        const editorType = state?.changeType || 
-                                         this.propertyConsistency.get(key)?.type.mostCommonType || 
-                                         'text';
-                        this.processLinksInEditor(editor, editorType);
-                    }
+    }
+
+    /**
+     * Creates the details section for a property: info and dynamic value input.
+     */
+    private createPropertyDetailsSection(container: HTMLElement, key: string) {
+        const state = this.propertiesState.get(key);
+        const stats = this.propertyConsistency.get(key);
+        if (!state || !stats) return;
+
+        // Action if Edit Disabled
+        const disabledActionSetting = new Setting(container)
+            .setName('Action if Edit Disabled')
+            .setDesc('Overrides global setting if the edit toggle above is off.')
+            .addDropdown((dropdown: DropdownComponent) => {
+                dropdown
+                    .addOption('global', 'Use Global Setting')
+                    .addOption('keep', 'Keep Existing (Do Nothing if Missing)')
+                    .addOption('remove', 'Remove Property')
+                    .addOption('add_if_missing', 'Add Empty if Missing (Keep Existing)')
+                    .setValue(state.disabledAction)
+                    .onChange((value: string) => {
+                        state.disabledAction = value as 'global' | 'keep' | 'remove' | 'add_if_missing';
+                    });
+            });
+        disabledActionSetting.settingEl.setAttr('data-setting-type', 'disabled-action-dropdown');
+
+        // Apply Order for This Property
+        const applyOrderSetting = new Setting(container)
+            .setName('Apply Order for This Property')
+            .setDesc('When enabled, the position of this property in the list will be preserved on apply.')
+            .addToggle((toggle: ToggleComponent) => {
+                toggle
+                    .setValue(state.applyOrder)
+                    .onChange((value: boolean) => {
+                        state.applyOrder = value;
+                    });
+            });
+        applyOrderSetting.settingEl.setAttr('data-setting-type', 'apply-order-toggle');
+
+        // Property Type Selection
+        const propertyTypeSetting = new Setting(container)
+            .setName('Property Type')
+            .setDesc('Select the type to apply for this property.');
+
+        const mostCommonTypeValue = stats.type.mostCommonType;
+        const mostCommonTypeDisplay = mostCommonTypeValue
+            ? this.plugin.propertyTypeService.getPropertyTypeDisplayName(mostCommonTypeValue)
+            : 'Varies';
+
+        // Set Description for Property Type using Spans
+        const typeDescEl = propertyTypeSetting.descEl;
+        typeDescEl.empty();
+
+        // Create the explanatory text span
+        typeDescEl.createSpan({
+            text: "Select a type to apply to this property across selected files.",
+            cls: "setting-item-description"
+        });
+
+        // Create a line break element
+        typeDescEl.createEl("br");
+
+        // Create the "Current Type" text span
+        let definedType: string | null = null;
+        let currentTypeLine: string = "Current Type: Not defined in Obsidian settings";
+        let definedTypeNameForDefault: string = 'text';
+
+        try {
+            const propKey = key.toLowerCase();
+            const metadataManager = (this.app as any).metadataTypeManager;
+            if (metadataManager) {
+                definedType = metadataManager.properties?.[propKey]?.type || metadataManager.types?.[propKey]?.type || null;
+            }
+            if (definedType) {
+                definedTypeNameForDefault = definedType;
+                currentTypeLine = "Current Type: " + this.plugin.propertyTypeService.getPropertyTypeDisplayName(definedType);
+            }
+        } catch (error) {
+            console.error(`Error getting defined type for ${key}:`, error);
+            currentTypeLine = "Current Type: Error checking type";
+        }
+
+        typeDescEl.createSpan({
+            text: currentTypeLine,
+            cls: "setting-item-description setting-item-description-subtle"
+        });
+
+        // Static Property Value Info Display
+        const propertyValueDisplaySetting = new Setting(container)
+            .setName('Property Value')
+            .setDesc('Displays value consistency information.');
+            
+        propertyValueDisplaySetting.addButton(button => {
+            button
+                .setButtonText("Select Existing")
+                .setTooltip("Select from existing values found in files")
+                .setDisabled(stats.value.allUniqueValues.length < 2)
+                .onClick(() => {
+                    new ExistingValueSuggestModal(
+                        this.app,
+                        stats.value.allUniqueValues,
+                        key,
+                        (selectedValue) => {
+                            // Update the state
+                            state.overrideValue = selectedValue;
+
+                            // Find the input container for this property
+                            const propertyItemEl = this.propertiesListContainer?.querySelector(`#prop-${key}`);
+                            const valueInputContainer = propertyItemEl?.querySelector('.dynamic-value-input-container') as HTMLElement | null;
+
+                            // Refresh the UI input control if container found
+                            if (valueInputContainer) {
+                                this.updateValueControl(valueInputContainer, key, state.changeType);
+
+                                // Update the value counter after UI refresh
+                                const count = this.calculateValueCount(key, selectedValue);
+                                this.updateValueCounterUI(key, count);
+                            } else {
+                                console.warn(`Could not find value input container for property: ${key}`);
+                            }
+                        }
+                    ).open();
+                });
+        });
+
+        // Property Value Description and Counter
+        const valueDescEl = propertyValueDisplaySetting.descEl;
+        valueDescEl.empty();
+        valueDescEl.addClass('value-description-container');
+
+        // Add the explanatory text span
+        valueDescEl.createSpan({
+            text: "Input a new value or select from existing values across the selected files.",
+            cls: "setting-item-description"
+        });
+
+        // Add a line break
+        valueDescEl.createEl('br');
+
+        // Add the counter span and icon
+        const valueCounterSpan = valueDescEl.createSpan({ cls: 'value-counter-span setting-item-description-subtle' });
+        const initialValue = state.overrideValue ?? stats.value.mostCommonValue ?? stats.value.firstEncounteredValue;
+        const initialValueCount = this.calculateValueCount(key, initialValue);
+        const filesWithProperty = stats.property.present;
+
+        // Set the main text content including the period
+        valueCounterSpan.appendText('Current value present in ' + initialValueCount + '/' + filesWithProperty + (filesWithProperty === 1 ? ' file.' : ' files.'));
+
+        // Determine consistency
+        const isConsistent = filesWithProperty > 0 && initialValueCount === filesWithProperty;
+
+        // Add the icon span AFTER the period
+        valueCounterSpan.createSpan({
+            cls: `property-header-stat-icon ${isConsistent ? 'is-consistent' : 'is-inconsistent'}`,
+            text: isConsistent ? ' ✓' : ' ⚠'
+        });
+
+        propertyValueDisplaySetting.settingEl.addClass('property-value-display-setting');
+
+        // Container for Dynamic Value Input Control
+        const valueControlContainer = container.createDiv();
+        valueControlContainer.addClass('dynamic-value-input-container');
+        // Add class based on initial type for styling
+        const initialActualType = state.changeType || mostCommonTypeValue || 'text';
+        valueControlContainer.addClass(`value-input-container-${initialActualType}`);
+
+        // Link Type Dropdown onChange to Update Control
+        propertyTypeSetting.addDropdown(dropdown => {
+            const filteredTypes = mostCommonTypeValue
+                ? PROPERTY_TYPES.filter(type => type.value !== mostCommonTypeValue)
+                : PROPERTY_TYPES;
+
+            dropdown.addOption('', mostCommonTypeDisplay);
+            dropdown.addOptions(filteredTypes.reduce((options, type) => {
+                options[type.value] = type.label;
+                return options;
+            }, {} as Record<string, string>));
+
+            dropdown
+                .setValue(state.changeType || '')
+                .onChange(value => {
+                    const newType = value || null;
+                    state.changeType = newType;
+                    // Update CSS class on container
+                    valueControlContainer.className = 'dynamic-value-input-container';
+                    valueControlContainer.addClass(`value-input-container-${newType || mostCommonTypeValue || 'text'}`);
+                    // Call the update function
+                    this.updateValueControl(valueControlContainer, key, newType);
+                });
+            return dropdown;
+        });
+
+        this.createUnifiedValueContainer(valueControlContainer, key, state.changeType || mostCommonTypeValue || 'text');
+
+        // Initial setup of the value control
+        this.updateValueControl(valueControlContainer, key, state.changeType);
+    }
+
+    /**
+     * Creates a unified value container with appropriate input based on property type.
+     */
+    private createUnifiedValueContainer(
+        container: HTMLElement,
+        key: string,
+        initialType: string | null
+    ): void {
+        const state = this.propertiesState.get(key);
+        const stats = this.propertyConsistency.get(key);
+        if (!state || !stats) {
+            container.empty();
+            return;
+        }
+    
+        const mostCommonTypeValue = stats.type.mostCommonType;
+        const actualType = initialType || mostCommonTypeValue || 'text';
+        const hasValueData = stats.value.total > 0;
+    
+        // Clear previous content
+        container.empty();
+        // Add base class for dynamic value input area
+        container.addClass('dynamic-value-input-container');
+        // Add type-specific class for styling
+        container.addClass(`value-input-container-${actualType}`);
+    
+        // Create input based on type
+        if (actualType === 'list') {
+            // List Type: Pills + Input
+            const listEditorContainer = container.createDiv({
+                cls: 'property-value-editor list-editor-container'
+            });
+    
+            // Populate with pills and the input field
+            this.renderListEditorContent(key, listEditorContainer);
+    
+        } else if (actualType === 'checkbox') {
+            // Checkbox Type
+            const checkboxContainer = container.createDiv({
+                cls: 'checkbox-input-container'
+            });
+    
+            const checkboxInput = checkboxContainer.createEl('input', {
+                type: 'checkbox',
+                cls: 'property-value-checkbox',
+                attr: {
+                    tabindex: '0'
                 }
             });
+    
+            // Determine initial boolean value
+            let initialBoolValue = false;
+            if (state.overrideValue !== null && state.overrideValue !== undefined) {
+                initialBoolValue = typeof state.overrideValue === 'boolean'
+                    ? state.overrideValue
+                    : String(state.overrideValue).toLowerCase() === 'true';
+            } else if (hasValueData) {
+                const rawInitialValue = stats.value.mostCommonValue ?? stats.value.firstEncounteredValue;
+                initialBoolValue = typeof rawInitialValue === 'boolean'
+                    ? rawInitialValue
+                    : String(rawInitialValue).toLowerCase() === 'true';
+            }
+            checkboxInput.checked = initialBoolValue;
+    
+            // Update state on change
+            this.plugin.registerDomEvent(checkboxInput, 'change', () => {
+                state.overrideValue = checkboxInput.checked;
+
+                const count = this.calculateValueCount(key, checkboxInput.checked);
+                this.updateValueCounterUI(key, count);
+            });
+    
+        } else {
+            // Other Types (Text, Number, Date, Datetime)
+            const propertyValueDiv = container.createDiv({
+                cls: 'metadata-input-longtext property-value-editor',
+                attr: {
+                    contenteditable: 'true',
+                    spellcheck: 'true',
+                    tabindex: '0',
+                    placeholder: this.getPlaceholderForType(actualType)
+                }
+            });
+    
+            // Determine Initial Value and Format for Display
+            let rawInitialValue: any = '';
+            if (state.overrideValue !== null && state.overrideValue !== undefined) {
+                rawInitialValue = state.overrideValue;
+            } else if (hasValueData) {
+                rawInitialValue = stats.value.mostCommonValue ?? stats.value.firstEncounteredValue;
+            }
+            // Format for display
+            const formattedValue = formatInputValue(rawInitialValue);
+            propertyValueDiv.textContent = formattedValue;
+
+            // Initial Validation
+            const isValidInitially = this.validateInputValue(formattedValue, actualType);
+            if (!isValidInitially) {
+                propertyValueDiv.classList.add('is-invalid');
+            }
+    
+            // Process links for text type
+            if (actualType === 'text') {
+                this.processLinksInEditor(propertyValueDiv, actualType);
+            }
+    
+            // Add Event Listeners for contenteditable
+            this.plugin.registerDomEvent(propertyValueDiv, 'input', () => {
+                const currentValue = propertyValueDiv.textContent;
+                if (currentValue !== null) {
+                    state.overrideValue = currentValue;
+                }
+       
+                // Validation on Input
+                const isValid = this.validateInputValue(currentValue, actualType);
+                if (!isValid) {
+                    propertyValueDiv.classList.add('is-invalid');
+                } else {
+                    propertyValueDiv.classList.remove('is-invalid');
+                }
+
+                // Debounced update for the value counter
+                const parsedValue = this.parseUserInput(currentValue, actualType);
+                this.debouncedUpdateValueCounter(key, parsedValue, actualType);
+
+                // NEW: Also update property counters with the same debounce
+                const debouncedPropertyCountersUpdate = debounce(() => {
+                    this.updatePropertyCountersUI(key);
+                }, 300);
+                debouncedPropertyCountersUpdate();
+       
+                this.autoResizeEditableDiv(propertyValueDiv);
+            });
+    
+            this.plugin.registerDomEvent(propertyValueDiv, 'focus', () => {
+                if (actualType === 'text') {
+                    // Convert links back to text for editing
+                    const linkSpans = propertyValueDiv.querySelectorAll('.metadata-link');
+                    if (linkSpans.length > 0) {
+                        linkSpans.forEach(span => {
+                            const textNode = document.createTextNode(span.textContent || '');
+                            span.parentNode?.replaceChild(textNode, span);
+                        });
+                    }
+                }
+                this.autoResizeEditableDiv(propertyValueDiv);
+            });
+    
+            this.plugin.registerDomEvent(propertyValueDiv, 'blur', () => {
+                const currentValue = propertyValueDiv.textContent;
+        
+                // Validation on Blur
+                const isValid = this.validateInputValue(currentValue, actualType);
+                if (!isValid) {
+                    propertyValueDiv.classList.add('is-invalid');
+                } else {
+                    propertyValueDiv.classList.remove('is-invalid');
+                }
+        
+                if (actualType === 'text') {
+                    this.processLinksInEditor(propertyValueDiv, actualType);
+                }
+                
+                setTimeout(() => this.autoResizeEditableDiv(propertyValueDiv), 0);
+            });
+    
+            // Prevent Enter key for single-line types
+            if (actualType !== 'text') {
+                this.plugin.registerDomEvent(propertyValueDiv, 'keydown', (e: KeyboardEvent) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                    }
+                    
+                    // Number validation
+                    if (actualType === 'number') {
+                        // Allow only numbers, '.', '-', '+' (basic validation)
+                        if (!/[\d.\-+e]/.test(e.key) && !['Backspace', 'Delete', 'ArrowLeft', 'ArrowRight', 'Tab', 'Enter', 'Home', 'End'].includes(e.key) && !(e.ctrlKey || e.metaKey)) {
+                            e.preventDefault();
+                        }
+                    }
+                });
+    
+                // Validate paste for numbers
+                if (actualType === 'number') {
+                    this.plugin.registerDomEvent(propertyValueDiv, 'paste', (e: ClipboardEvent) => {
+                        e.preventDefault();
+                        const pastedText = e.clipboardData?.getData('text');
+                        if (pastedText) {
+                            const filteredText = pastedText.replace(/[^0-9.\-+e]/gi, '');
+                            document.execCommand('insertText', false, filteredText);
+                        }
+                    });
+                }
+            }
+    
+            // Initial resize
+            this.autoResizeEditableDiv(propertyValueDiv);
         }
     }
-    
+
     /**
-     * Updates the expanded/collapsed state of all properties
+     * Creates the inconsistent files section for a property
      */
-    private updateAllExpansionState(expanded: boolean) {
-        // Update each property's expansion state in the propertiesState map
-        this.propertiesState.forEach((state, key) => {
-            state.expanded = expanded;
+    private createInconsistentFilesSection(container: HTMLElement, key: string) {
+        const state = this.propertiesState.get(key);
+        const stats = this.propertyConsistency.get(key);
+        if (!state || !stats) return;
+        
+        // Section header
+        new Setting(container)
+            .setName('Inconsistent Files')
+            .setHeading()
+            .settingEl.addClass('bulk-editor-section-heading');
+        
+        const inconsistentFiles = this.getInconsistentFiles(key);
+        const inconsistentFilesContainer = container.createDiv({ cls: 'inconsistent-files-container' });
+        const filterOrderRow = inconsistentFilesContainer.createDiv({ cls: 'filter-order-row' });
+        
+        // Order by dropdown
+        filterOrderRow.createEl('label', { 
+            text: 'Order by:',
+            attr: { for: `order-by-${key}` }
+        });
+        
+        const orderBySelect = filterOrderRow.createEl('select', { 
+            cls: 'inconsistent-order-by',
+            attr: { 
+                id: `order-by-${key}`,
+                title: 'Order inconsistent files'
+            }
+        });
+        
+        orderBySelect.appendChild(new Option('File Name (A-Z)', 'name-asc', true, true));
+        orderBySelect.appendChild(new Option('File Name (Z-A)', 'name-desc'));
+        orderBySelect.appendChild(new Option('Value Mismatch First', 'value-mismatch'));
+        orderBySelect.appendChild(new Option('Missing Property First', 'missing-first'));
+        
+        // Filter by dropdown
+        filterOrderRow.createEl('label', { 
+            text: 'Filter by:',
+            attr: { for: `filter-by-${key}` }
+        });
+        
+        const filterBySelect = filterOrderRow.createEl('select', { 
+            cls: 'inconsistent-filter-by',
+            attr: { 
+                id: `filter-by-${key}`,
+                title: 'Filter inconsistent files'
+            }
+        });
+        
+        filterBySelect.appendChild(new Option('All', 'all', true, true));
+        filterBySelect.appendChild(new Option('Value Mismatch', 'value'));
+        filterBySelect.appendChild(new Option('Missing Property', 'missing'));
+        
+        // Exclude All Files toggle
+        const inconsistentFilesControls = inconsistentFilesContainer.createDiv({ cls: 'inconsistent-files-controls' });
+        
+        const excludeAllSettingId = `exclude-all-${key.replace(/\s+/g, '-')}`;
+
+        const excludeAllSetting = new Setting(inconsistentFilesControls)
+            .setName('Exclude All Files')
+            .setDesc('Toggle to ignore all file on apply.');
+
+        // Add a unique ID to the setting element
+        excludeAllSetting.settingEl.id = excludeAllSettingId;
+            
+        // Initialize the toggle components map entry for this property
+        if (!this.fileToggleComponents.has(key)) {
+            this.fileToggleComponents.set(key, {
+                excludeAllToggle: null as unknown as ToggleHandler,
+                fileToggles: []
+            });
+        }
+
+        // Check if there are any inconsistent files to exclude
+        const hasInconsistentFiles = inconsistentFiles.length > 0;
+
+        // Hide the setting completely if there are no inconsistent files
+        if (!hasInconsistentFiles) {
+            setTimeout(() => {
+                const settingEl = excludeAllSetting.settingEl;
+                if (settingEl) {
+                    settingEl.style.display = 'none';
+                    
+                    // Remove top border from Add All Missing Properties setting
+                    const addAllMissingSetting = addAllMissingSettings.settingEl;
+                    if (addAllMissingSetting) {
+                        addAllMissingSetting.style.borderTop = 'none';
+                        addAllMissingSetting.style.paddingTop = '8px';
+                    }
+                }
+            }, 0);
+        }
+
+        excludeAllSetting.addToggle(toggle => {
+            // Create standardized toggle handler
+            const handler = new ToggleHandler(
+                toggle,
+                (value) => {
+                    // Call our standardized exclude handler
+                    this.handleExcludeAllToggled(key, value);
+                },
+                this.plugin
+            );
+            
+            // Store reference to toggle
+            const toggleData = this.fileToggleComponents.get(key);
+            if (toggleData) toggleData.excludeAllToggle = handler;
+
+            // Initial state check - only set to true if there are files and all are excluded
+            const allExcluded = inconsistentFiles.length > 0 && 
+                                inconsistentFiles.every(file => state?.excludedFiles.has(file.path));
+            handler.setValue(allExcluded);
+            
+            // Disable the toggle if there are no inconsistent files
+            if (!hasInconsistentFiles) {
+                handler.setDisabled(true);
+            }
+
+            // Create a toggle relationship for this exclude all toggle
+            const relationship = new ToggleRelationship(handler);
+            this.toggleRelationships.set(`exclude-all-${key}`, relationship);
+            
+            return toggle;
         });
 
-        // Update the UI (find items and update classes/icons)
-        const propertyItems = this.propertiesListContainer?.querySelectorAll('.bulk-property-item') || [];
-        propertyItems.forEach(item => {
-            const header = item.querySelector('.setting-item.bulk-property-item-header-setting'); // Use updated selector
-            const contentContainer = item.querySelector('.property-content') as HTMLElement | null; // Use updated selector
+        // Add missing properties toggle (should be added after excludeAllSetting)
+        const addAllMissingSettings = new Setting(inconsistentFilesControls)
+            .setName('Add All Missing Properties')
+            .setDesc('Toggle to add all missing properties.');
 
-            // Update ARIA attribute for accessibility
-            if (header) {
-                header.setAttribute('aria-expanded', String(expanded));
+        // Get the description element to customize it
+        const addAllMissingDescEl = addAllMissingSettings.descEl;
+        addAllMissingDescEl.empty(); // Clear the previous description
+
+        // Add the main description text
+        addAllMissingDescEl.createSpan({
+            text: "Toggle to add all missing properties.",
+            cls: "setting-item-description"
+        });
+
+        // Add a line break
+        addAllMissingDescEl.createEl('br');
+
+        // Create the counter container with default styling
+        const missingFilesCounter = addAllMissingDescEl.createSpan({
+            cls: "setting-item-description property-header-stat-row"
+        });
+
+        // Count files missing this property
+        const missingFilesCount = inconsistentFiles.filter(file => {
+            const properties = this.fileProperties.get(file.path);
+            return !properties || !(key in properties);
+        }).length;
+
+        // Check if there are any files missing this property
+        const hasMissingPropertyFiles = missingFilesCount > 0;
+
+        // Add the appropriate icon and text based on count
+        if (missingFilesCount > 0) {
+            missingFilesCounter.createSpan({
+                cls: "property-header-stat-icon is-inconsistent",
+                text: "⚠"
+            });
+            missingFilesCounter.createSpan({
+                text: ` ${missingFilesCount} ${missingFilesCount === 1 ? 'file is' : 'files are'} missing this property`,
+                cls: "missing-files-text is-inconsistent"
+            });
+        } else {
+            missingFilesCounter.createSpan({
+                cls: "property-header-stat-icon is-consistent",
+                text: "✓"
+            });
+            missingFilesCounter.createSpan({
+                text: " No files are missing this property",
+                cls: "missing-files-text is-consistent"
+            });
+        }
+
+        // Add the toggle (disabled if no missing property files)
+        addAllMissingSettings.addToggle(toggle => {
+            // Create standardized toggle handler
+            const handler = new ToggleHandler(
+                toggle,
+                (value) => {
+                    // Call our handler function
+                    this.handleAddAllMissingToggled(key, value);
+                },
+                this.plugin
+            );
+            
+            // Set initial state
+            handler.setDisabled(!hasMissingPropertyFiles);
+            
+            // Find out if all missing properties are already toggled on
+            const allMissingEnabled = inconsistentFiles.every(file => {
+                const properties = this.fileProperties.get(file.path);
+                if (properties && key in properties) return true; // Not missing, so counts as "enabled"
+                
+                const fileActions = state.fileActions.get(file.path) || { type: false, value: false, add: false };
+                return fileActions.add; // For missing properties, check if add is true
+            });
+
+            handler.setValue(allMissingEnabled && hasMissingPropertyFiles);
+
+            // Hide the toggle if there are no missing properties
+            if (!hasMissingPropertyFiles) {
+                // We need to access the toggle control after it's created
+                setTimeout(() => {
+                    const toggleControl = addAllMissingSettings.controlEl;
+                    if (toggleControl) {
+                        toggleControl.style.display = 'none';
+                    }
+                }, 0);
+            }
+            
+            // Create a relationship for this toggle
+            const relationship = new ToggleRelationship(handler);
+            this.toggleRelationships.set(`add-all-missing-${key}`, relationship);
+            
+            // Store reference to this toggle
+            this.addAllMissingToggles.set(key, handler);
+            
+            return toggle;
+        });
+
+        // Add "Apply Value" toggle
+        const applyValueToAllSettings = new Setting(inconsistentFilesControls)
+            .setName('Apply Defined Property Value for All')
+            .setDesc('Applies the value entered or selected above for all the missing properties.');
+
+        // Add the toggle
+        applyValueToAllSettings.addToggle(toggle => {
+            // Create standardized toggle handler
+            const handler = new ToggleHandler(
+                toggle,
+                (value) => {
+                    // Handle toggle change
+                    this.handleApplyValueToAllToggled(key, value);
+                },
+                this.plugin
+            );
+            
+            // Initialize as disabled if addAllMissingToggle is not checked
+            const addAllMissingToggle = this.addAllMissingToggles.get(key);
+            const isAddAllMissingEnabled = addAllMissingToggle ? addAllMissingToggle.getValue() : false;
+
+            handler.setDisabled(!isAddAllMissingEnabled);
+
+            // Hide the entire setting if there are no missing properties
+            if (!hasMissingPropertyFiles) {
+                setTimeout(() => {
+                    const settingEl = applyValueToAllSettings.settingEl;
+                    if (settingEl) {
+                        settingEl.style.display = 'none';
+                    }
+                }, 0);
+            }
+
+            // Find out if all missing files already have "Use Value" enabled
+            const allValueEnabled = inconsistentFiles.every(file => {
+                const properties = this.fileProperties.get(file.path);
+                if (properties && key in properties) return true; // Not missing, so doesn't apply
+                
+                const fileActions = state.fileActions.get(file.path) || { type: false, value: false, add: false };
+                return !fileActions.add || fileActions.value; // Only count files where "Add Missing" is enabled
+            });
+
+            handler.setValue(allValueEnabled && isAddAllMissingEnabled);
+            
+            // Create a relationship for this toggle
+            const relationship = new ToggleRelationship(handler);
+            this.toggleRelationships.set(`apply-value-all-${key}`, relationship);
+            
+            // Store reference to this toggle
+            this.applyValueToAllToggles.set(key, handler);
+            
+            return toggle;
+        });
+
+        // Add "Overwrite All Values" toggle
+        const overwriteAllValuesSetting = new Setting(inconsistentFilesControls)
+            .setName('Overwrite All Values')
+            .setDesc('Overwrites the existing values with the value entered or selected above.');
+
+        // Get the description element to customize it
+        const overwriteAllValuesDescEl = overwriteAllValuesSetting.descEl;
+        overwriteAllValuesDescEl.empty(); // Clear the previous description
+
+        // Add the main description text
+        overwriteAllValuesDescEl.createSpan({
+            text: "Overwrites the existing values with the value entered or selected above.",
+            cls: "setting-item-description"
+        });
+
+        // Add a line break
+        overwriteAllValuesDescEl.createEl('br');
+
+        // Create the counter container with default styling
+        const inconsistentValuesCounter = overwriteAllValuesDescEl.createSpan({
+            cls: "setting-item-description property-header-stat-row"
+        });
+
+        // Count files with inconsistent values
+        const filesWithInconsistentValues = inconsistentFiles.filter(file => {
+            const properties = this.fileProperties.get(file.path);
+            // File has the property but the value is inconsistent (not the most common value)
+            if (properties && key in properties) {
+                const fileValue = properties[key].value;
+                const stats = this.propertyConsistency.get(key);
+                if (stats && stats.value.mostCommonValue !== null) {
+                    // Compare values - if different, it's inconsistent
+                    return JSON.stringify(fileValue) !== JSON.stringify(stats.value.mostCommonValue);
+                }
+            }
+            return false;
+        }).length;
+
+        // Add the appropriate icon and text based on count
+        if (filesWithInconsistentValues > 0) {
+            inconsistentValuesCounter.createSpan({
+                cls: "property-header-stat-icon is-inconsistent",
+                text: "⚠"
+            });
+            inconsistentValuesCounter.createSpan({
+                text: ` ${filesWithInconsistentValues} ${filesWithInconsistentValues === 1 ? 'file has' : 'files have'} inconsistent value`,
+                cls: "missing-files-text is-inconsistent"
+            });
+        } else {
+            inconsistentValuesCounter.createSpan({
+                cls: "property-header-stat-icon is-consistent",
+                text: "✓"
+            });
+            inconsistentValuesCounter.createSpan({
+                text: " No files have inconsistent value",
+                cls: "missing-files-text is-consistent"
+            });
+        }
+
+        // Add the toggle
+        overwriteAllValuesSetting.addToggle(toggle => {
+            // Create standardized toggle handler
+            const handler = new ToggleHandler(
+                toggle,
+                (value) => {
+                    // Handle toggle change
+                    this.handleOverwriteAllValuesToggled(key, value);
+                },
+                this.plugin
+            );
+            
+            // Find out if all files with value inconsistencies have overwrite enabled
+            const allValuesOverwritten = inconsistentFiles.every(file => {
+                const properties = this.fileProperties.get(file.path);
+                if (properties && key in properties) {
+                    const fileActions = state.fileActions.get(file.path) || { type: false, value: false, add: false };
+                    const fileValue = properties[key].value;
+                    const stats = this.propertyConsistency.get(key);
+                    // Only count files with inconsistent values
+                    if (stats && stats.value.mostCommonValue !== null) {
+                        if (JSON.stringify(fileValue) !== JSON.stringify(stats.value.mostCommonValue)) {
+                            return fileActions.value;
+                        }
+                    }
+                }
+                return true; // Not relevant for this toggle, so count as "applied"
+            });
+
+            handler.setValue(allValuesOverwritten && filesWithInconsistentValues > 0);
+            
+            // Hide the toggle if there are no files with inconsistent values
+            if (filesWithInconsistentValues === 0) {
+                setTimeout(() => {
+                    const toggleControl = overwriteAllValuesSetting.controlEl;
+                    if (toggleControl) {
+                        toggleControl.style.display = 'none';
+                    }
+                }, 0);
+            }
+            
+            // Create a relationship for this toggle
+            const relationship = new ToggleRelationship(handler);
+            this.toggleRelationships.set(`overwrite-values-all-${key}`, relationship);
+            
+            // Store reference to this toggle
+            this.overwriteAllValuesToggles.set(key, handler);
+            
+            return toggle;
+        });
+
+        // Inconsistent files list
+        const inconsistentFilesList = inconsistentFilesContainer.createDiv({ cls: 'inconsistent-files-list' });
+        
+        // Handle no inconsistencies case
+        if (inconsistentFiles.length === 0) {
+            // Hide the entire inconsistent files list container
+            inconsistentFilesList.style.display = 'none';
+            return;
+        }
+        
+        // Create file items
+        inconsistentFiles.forEach(file => {
+            this.createInconsistentFileItem(inconsistentFilesList, key, file);
+        });
+        
+        // Add event listeners for filtering and ordering
+        this.plugin.registerDomEvent(orderBySelect, 'change', () => {
+            this.reorderInconsistentFiles(key, inconsistentFilesList, orderBySelect.value, filterBySelect.value);
+        });
+        
+        this.plugin.registerDomEvent(filterBySelect, 'change', () => {
+            this.reorderInconsistentFiles(key, inconsistentFilesList, orderBySelect.value, filterBySelect.value);
+        });
+
+        // Initial check of file toggle states to set the master toggle correctly
+        this.syncExclusionToggles(key);
+    }
+
+    /**
+     * Creates an inconsistent file item in the list
+     */
+    private createInconsistentFileItem(container: HTMLElement, propertyKey: string, file: TFile) {
+        const state = this.propertiesState.get(propertyKey);
+        const stats = this.propertyConsistency.get(propertyKey);
+        const isFileExcluded = state?.excludedFiles.has(file.path) || false;
+
+        if (!state || !stats) return;
+
+        const properties = this.fileProperties.get(file.path);
+        const propertyExists = properties && propertyKey in properties;
+        const propertyValue = propertyExists ? properties![propertyKey].value : null;
+
+        // Determine inconsistency types
+        const inconsistencyTypes = {
+            missing: !propertyExists,
+            value: propertyExists && JSON.stringify(propertyValue) !== JSON.stringify(stats.value.mostCommonValue)
+        };
+
+        // Create file item container
+        const fileItem = container.createDiv({
+            cls: `inconsistent-file-item ${isFileExcluded ? 'is-excluded' : ''}`,
+            attr: { 'data-path': file.path }
+        });
+
+        // Create Header using Setting
+        const fileHeaderSetting = new Setting(fileItem)
+            .setName(file.path);
+
+        // Add View File Button
+        fileHeaderSetting.addExtraButton((button: ExtraButtonComponent) => {
+            button
+                .setIcon('eye')
+                .setTooltip(`View File: ${file.path}`)
+                .onClick(() => {
+                    // Open File in New Window
+                    this.app.workspace.getLeaf('window').openFile(file)
+                        .catch(err => {
+                            console.error(`Error opening file ${file.path} in new window:`, err);
+                            new Notice(`Error opening file: ${file.name}`);
+                        });
+                });
+        });
+
+        // Add Exclude Toggle
+        fileHeaderSetting.addToggle((toggle: ToggleComponent) => {
+            // Create standardized toggle handler
+            const handler = new ToggleHandler(
+                toggle,
+                (value) => {
+                    // Handle exclude file toggle change
+                    this.handleExcludeFileToggled(propertyKey, file.path, fileItem, value);
+                },
+                this.plugin
+            );
+            
+            // Set initial value and tooltip
+            handler.setValue(isFileExcluded);
+            toggle.setTooltip(`Exclude this file from changes for property "${propertyKey}"`);
+            
+            // Store reference
+            const toggleData = this.fileToggleComponents.get(propertyKey);
+            if (toggleData) {
+                toggleData.fileToggles.push(handler);
+            }
+            
+            // Add to relationship with the master "Exclude All" toggle
+            const excludeAllRelationship = this.toggleRelationships.get(`exclude-all-${propertyKey}`);
+            if (excludeAllRelationship) {
+                excludeAllRelationship.addIndividualToggle(handler);
+            }
+            
+            // Create a unique identifier for this file toggle
+            const fileToggleId = `file-toggle-${propertyKey}-${file.path.replace(/[^a-zA-Z0-9]/g, '-')}`;
+            this.toggleRelationships.set(fileToggleId, new ToggleRelationship(handler));
+            
+            return toggle;
+        });
+
+        // Modify elements and add descriptions
+        fileHeaderSetting.nameEl.addClass('file-item-name');
+        fileHeaderSetting.settingEl.addClass('bulk-editor-file-header');
+
+        // Add descriptions to the header's descEl
+        const fileHeaderDescEl = fileHeaderSetting.descEl;
+        fileHeaderDescEl.empty();
+
+        fileHeaderDescEl.createSpan({
+            text: "Toggle to ignore this file.",
+            cls: "setting-item-description"
+        });
+        fileHeaderDescEl.createEl('br');
+
+        const inconsistencyDescSpan = fileHeaderDescEl.createSpan({
+            cls: "setting-item-description setting-item-description-subtle"
+        });
+        if (inconsistencyTypes.missing) {
+            inconsistencyDescSpan.appendText("Missing property.");
+            inconsistencyDescSpan.createSpan({ cls: 'property-header-stat-icon is-inconsistent', text: ' ⚠' });
+        } else if (inconsistencyTypes.value) {
+            inconsistencyDescSpan.appendText("Inconsistent value.");
+            inconsistencyDescSpan.createSpan({ cls: 'property-header-stat-icon is-inconsistent', text: ' ⚠' });
+        }
+
+        // Create Content Section
+        const fileContent = fileItem.createDiv({ cls: 'file-item-content' });
+
+        // File details based on inconsistency type
+        if (inconsistencyTypes.missing) {
+            // Add missing property toggle
+            const addMissingSetting = new Setting(fileContent)
+                .setName('Add Missing Property')
+                .setDesc('Adds this property to the file.')
+                .addToggle((toggle: ToggleComponent) => {
+                    // Get initial value from file actions
+                    const fileActions = state.fileActions.get(file.path) || { type: false, value: false, add: false };
+                    
+                    // Create standardized toggle handler
+                    const handler = new ToggleHandler(
+                        toggle,
+                        (isChecked) => {
+                            // Handle the Add Missing Property toggle change
+                            this.handleAddMissingPropertyToggled(propertyKey, file.path, fileItem, fileContent, isChecked);
+                        },
+                        this.plugin
+                    );
+                    
+                    // Set initial value
+                    handler.setValue(fileActions.add);
+                    
+                    // Add to relationship with the master "Add All Missing" toggle
+                    const relationship = this.toggleRelationships.get(`add-all-missing-${propertyKey}`);
+                    if (relationship) {
+                        relationship.addIndividualToggle(handler);
+                    }
+                });
+            addMissingSetting.settingEl.setAttr('data-action-key', 'addMissing');
+        
+            // Set "Use Defined Property Value" toggle
+            const useValueOnAddSetting = new Setting(fileContent)
+                .setName('Use Defined Property Value')
+                .setDesc('Applies the value entered or selected above. If unchecked, adds an empty value.')
+                .addToggle((toggle: ToggleComponent) => {
+                    // Get initial value from file actions
+                    const fileActions = state.fileActions.get(file.path) || { type: false, value: false, add: false };
+                    
+                    // Create standardized toggle handler
+                    const handler = new ToggleHandler(
+                        toggle,
+                        (isChecked) => {
+                            // Handle the Use Defined Property Value toggle change
+                            this.handleUseValueOnAddToggled(propertyKey, file.path, fileItem, isChecked);
+                        },
+                        this.plugin
+                    );
+                    
+                    // Set initial value and disabled state
+                    handler.setValue(fileActions.value);
+                    handler.setDisabled(!fileActions.add);
+                    
+                    // Add to relationship with the master "Apply Value To All" toggle
+                    const relationship = this.toggleRelationships.get(`apply-value-all-${propertyKey}`);
+                    if (relationship) {
+                        relationship.addIndividualToggle(handler);
+                    }
+                });
+
+            // Add attribute for easier selection
+            useValueOnAddSetting.settingEl.setAttr('data-action-key', 'useValueOnAdd');
+
+            // Set initial disabled state based on "Add Missing" toggle
+            const fileActions = state.fileActions.get(file.path) || { type: false, value: false, add: false };
+            if (!fileActions.add) {
+                // For any toggle within this setting, make sure it's properly disabled
+                const toggleEl = useValueOnAddSetting.controlEl.querySelector('input[type="checkbox"]') as HTMLInputElement;
+                if (toggleEl) {
+                    toggleEl.disabled = true;
+                    
+                    // Also disable the entire setting
+                    useValueOnAddSetting.settingEl.addClass('setting-disabled');
+                    
+                    // If there's a toggle handler, update it too
+                    const toggleHandler = useValueOnAddSetting.controlEl.querySelector('.toggle-handler') as HTMLElement | null;
+                    if (toggleHandler instanceof HTMLElement) {
+                        toggleHandler.classList.add('is-disabled');
+                    }
+                }
+            }
+        } else if (inconsistencyTypes.value) {
+            // Render Disabled Value Replica Directly
+            const disabledValueContainer = fileContent.createDiv();
+            disabledValueContainer.addClass('dynamic-value-input-container');
+            const actualFileType = propertyExists ? properties![propertyKey].type : null;
+            const displayType = actualFileType || this.plugin.propertyTypeService.detectPropertyType(propertyValue);
+
+            disabledValueContainer.addClass(`value-input-container-${displayType}`);
+            disabledValueContainer.addClass('is-disabled-replica');
+
+            if (displayType === 'list') {
+                const listEditorContainer = disabledValueContainer.createDiv({ cls: 'property-value-editor list-editor-container is-disabled-replica' });
+                const listValue = Array.isArray(propertyValue) ? propertyValue : [];
+                listValue.forEach((item) => {
+                    const pill = listEditorContainer.createDiv({ cls: 'list-item-pill is-disabled' });
+                    pill.createSpan({ cls: 'pill-text', text: formatValuePreview(item) });
+                });
+                if (listValue.length === 0) {
+                    listEditorContainer.createEl('em', { text: '(Empty list)'});
+                }
+            } else if (displayType === 'checkbox') {
+                const checkboxContainer = disabledValueContainer.createDiv({ cls: 'checkbox-input-container is-disabled-replica'});
+                const checkboxInput = checkboxContainer.createEl('input', { type: 'checkbox', cls: 'property-value-checkbox' });
+                checkboxInput.checked = !!propertyValue;
+                checkboxInput.disabled = true;
+            } else {
+                const propertyValueDiv = disabledValueContainer.createDiv({
+                    cls: 'metadata-input-longtext property-value-editor is-disabled-replica',
+                    attr: {
+                        contenteditable: 'false',
+                        tabindex: '-1',
+                        ...( (!propertyValue || String(propertyValue).trim() === '') && { 'data-placeholder': this.getPlaceholderForType(displayType) } )
+                    }
+                });
+                propertyValueDiv.textContent = formatInputValue(propertyValue);
+                const isMultiline = displayType === 'multitext' || (typeof propertyValue === 'string' && propertyValue.includes('\n'));
+            }
+
+            // Add toggle to control overwriting this value
+            const overwriteValueSetting = new Setting(fileContent)
+                .setName('Overwrite with Defined Property Value')
+                .setDesc('Applies the value entered or selected above, overwriting the current value shown.')
+                .addToggle((toggle: ToggleComponent) => {
+                    // Get initial value from file actions
+                    const fileActions = state.fileActions.get(file.path) || { type: false, value: false, add: false };
+                    
+                    // Create standardized toggle handler
+                    const handler = new ToggleHandler(
+                        toggle,
+                        (value) => {
+                            // Handle the Overwrite Value toggle change
+                            this.handleOverwriteValueToggled(propertyKey, file.path, fileItem, value);
+                        },
+                        this.plugin
+                    );
+                    
+                    // Set initial value
+                    handler.setValue(fileActions.value);
+                    
+                    // Add to relationship with the master "Overwrite All Values" toggle
+                    const relationship = this.toggleRelationships.get(`overwrite-values-all-${propertyKey}`);
+                    if (relationship) {
+                        relationship.addIndividualToggle(handler);
+                    }
+                });
+            overwriteValueSetting.settingEl.setAttr('data-action-key', 'overwriteValue');
+        }
+
+        // Add data attributes for filtering
+        if (inconsistencyTypes.missing) {
+            fileItem.setAttribute('data-inconsistency-missing', 'true');
+        }
+        if (inconsistencyTypes.value) {
+            fileItem.setAttribute('data-inconsistency-value', 'true');
+        }
+
+        // Set initial header appearance
+        this.updateFileHeaderAppearance(fileItem, propertyKey);
+
+        // Initialize internal toggles state based on file exclusion
+        this.updateInternalTogglesState(fileItem, isFileExcluded);
+    }
+
+    /**
+     * Clears and re-renders the content (pills and input) of a list editor container.
+     */
+    private renderListEditorContent(propertyKey: string, container: HTMLElement): void {
+        const state = this.propertiesState.get(propertyKey);
+        if (!state) return;
+
+        // Ensure listValue is an array
+        let listValue: any[] = [];
+        // Prioritize overrideValue if it exists and is an array
+        if (Array.isArray(state.overrideValue)) {
+            listValue = state.overrideValue;
+        } else {
+            // Otherwise, try to use initial stats, converting if necessary
+            const stats = this.propertyConsistency.get(propertyKey);
+            if (stats) {
+                const initialValue = stats.value.mostCommonValue ?? stats.value.firstEncounteredValue;
+                if (Array.isArray(initialValue)) {
+                    listValue = initialValue;
+                } else if (initialValue !== null && initialValue !== undefined) {
+                    // Treat non-arrays as a single-item list
+                    listValue = [initialValue];
+                }
+                // Store the potentially converted array back into overrideValue
+                state.overrideValue = [...listValue];
+            }
+        }
+        // Make sure overrideValue is now definitely an array
+        if (!Array.isArray(state.overrideValue)) {
+            state.overrideValue = [];
+        }
+
+        // Clear existing content
+        container.empty();
+
+        // Render pills for each item
+        listValue.forEach((item, index) => {
+            const pillElement = this.createPill(propertyKey, item, index);
+            container.appendChild(pillElement);
+        });
+
+        const isListEmpty = listValue.length === 0;
+
+        // Create the contenteditable div for adding new items
+        const newItemInput = container.createDiv({
+            cls: 'new-item-input',
+            attr: {
+                contenteditable: 'true',
+                'aria-label': 'Add new list item',
+                role: 'textbox',
+                // Conditionally add data-placeholder attribute
+                ...(isListEmpty && { 'data-placeholder': 'Empty' })
+            }
+        });
+
+        // Event listener for adding items on Enter and preventing newlines
+        this.plugin.registerDomEvent(newItemInput, 'keydown', (e: KeyboardEvent) => {
+            // Prevent Enter from creating a new line in the div
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                const newValue = newItemInput.textContent?.trim();
+                if (newValue) {
+                    // Add the new value to the state array
+                    if (Array.isArray(state.overrideValue)) {
+                        state.overrideValue.push(newValue);
+                    } else {
+                        state.overrideValue = [newValue];
+                    }
+
+                    // Update counter for the new list value (debounced)
+                    this.debouncedUpdateValueCounter(propertyKey, [...state.overrideValue], 'list');
+
+                    // Re-render the content of this specific list editor
+                    this.renderListEditorContent(propertyKey, container);
+                    
+                    // Find the *new* input element after re-rendering and focus it
+                    const newInputElement = container.querySelector('.new-item-input') as HTMLElement | null;
+                    newInputElement?.focus();
+                }
+            } else if (e.key === 'Backspace') {
+                const selection = window.getSelection();
+                // Check if input is empty or cursor is at the very start
+                const isEmpty = newItemInput.textContent?.length === 0;
+                const isAtStart = selection?.anchorOffset === 0 && selection?.focusOffset === 0;
+        
+                if (isEmpty || isAtStart) {
+                    e.preventDefault();
+                    // Find the last pill in this container
+                    const pills = container.querySelectorAll('.list-item-pill[tabindex="0"]') as NodeListOf<HTMLElement>;
+                    const lastPill = pills[pills.length - 1];
+                    if (lastPill) {
+                        lastPill.focus();
+                    }
+                }
+            }
+        });
+
+        // Add click listener to the container to focus the input div when clicking empty space
+        this.plugin.registerDomEvent(container, 'click', (e: MouseEvent) => {
+            if (e.target === container) {
+                newItemInput.focus();
+            }
+        });
+
+        // Add paste handler to sanitize pasted content (remove newlines)
+        this.plugin.registerDomEvent(newItemInput, 'paste', (e: ClipboardEvent) => {
+            e.preventDefault();
+            const text = e.clipboardData?.getData('text/plain');
+            if (text) {
+                // Remove line breaks from pasted text
+                const sanitizedText = text.replace(/(\r\n|\n|\r)/gm, " ");
+                document.execCommand('insertText', false, sanitizedText);
             }
         });
     }
+
+    /**
+     * Creates a pill element for a list item.
+     */
+    private createPill(propertyKey: string, itemValue: any, index: number): HTMLElement {
+        const state = this.propertiesState.get(propertyKey);
+
+        const pill = createDiv({
+            cls: 'list-item-pill',
+            attr: {
+                'data-index': index,
+                tabindex: '0'
+            }
+        });
+
+        // Create span for the text content
+        const textSpan = pill.createDiv({ cls: 'pill-text' });
+        textSpan.textContent = formatValuePreview(itemValue);
+
+        // Create remove button
+        const removeButton = pill.createDiv({
+            cls: 'remove-pill-button',
+            attr: { 'aria-label': 'Remove item' }
+        });
+        setIcon(removeButton, 'x');
+
+        // Add click listener to remove button
+        this.plugin.registerDomEvent(removeButton, 'click', (e: MouseEvent) => {
+            e.stopPropagation();
+            if (state && Array.isArray(state.overrideValue)) {
+                const currentItems = state.overrideValue;
+                const itemIndex = parseInt(pill.getAttribute('data-index') || '-1');
+                if (itemIndex >= 0 && itemIndex < currentItems.length) {
+                    // Remove the item from the array
+                    currentItems.splice(itemIndex, 1);
+
+                    // Update counter after removing from list (debounced)
+                    this.debouncedUpdateValueCounter(propertyKey, [...currentItems], 'list');
+                    // Find the container and re-render its content
+                    const listEditorContainer = pill.closest('.list-editor-container');
+                    if (listEditorContainer instanceof HTMLElement) {
+                        this.renderListEditorContent(propertyKey, listEditorContainer);
+                        // Focus the input after removing an item
+                        const input = listEditorContainer.querySelector('.new-item-input') as HTMLInputElement | null;
+                        input?.focus();
+                    }
+                }
+            }
+        });
+
+        // Add Double-click to Edit Functionality
+        this.plugin.registerDomEvent(pill, 'dblclick', () => {
+            // Ensure state exists and value is an array
+            if (!state || !Array.isArray(state.overrideValue)) return;
+
+            const originalValue = itemValue;
+            const itemIndex = parseInt(pill.getAttribute('data-index') || '-1');
+            if (itemIndex === -1) return;
+
+            // Hide the original pill
+            pill.classList.add('is-editing');
+
+            // Create temporary editing input (contenteditable div)
+            const editingInput = createDiv({
+                cls: 'new-item-input editing-pill-input',
+                attr: {
+                    contenteditable: 'true',
+                    'aria-label': `Edit item ${index + 1}`
+                },
+                text: formatInputValue(originalValue)
+            });
+
+            // Function to finalize edit or cancel
+            const finalizeEdit = (saveChanges: boolean) => {
+                const listEditorContainer = pill.closest('.list-editor-container');
     
+                if (saveChanges) {
+                    // Save Logic
+                    const newValue = editingInput.textContent?.trim();
+                    if (newValue !== null && newValue !== undefined && newValue !== '') {
+                        if (Array.isArray(state.overrideValue)) {
+                            state.overrideValue[itemIndex] = newValue;
+                        }
+                    } else {
+                        if (Array.isArray(state.overrideValue)) {
+                            state.overrideValue.splice(itemIndex, 1);
+                        }
+                    }
+
+                    // Update counter after editing list item (debounced)
+                    if (Array.isArray(state.overrideValue)) {
+                        this.debouncedUpdateValueCounter(propertyKey, [...state.overrideValue], 'list');
+                    }
+
+                    // Clean up the temporary input
+                    editingInput.remove();
+                    // Re-render ONLY on save
+                    if (listEditorContainer instanceof HTMLElement) {
+                        this.renderListEditorContent(propertyKey, listEditorContainer);
+                    } else {
+                        // Fallback - unlikely
+                        pill.classList.remove('is-editing');
+                    }
+                } else {
+                    // Cancel Logic
+                    editingInput.remove();
+                }
+            };
+
+            // Event listeners for the temporary input
+            editingInput.addEventListener('blur', () => {
+                // Use a small delay to avoid race conditions with click/enter
+                setTimeout(() => {
+                    // Check if the element still exists (might have been removed by Enter/Escape)
+                    if (editingInput.isConnected) {
+                        finalizeEdit(true);
+                    }
+                }, 150);
+            });
+
+            editingInput.addEventListener('keydown', (e: KeyboardEvent) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    // Save changes
+                    finalizeEdit(true);
+    
+                    // Add Focus Logic
+                    const listEditorContainer = pill.closest('.list-editor-container');
+                    if (listEditorContainer instanceof HTMLElement) {
+                        // Find all pills and the input field *after* re-render
+                        const pillsAfterRender = listEditorContainer.querySelectorAll('.list-item-pill[tabindex="0"]') as NodeListOf<HTMLElement>;
+                        const newItemInputAfterRender = listEditorContainer.querySelector('.new-item-input') as HTMLElement | null;
+    
+                        // Determine the next element to focus based on the original itemIndex
+                        let elementToFocus: HTMLElement | null = null;
+                        if (itemIndex + 1 < pillsAfterRender.length) {
+                            // Focus the next pill if it exists
+                            elementToFocus = pillsAfterRender[itemIndex + 1];
+                        } else {
+                            // Otherwise, focus the 'add new' input field
+                            elementToFocus = newItemInputAfterRender;
+                        }
+    
+                        // Set the focus
+                        elementToFocus?.focus();
+                    }
+                } else if (e.key === 'Escape') {
+                    e.preventDefault();
+                    editingInput.remove();
+                    pill.classList.remove('is-editing');
+                    pill.focus();
+                }
+            });
+
+            // Insert the editing input right after the hidden pill
+            pill.after(editingInput);
+
+            // Focus the input and select its content
+            editingInput.focus();
+            const selection = window.getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(editingInput);
+            selection?.removeAllRanges();
+            selection?.addRange(range);
+        });
+
+        // Add Backspace to Delete Pill Functionality
+        this.plugin.registerDomEvent(pill, 'keydown', (e: KeyboardEvent) => {
+            if (e.key === 'Backspace') {
+                e.preventDefault();
+
+                if (!state || !Array.isArray(state.overrideValue)) return;
+
+                const itemIndex = parseInt(pill.getAttribute('data-index') || '-1');
+                if (itemIndex === -1) return;
+
+                // Remove the item from the state array
+                state.overrideValue.splice(itemIndex, 1);
+
+                // Update counter after removing from list (debounced)
+                this.debouncedUpdateValueCounter(propertyKey, [...state.overrideValue], 'list');
+
+                // Get container reference *before* potentially removing the pill element during re-render
+                const listEditorContainer = pill.closest('.list-editor-container');
+                if (!(listEditorContainer instanceof HTMLElement)) return;
+
+                // Re-render the list container
+                this.renderListEditorContent(propertyKey, listEditorContainer);
+
+                // Set Focus After Deletion
+                const pillsAfterRender = listEditorContainer.querySelectorAll('.list-item-pill[tabindex="0"]') as NodeListOf<HTMLElement>;
+                const newItemInputAfterRender = listEditorContainer.querySelector('.new-item-input') as HTMLElement | null;
+
+                let elementToFocus: HTMLElement | null = null;
+                if (itemIndex > 0 && pillsAfterRender.length > 0) {
+                    // Focus the item that is now at the previous index (or the new last item if the original last was deleted)
+                    elementToFocus = pillsAfterRender[Math.min(itemIndex - 1, pillsAfterRender.length - 1)];
+                } else {
+                    // If the first item was deleted, or no pills remain, focus the input
+                    elementToFocus = newItemInputAfterRender;
+                }
+
+                elementToFocus?.focus();
+            }
+        });
+
+        return pill;
+    }
+
+    // =================================================================
+    // SECTION: Property Data Methods
+    // =================================================================
+
     /**
      * Loads properties from all files and calculates consistency statistics
      */
@@ -410,12 +2402,12 @@ export class BulkEditor extends Modal {
                         this.propertyConsistency.set(key, {
                             property: { total: this.files.length, present: 0 },
                             type: { total: 0, consistent: 0, mostCommonType: null },
-                            value: { // Ensure all value fields are initialized
+                            value: {
                                 total: 0,
                                 consistent: 0,
                                 mostCommonValue: null,
-                                firstEncounteredValue: undefined, // Add this
-                                allUniqueValues: [] // Add this
+                                firstEncounteredValue: undefined,
+                                allUniqueValues: []
                             }
                         });
                     }
@@ -485,8 +2477,8 @@ export class BulkEditor extends Modal {
                 counts: new Map<string, { count: number; value: any }>(),
                 firstValue: undefined as any,
                 hasFoundFirst: false,
-                uniqueValuesSet: new Set<string>(), // Store stringified unique values
-                uniqueValues: [] as any[] // Store actual unique values
+                uniqueValuesSet: new Set<string>(),
+                uniqueValues: [] as any[]
             };
 
             // Process each file's property
@@ -507,7 +2499,7 @@ export class BulkEditor extends Modal {
                 typeCount.set(type, (typeCount.get(type) || 0) + 1);
 
                 // Count values (stringify for comparison, store original value)
-                const valueStr = JSON.stringify(property.value); // Key for counting
+                const valueStr = JSON.stringify(property.value);
                 if (!valueDetails.counts.has(valueStr)) {
                     valueDetails.counts.set(valueStr, { count: 0, value: property.value });
                 }
@@ -545,854 +2537,24 @@ export class BulkEditor extends Modal {
             stats.type.mostCommonType = mostCommonType;
 
             // Ensure value stats are initialized if they weren't already
-             if (!stats.value) {
-                 stats.value = {
-                     total: stats.type.total, // total value count is same as type count
-                     consistent: 0,
-                     mostCommonValue: null,
-                     firstEncounteredValue: undefined,
-                     allUniqueValues: []
-                 };
-             }
+            if (!stats.value) {
+                stats.value = {
+                    total: stats.type.total,
+                    consistent: 0,
+                    mostCommonValue: null,
+                    firstEncounteredValue: undefined,
+                    allUniqueValues: []
+                };
+            }
 
-            stats.value.total = stats.type.total; // Update total count
+            stats.value.total = stats.type.total;
             stats.value.consistent = maxValueCount;
             stats.value.mostCommonValue = mostCommonValue;
             stats.value.firstEncounteredValue = valueDetails.firstValue;
             stats.value.allUniqueValues = valueDetails.uniqueValues;
-
         });
     }
-    
-    /**
-     * Renders a single property item in the list
-     */
-    private renderPropertyItem(key: string) {
-        // Ensure propertiesListContainer exists before proceeding
-        if (!this.propertiesListContainer) return;
 
-        // Retrieve state and stats for the property key
-        const state = this.propertiesState.get(key);
-        const stats = this.propertyConsistency.get(key);
-
-        // Guard clause: Exit if state or stats are missing
-        if (!state || !stats) return;
-
-        // Create property item container div
-        const propertyItem = this.propertiesListContainer.createDiv({
-            cls: `bulk-property-item ${state.expanded ? '' : 'is-collapsed'}`,
-            attr: { id: `prop-${key}` }
-        });
-
-        // --- Header Section (Using Setting Component) ---
-        const propertyHeaderSetting = new Setting(propertyItem);
-        propertyHeaderSetting.settingEl.addClass('bulk-property-item-header-setting');
-
-        // Property Name
-        propertyHeaderSetting.setName(key);
-
-        // ARIA attributes
-        propertyHeaderSetting.settingEl.setAttrs({
-            'aria-expanded': state.expanded.toString(),
-            'role': 'button',
-            'tabindex': '0'
-        });
-
-        // --- Status Text moved to Description Area ---
-        const descEl = propertyHeaderSetting.descEl;
-        descEl.empty(); // Clear default description content
-        descEl.addClass('bulk-property-stats-description'); // Add class for styling
-
-        // --- Controls Area (Toggle and Drag Handle only) ---
-        const controlEl = propertyHeaderSetting.controlEl;
-        controlEl.addClass('bulk-property-item-header-controls');
-
-        // Edit Enabled Toggle
-        propertyHeaderSetting.addToggle(toggle => {
-            toggle.setValue(state.enabled)
-                .setTooltip(`Toggle editing for ${key} property`)
-                .onChange(value => {
-                    state.enabled = value;
-                    this.updateMasterEnableToggleState();
-
-                    // Process links in all property editors when toggling
-                    const propertyContent = propertyItem.querySelector('.property-content');
-                    if (propertyContent) {
-                        const editors = propertyContent.querySelectorAll('.property-value-editor');
-                        editors.forEach(editor => {
-                            if (editor instanceof HTMLElement) {
-                                const editorType = state.changeType || 
-                                                stats?.type.mostCommonType || 
-                                                'text';
-                                this.processLinksInEditor(editor, editorType);
-                            }
-                        });
-                    }
-                });
-             toggle.toggleEl.parentElement?.addClass('edit-toggle-control-wrapper');
-        });
-
-        // Drag Handle
-        const dragHandle = controlEl.createSpan({
-            cls: 'drag-handle', text: '☰',
-            attr: { draggable: 'true', title: `Drag to reorder ${key} property` }
-        });
-
-        // Helper function to add a status row
-        const addStatusRow = (label: string, value: string, isConsistent: boolean) => {
-            const row = descEl.createDiv({ cls: 'property-header-stat-row' }); // Each status on a new div/row
-            // Add icon based on consistency
-            row.createSpan({
-                cls: `property-header-stat-icon ${isConsistent ? 'is-consistent' : 'is-inconsistent'}`,
-                text: isConsistent ? '✓' : '⚠' // Use checkmark or warning
-            });
-            row.createSpan({ cls: 'property-header-stat-label', text: `${label}: ` });
-            row.createSpan({ cls: 'property-header-stat-value', text: value });
-        };
-
-        // Add status rows
-        addStatusRow(
-            'Property',
-            `${stats.property.present}/${stats.property.total}`,
-            stats.property.present === stats.property.total
-        );
-        addStatusRow(
-            'Type',
-            `${stats.type.consistent}/${stats.type.total}`,
-            stats.type.consistent === stats.type.total
-        );
-        addStatusRow(
-            'Value',
-            `${stats.value.consistent}/${stats.type.total}`,
-            stats.value.consistent === stats.type.total
-        );
-
-        // --- Dynamic Hint Text Span ---
-        const hintSpan = descEl.createSpan({ cls: 'property-toggle-hint' });
-        hintSpan.textContent = state.expanded ? 'Toggle to hide options.' : 'Toggle to display options.';
-
-        // --- Content Section ---
-        const contentContainer = propertyItem.createDiv({ cls: 'property-content' });
-        if (!state.expanded) { contentContainer.style.display = 'none'; }
-        this.createPropertyDetailsSection(contentContainer, key);
-        this.createInconsistentFilesSection(contentContainer, key);
-
-
-        // --- Event Handlers ---
-        this.plugin.registerDomEvent(propertyHeaderSetting.settingEl, 'click', (e: MouseEvent) => {
-            // Ignore clicks on controls
-            if (controlEl.contains(e.target as Node)) { return; }
-        
-            // Toggle state
-            state.expanded = !state.expanded;
-        
-            // Find the hint span dynamically if needed
-            const currentHintSpan = propertyHeaderSetting.descEl.querySelector('.property-toggle-hint');
-        
-            // Update UI
-            if (state.expanded) {
-                propertyItem.classList.remove('is-collapsed');
-                contentContainer.style.display = '';
-                propertyHeaderSetting.settingEl.setAttribute('aria-expanded', 'true');
-                if (currentHintSpan) currentHintSpan.textContent = 'Toggle to hide options.';
-                
-                // Resize all contenteditable elements when they become visible
-                setTimeout(() => {
-                    const editors = contentContainer.querySelectorAll('.property-value-editor');
-                    editors.forEach(editor => {
-                        if (editor instanceof HTMLElement) {
-                            this.autoResizeEditableDiv(editor);
-                        }
-                    });
-                }, 0);
-            } else {
-                propertyItem.classList.add('is-collapsed');
-                contentContainer.style.display = 'none';
-                propertyHeaderSetting.settingEl.setAttribute('aria-expanded', 'false');
-                if (currentHintSpan) currentHintSpan.textContent = 'Toggle to display options.';
-            }
-            
-            // Update the global expand/collapse button state if necessary
-            this.updateExpandCollapseButtonState();
-        });
-
-        this.plugin.registerDomEvent(propertyHeaderSetting.settingEl, 'keydown', (e: KeyboardEvent) => {
-            if (e.key === 'Enter' || e.key === ' ') {
-                // Prevent toggling if focus is on the actual checkbox toggle in controls
-                if (e.target instanceof HTMLElement && controlEl.contains(e.target) && e.target.closest('.checkbox-container')) { return; }
-                // Allow toggling if focus is anywhere else in the header, except controls
-                if (!controlEl.contains(e.target as Node)) {
-                    e.preventDefault();
-                    propertyHeaderSetting.settingEl.click(); // This will trigger the click handler above
-                }
-            }
-        });
-    }
-    
-    /**
-     * Creates the details section for a property: info and dynamic value input.
-     */
-    private createPropertyDetailsSection(container: HTMLElement, key: string) {
-        const state = this.propertiesState.get(key);
-        const stats = this.propertyConsistency.get(key);
-        if (!state || !stats) return;
-
-        // --- Action if Edit Disabled ---
-        new Setting(container)
-            .setName('Action if Edit Disabled')
-            .setDesc('Overrides global setting if the edit toggle above is off.')
-            .addDropdown(dropdown => {
-                dropdown
-                .setValue(state.changeType || '')
-                .onChange(value => {
-                    const newType = value || null;
-                    state.changeType = newType;
-                    this.updateValueControl(valueControlContainer, key, newType);
-                });
-            });
-
-        // --- Apply Order for This Property ---
-        new Setting(container)
-            .setName('Apply Order for This Property')
-            .setDesc('When enabled, the position of this property in the list will be preserved on apply.')
-            .addToggle(toggle => {
-                toggle
-                    .setValue(state.applyOrder)
-                    .onChange(value => {
-                        state.applyOrder = value;
-                    });
-            });
-
-        // --- Property Type Selection ---
-        const propertyTypeSetting = new Setting(container)
-            .setName('Property Type')
-            .setDesc('Select the type to apply for this property.');
-
-        const mostCommonTypeValue = stats.type.mostCommonType;
-        const mostCommonTypeDisplay = mostCommonTypeValue
-            ? this.plugin.propertyTypeService.getPropertyTypeDisplayName(mostCommonTypeValue)
-            : 'Varies';
-
-        // Add consistency info to description
-        const typeDescEl = propertyTypeSetting.descEl;
-        typeDescEl.createEl('br');
-        const hasTypeData = stats.type.total > 0;
-        // ... (keep consistency status logic from previous step) ...
-        if (stats.type.total > 1 && stats.type.consistent === 1) { /* isTypeChaotic */
-            const warningSpan = typeDescEl.createSpan({ cls: 'type-consistency-warning' });
-            warningSpan.createSpan({ text: '⚠ ' });
-            warningSpan.appendText('No single type is dominant across files.');
-        } else if (hasTypeData) {
-            const statusRow = typeDescEl.createDiv({ cls: 'property-header-stat-row' });
-            const iconClass = (stats.type.consistent === stats.type.total) ? 'is-consistent' : 'is-inconsistent';
-            const iconText = (stats.type.consistent === stats.type.total) ? '✓' : '⚠';
-            statusRow.createSpan({ cls: `property-header-stat-icon ${iconClass}`, text: iconText });
-            const labelSpan = statusRow.createSpan({ cls: 'property-header-stat-label' });
-            labelSpan.appendText(`Most common type found in <span class="math-inline">\{stats\.type\.consistent\}/</span>{stats.type.total} files.`);
-        } else {
-            typeDescEl.createSpan({ text: 'Property not found in any selected file.', cls: 'text-muted' });
-        }
-        // --- End Property Type Description ---
-
-
-        // --- Static Property Value Info Display ---
-        const propertyValueDisplaySetting = new Setting(container)
-            .setName('Property Value') // Static display part
-            .setDesc('Displays value consistency information.'); // Explain purpose
-
-        // Add consistency info to its description
-        const valueDescEl = propertyValueDisplaySetting.descEl;
-        valueDescEl.empty();
-        valueDescEl.createSpan({text: 'Displays value consistency information.'});
-        valueDescEl.createEl('br');
-        // ... (keep consistency status logic from previous step) ...
-        const isValueChaotic = stats.value.total > 1 && stats.value.consistent === 1;
-        const isValueFullyConsistent = stats.value.total > 0 && stats.value.consistent === stats.value.total;
-        const hasValueData = stats.value.total > 0;
-        if (isValueChaotic) {
-            const warningSpan = valueDescEl.createSpan({ cls: 'value-consistency-warning' });
-            warningSpan.createSpan({ text: '⚠ ' });
-            warningSpan.appendText('No files share the same value.');
-        } else if (hasValueData) {
-            const statusRow = valueDescEl.createDiv({ cls: 'property-header-stat-row' });
-            const iconClass = isValueFullyConsistent ? 'is-consistent' : 'is-inconsistent';
-            const iconText = isValueFullyConsistent ? '✓' : '⚠';
-            statusRow.createSpan({ cls: `property-header-stat-icon ${iconClass}`, text: iconText });
-            const labelSpan = statusRow.createSpan({ cls: 'property-header-stat-label' });
-            labelSpan.appendText(`Most common value found in ${stats.value.consistent}`);
-            labelSpan.appendText(`/${stats.value.total} files.`);
-        } else {
-            valueDescEl.createSpan({ text: 'Property not found in any selected file.', cls: 'text-muted' });
-        }
-        propertyValueDisplaySetting.settingEl.addClass('property-value-display-setting');
-        // --- End Static Property Value Info Display ---
-
-
-        // --- Container for Dynamic Value Input Control ---
-        // This div will be populated by updateValueControl
-        const valueControlContainer = container.createDiv();
-        valueControlContainer.addClass('dynamic-value-input-container');
-        // Add class based on initial type for styling
-        const initialActualType = state.changeType || mostCommonTypeValue || 'text';
-        valueControlContainer.addClass(`value-input-container-${initialActualType}`);
-
-
-        // --- Link Type Dropdown onChange to Update Control ---
-        propertyTypeSetting.addDropdown(dropdown => {
-            const filteredTypes = mostCommonTypeValue
-                ? PROPERTY_TYPES.filter(type => type.value !== mostCommonTypeValue)
-                : PROPERTY_TYPES;
-
-            dropdown.addOption('', mostCommonTypeDisplay);
-            dropdown.addOptions(filteredTypes.reduce((options, type) => {
-                options[type.value] = type.label;
-                return options;
-            }, {} as Record<string, string>));
-
-            dropdown
-                .setValue(state.changeType || '')
-                .onChange(value => {
-                    const newType = value || null;
-                    state.changeType = newType;
-                    // Update CSS class on container
-                    valueControlContainer.className = 'dynamic-value-input-container'; // Reset classes
-                    valueControlContainer.addClass(`value-input-container-${newType || mostCommonTypeValue || 'text'}`);
-                    // Call the update function
-                    this.updateValueControl(valueControlContainer, key, newType);
-                });
-            return dropdown;
-        });
-
-        this.createUnifiedValueContainer(valueControlContainer, key, state.changeType || mostCommonTypeValue || 'text');
-
-        // Initial setup of the value control
-        this.updateValueControl(valueControlContainer, key, state.changeType);
-
-    } // End of createPropertyDetailsSection
-
-    /**
-     * Updates the unified editor's value when the property type changes.
-     */
-    private updateValueControl(
-        valueControlContainer: HTMLElement, // The container div holding the editor
-        key: string,
-        selectedType: string | null
-        ): void {
-        const state = this.propertiesState.get(key);
-        const stats = this.propertyConsistency.get(key);
-        if (!state || !stats) return;
-
-        // Find the editor div within the container
-        const editor = valueControlContainer.querySelector('.property-value-editor') as HTMLElement | null;
-        if (!editor) {
-            console.error(`Editor not found for property ${key}`);
-            return;
-        }
-
-        const mostCommonTypeValue = stats.type.mostCommonType;
-        const actualType = selectedType || mostCommonTypeValue || 'text';
-
-        // Update container classes for the new type
-        valueControlContainer.className = 'dynamic-value-input-container'; // Reset classes
-        valueControlContainer.addClass(`value-input-container-${actualType}`);
-
-        // Determine the value to display - prioritize override, then stats
-        let valueToDisplay: any;
-        if (state.overrideValue !== null && state.overrideValue !== undefined) {
-            valueToDisplay = state.overrideValue;
-        } else if (stats.value.total > 0) {
-            valueToDisplay = stats.value.mostCommonValue ?? stats.value.firstEncounteredValue;
-        } else {
-            valueToDisplay = null;
-        }
-
-        // Format the value using formatValuePreview to remove syntax characters
-        const formattedValue = formatValuePreview(valueToDisplay, actualType);
-
-        // Update the editor's content and placeholder
-        editor.textContent = formattedValue;
-        editor.setAttribute('placeholder', `Enter ${actualType} value...`);
-
-        // Process links in the editor
-        this.processLinksInEditor(editor, actualType);
-
-        // Resize the editor based on the new content
-        this.autoResizeEditableDiv(editor);
-    }
-
-    /**
-     * Creates a unified value container with appropriate input based on property type.
-     */
-    private createUnifiedValueContainer(
-        container: HTMLElement,
-        key: string,
-        initialType: string | null
-        ): HTMLElement {
-        const state = this.propertiesState.get(key);
-        const stats = this.propertyConsistency.get(key);
-        if (!state || !stats) return container;
-
-        const mostCommonTypeValue = stats.type.mostCommonType;
-        const actualType = initialType || mostCommonTypeValue || 'text';
-        const hasValueData = stats.value.total > 0;
-
-        // --- Create the unified container DIV ---
-        const valueContainer = container.createDiv({
-            cls: 'unified-value-container'
-        });
-        
-        // Add type-specific class to container
-        valueContainer.addClass(`value-container-type-${actualType}`);
-
-        // --- Determine Initial Value and Format for Display ---
-        let rawInitialValue: any = '';
-        if (state.overrideValue !== null && state.overrideValue !== undefined) {
-            rawInitialValue = state.overrideValue;
-        } else if (hasValueData) {
-            rawInitialValue = stats.value.mostCommonValue ?? stats.value.firstEncounteredValue;
-        }
-
-        // Format the value using formatValuePreview to remove syntax characters
-        const formattedValue = formatValuePreview(rawInitialValue, actualType);
-
-        // --- Create appropriate input element based on type ---
-        if (actualType === 'checkbox') {
-            // Create checkbox input for checkbox type
-            const checkboxContainer = valueContainer.createDiv({
-                cls: 'checkbox-input-container'
-            });
-            
-            const checkboxInput = checkboxContainer.createEl('input', {
-                type: 'checkbox',
-                cls: 'property-value-checkbox',
-                attr: { 
-                    tabindex: '0'
-                }
-            });
-            
-            // Set initial value for checkbox
-            const initialBoolValue = typeof rawInitialValue === 'boolean' 
-                ? rawInitialValue 
-                : String(rawInitialValue).toLowerCase() === 'true';
-            checkboxInput.checked = initialBoolValue;
-            
-            // Add change event listener for checkbox
-            this.plugin.registerDomEvent(checkboxInput, 'change', () => {
-                state.overrideValue = checkboxInput.checked;
-            });
-            
-            // Focus/blur handlers
-            this.plugin.registerDomEvent(checkboxInput, 'focus', () => {
-                this.autoResizeEditableDiv(checkboxContainer);
-            });
-            
-            this.plugin.registerDomEvent(checkboxInput, 'blur', () => {
-                this.autoResizeEditableDiv(checkboxContainer);
-            });
-            
-        } else {
-            // Create contenteditable div for other types
-            const propertyValueDiv = valueContainer.createDiv({
-                cls: 'metadata-input-longtext property-value-editor',
-                attr: {
-                    contenteditable: 'true',
-                    spellcheck: 'true',
-                    tabindex: '0',
-                    placeholder: this.getPlaceholderForType(actualType)
-                }
-            });
-            
-            // Set initial text content with the formatted value
-            propertyValueDiv.textContent = formattedValue;
-            
-            // Process any links in the initial content
-            this.processLinksInEditor(propertyValueDiv, actualType);
-
-            // --- Add Input Event Listener ---
-            this.plugin.registerDomEvent(propertyValueDiv, 'input', () => {
-                // Store the raw text value in the state
-                if (propertyValueDiv.textContent !== null) {
-                    state.overrideValue = propertyValueDiv.textContent;
-                }
-                
-                // Only restrict multi-line input for non-text types
-                if (actualType !== 'text') {
-                    // Remove newlines from text content
-                    if (propertyValueDiv.textContent) {
-                        propertyValueDiv.textContent = propertyValueDiv.textContent.replace(/\n/g, '');
-                        state.overrideValue = propertyValueDiv.textContent;
-                    }
-                }
-                
-                // Convert any link spans back to plain text during editing
-                const linkSpans = propertyValueDiv.querySelectorAll('.metadata-link');
-                if (linkSpans.length > 0) {
-                    linkSpans.forEach(span => {
-                        const textNode = document.createTextNode(span.textContent || '');
-                        span.parentNode?.replaceChild(textNode, span);
-                    });
-                    state.overrideValue = propertyValueDiv.textContent;
-                }
-                
-                // Resize on input
-                this.autoResizeEditableDiv(propertyValueDiv);
-            });
-            
-            // --- Focus/blur event listeners ---
-            this.plugin.registerDomEvent(propertyValueDiv, 'focus', () => {
-                // When focused, convert any link spans to plain text to allow editing
-                const linkSpans = propertyValueDiv.querySelectorAll('.metadata-link');
-                if (linkSpans.length > 0) {
-                    linkSpans.forEach(span => {
-                        const textNode = document.createTextNode(span.textContent || '');
-                        span.parentNode?.replaceChild(textNode, span);
-                    });
-                }
-                
-                this.autoResizeEditableDiv(propertyValueDiv);
-            });
-            
-            this.plugin.registerDomEvent(propertyValueDiv, 'blur', () => {
-                // Convert list type values back to arrays
-                if (actualType === 'list' && propertyValueDiv.textContent) {
-                    state.overrideValue = propertyValueDiv.textContent
-                        .split(',')
-                        .map(item => item.trim())
-                        .filter(item => item.length > 0);
-                }
-                
-                // Check if the content is still a valid link after editing
-                this.processLinksInEditor(propertyValueDiv, actualType);
-                
-                // Ensure we resize AFTER all content processing is done
-                setTimeout(() => {
-                    this.autoResizeEditableDiv(propertyValueDiv);
-                }, 0);
-            });
-            
-            // --- Type-specific event handlers ---
-            if (actualType !== 'text') {
-                this.plugin.registerDomEvent(propertyValueDiv, 'keydown', (e: KeyboardEvent) => {
-                    // Prevent Enter key for single-line types
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                        e.preventDefault();
-                        
-                        // Special handling for list type
-                        if (actualType === 'list') {
-                            document.execCommand('insertText', false, ', ');
-                        }
-                    }
-                });
-            }
-            
-            // Initial size calculation
-            this.autoResizeEditableDiv(propertyValueDiv);
-        }
-
-        return valueContainer;
-    }
-
-    /**
-     * Returns the appropriate placeholder text based on property type.
-     */
-    private getPlaceholderForType(type: string): string {
-        switch (type) {
-            case 'text':
-            case 'list':
-            case 'number':
-                return 'Empty';
-            case 'date':
-                return 'YYYY-MM-DD';
-            case 'datetime':
-                return 'YYYY-MM-DD HH:MM';
-            case 'checkbox':
-                return ''; // Checkbox doesn't need a placeholder
-            default:
-                return `Enter ${type} value...`;
-        }
-    }
-
-    /**
-     * Processes text content in the editor to identify and make links clickable.
-     * Now with improved cursor position handling.
-     */
-    private processLinksInEditor(element: HTMLElement, type: string): void {
-        // Skip if this is not a link-compatible type, or if content has multiple lines
-        if ((type !== 'text' && type !== 'list') || 
-            (element.textContent && element.textContent.includes('\n'))) {
-            return;
-        }
-        
-        // Get the current content
-        const currentContent = element.textContent || '';
-        
-        // Process based on type
-        if (type === 'text') {
-            // For text fields, ONLY make the entire content clickable if it's a valid URL
-            // Use a stricter URL validation to prevent partial links from being recognized
-            if (this.isValidUrl(currentContent)) {
-                // Only modify the DOM if needed
-                if (!element.querySelector('.metadata-link') || 
-                    element.querySelector('.metadata-link')?.textContent !== currentContent) {
-                    
-                    // Clear the element
-                    element.innerHTML = '';
-                    
-                    // Create a clickable link element
-                    const linkElement = this.createClickableLinkElement(currentContent);
-                    element.appendChild(linkElement);
-                }
-            } else {
-                // If it's not a valid URL anymore, make sure to convert any link spans back to plain text
-                const linkSpans = element.querySelectorAll('.metadata-link');
-                if (linkSpans.length > 0) {
-                    // Replace each link span with its text content
-                    linkSpans.forEach(span => {
-                        const textNode = document.createTextNode(span.textContent || '');
-                        span.parentNode?.replaceChild(textNode, span);
-                    });
-                }
-            }
-        } else if (type === 'list') {
-            // List processing remains the same...
-        }
-    }
-
-    /**
-     * Checks if a string is a valid URL with a stricter validation
-     */
-    private isValidUrl(text: string): boolean {
-        // More comprehensive URL validation regex
-        const urlRegex = /^(https?:\/\/)(www\.)?([a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+)(\/[^\s]*)?$/;
-        return urlRegex.test(text);
-    }
-    
-    /**
-     * Creates a clickable link element for the editor
-     */
-    private createClickableLinkElement(link: string): HTMLElement {
-        // Create the link element
-        const linkElement = document.createElement('span');
-        linkElement.className = 'metadata-link';
-        linkElement.textContent = link;
-        
-        // Add click handler
-        this.plugin.registerDomEvent(linkElement, 'click', (e: MouseEvent) => {
-            e.preventDefault();
-            e.stopPropagation();
-            handleLinkClick(this.app, link, e);
-        });
-        
-        return linkElement;
-    }
-
-    /**
-     * Counts the actual visual lines in a contenteditable element.
-     * Accounts for both \n characters and block elements like <div>, <p>, etc.
-     */
-    private countVisualLines(element: HTMLElement): number {
-        // Get the computed line height
-        const computedStyle = window.getComputedStyle(element);
-        let lineHeight = parseInt(computedStyle.lineHeight);
-        if (isNaN(lineHeight)) {
-            const fontSize = parseInt(computedStyle.fontSize);
-            lineHeight = Math.round(fontSize * 1.5);
-        }
-        
-        // Create a clone to measure without affecting the original
-        const clone = element.cloneNode(true) as HTMLElement;
-        clone.style.position = 'absolute';
-        clone.style.visibility = 'hidden';
-        clone.style.height = 'auto';
-        clone.style.width = element.offsetWidth + 'px';
-        document.body.appendChild(clone);
-        
-        // Get the height of the content
-        const contentHeight = clone.scrollHeight;
-        document.body.removeChild(clone);
-        
-        // Get padding
-        const paddingTop = parseInt(computedStyle.paddingTop) || 0;
-        const paddingBottom = parseInt(computedStyle.paddingBottom) || 0;
-        
-        // Calculate the actual content height without padding
-        const textHeight = contentHeight - paddingTop - paddingBottom;
-        
-        // Estimate the number of lines
-        const lines = Math.max(1, Math.round(textHeight / lineHeight));
-        
-        return lines;
-    }
-
-    /**
-     * Automatically adjusts the height of a contenteditable div based on its content.
-     */
-    private autoResizeEditableDiv(element: HTMLElement): void {
-        // Use the new method to count visual lines
-        const lineCount = this.countVisualLines(element);
-        
-        // Get computed style for measurements
-        const computedStyle = window.getComputedStyle(element);
-        
-        // Get line height
-        let lineHeight = parseInt(computedStyle.lineHeight);
-        if (isNaN(lineHeight)) {
-            const fontSize = parseInt(computedStyle.fontSize);
-            lineHeight = Math.round(fontSize * 1.5);
-        }
-        
-        // Calculate padding
-        const paddingTop = parseInt(computedStyle.paddingTop) || 0;
-        const paddingBottom = parseInt(computedStyle.paddingBottom) || 0;
-        
-        // Minimum height
-        const minHeight = 32;
-        
-        // Get current focus state
-        const isFocused = document.activeElement === element;
-        
-        // For when focused: show all content
-        if (isFocused) {
-            // Reset height to auto to get true content height
-            element.style.height = 'auto';
-            const contentHeight = element.scrollHeight;
-            element.style.height = `${Math.max(minHeight, contentHeight)}px`;
-            element.style.maxHeight = 'none';
-            element.style.overflowY = 'hidden';
-        } 
-        // For when not focused:
-        else {
-            // Calculate height based on actual line count
-            if (lineCount <= 3) {
-                // Show all lines (1-3) by calculating exact height needed
-                const exactHeight = Math.max(minHeight, 
-                    (lineCount * lineHeight) + paddingTop + paddingBottom);
-                element.style.height = `${exactHeight}px`;
-                element.style.maxHeight = `${exactHeight}px`;
-                element.style.overflowY = 'hidden';
-            } else {
-                // More than 3 lines: show exactly 3 lines with scrollbar
-                const threeLineHeight = (3 * lineHeight) + paddingTop + paddingBottom;
-                element.style.height = `${threeLineHeight}px`;
-                element.style.maxHeight = `${threeLineHeight}px`;
-                element.style.overflowY = 'auto';
-            }
-        }
-    }
-    
-    /**
-     * Creates the inconsistent files section for a property
-     */
-    private createInconsistentFilesSection(container: HTMLElement, key: string) {
-        const state = this.propertiesState.get(key);
-        const stats = this.propertyConsistency.get(key);
-        if (!state || !stats) return;
-        
-        // Section header
-        new Setting(container)
-            .setName('Inconsistent Files')
-            .setHeading()
-            .settingEl.addClass('bulk-editor-section-heading'); // Optional class for styling
-        
-        const inconsistentFiles = this.getInconsistentFiles(key);
-        const inconsistentFilesContainer = container.createDiv({ cls: 'inconsistent-files-container' });
-        const filterOrderRow = inconsistentFilesContainer.createDiv({ cls: 'filter-order-row' });
-        
-        // Order by dropdown
-        filterOrderRow.createEl('label', { 
-            text: 'Order by:',
-            attr: { for: `order-by-${key}` }
-        });
-        
-        const orderBySelect = filterOrderRow.createEl('select', { 
-            cls: 'inconsistent-order-by',
-            attr: { 
-                id: `order-by-${key}`,
-                title: 'Order inconsistent files'
-            }
-        });
-        
-        orderBySelect.appendChild(new Option('File Name (A-Z)', 'name-asc', true, true));
-        orderBySelect.appendChild(new Option('File Name (Z-A)', 'name-desc'));
-        
-        // Filter by dropdown
-        filterOrderRow.createEl('label', { 
-            text: 'Filter by:',
-            attr: { for: `filter-by-${key}` }
-        });
-        
-        const filterBySelect = filterOrderRow.createEl('select', { 
-            cls: 'inconsistent-filter-by',
-            attr: { 
-                id: `filter-by-${key}`,
-                title: 'Filter inconsistent files'
-            }
-        });
-        
-        filterBySelect.appendChild(new Option('All', 'all', true, true));
-        filterBySelect.appendChild(new Option('Type Mismatch', 'type'));
-        filterBySelect.appendChild(new Option('Value Mismatch', 'value'));
-        filterBySelect.appendChild(new Option('Missing Property', 'missing'));
-        
-        // Exclude All Files toggle
-        const inconsistentFilesControls = inconsistentFilesContainer.createDiv({ cls: 'inconsistent-files-controls' });
-        
-        const excludeAllSetting = new Setting(inconsistentFilesControls)
-            .setName('Exclude All Files')
-            .setDesc('Toggle exclusion for all files listed below.');
-            
-        const excludeAllToggle = excludeAllSetting.addToggle(toggle => {
-            toggle
-                .setValue(false)
-                .onChange(value => {
-                    // Update all file exclusions
-                    this.updateAllFileExclusions(key, value);
-                    
-                    // Update UI for all files in this property
-                    const fileToggles = inconsistentFilesContainer.querySelectorAll('.exclude-file-toggle');
-                    fileToggles.forEach(toggle => {
-                        if (toggle instanceof HTMLInputElement) {
-                            toggle.checked = value;
-                            
-                            // Find parent file item and update class
-                            const fileItem = toggle.closest('.inconsistent-file-item');
-                            if (fileItem) {
-                                if (value) {
-                                    fileItem.classList.add('is-excluded');
-                                } else {
-                                    fileItem.classList.remove('is-excluded');
-                                }
-                            }
-                        }
-                    });
-                });
-            return toggle;
-        });
-        
-        // Inconsistent files list
-        const inconsistentFilesList = inconsistentFilesContainer.createDiv({ cls: 'inconsistent-files-list' });
-        
-        // Handle no inconsistencies case
-        if (inconsistentFiles.length === 0) {
-            inconsistentFilesList.createEl('p', { text: 'No inconsistencies found.' });
-            return;
-        }
-        
-        // Create file items
-        inconsistentFiles.forEach(file => {
-            this.createInconsistentFileItem(inconsistentFilesList, key, file);
-        });
-        
-        // Add event listeners for filtering and ordering
-        this.plugin.registerDomEvent(orderBySelect, 'change', () => {
-            this.reorderInconsistentFiles(key, inconsistentFilesList, orderBySelect.value, filterBySelect.value);
-        });
-        
-        this.plugin.registerDomEvent(filterBySelect, 'change', () => {
-            this.reorderInconsistentFiles(key, inconsistentFilesList, orderBySelect.value, filterBySelect.value);
-        });
-    }
-    
     /**
      * Gets the list of files with inconsistencies for a property
      */
@@ -1428,250 +2590,1390 @@ export class BulkEditor extends Modal {
             return false;
         });
     }
-    
-    private handleAddProperty() {
-        // Implement this for adding new properties
-        new Notice('Add Property functionality coming soon!');
-    }
-    
+
     /**
-     * Creates an inconsistent file item in the list
+     * Calculates how many files have the property with a specific value.
      */
-    private createInconsistentFileItem(container: HTMLElement, propertyKey: string, file: TFile) {
-        const state = this.propertiesState.get(propertyKey);
-        const stats = this.propertyConsistency.get(propertyKey);
-        const isFileExcluded = state?.excludedFiles.has(file.path) || false;
-        
-        if (!state || !stats) return;
-        
-        const properties = this.fileProperties.get(file.path);
-        const propertyExists = properties && propertyKey in properties;
-        const propertyValue = propertyExists ? properties![propertyKey].value : null;
-        const propertyType = propertyExists ? properties![propertyKey].type : null;
-        
-        // Determine inconsistency types
-        const inconsistencyTypes = {
-            missing: !propertyExists,
-            type: propertyExists && stats.type.mostCommonType && propertyType !== stats.type.mostCommonType,
-            value: propertyExists && JSON.stringify(propertyValue) !== JSON.stringify(stats.value.mostCommonValue)
-        };
-        
-        // Create file item
-        const fileItem = container.createDiv({ 
-            cls: `inconsistent-file-item ${isFileExcluded ? 'is-excluded' : ''}`,
-            attr: { 'data-path': file.path }
-        });
-        
-        // Create header
-        const fileHeader = fileItem.createDiv({ cls: 'file-item-header' });
-        
-        // Create exclude toggle container
-        const excludeToggleContainer = fileHeader.createDiv({ cls: 'setting-item file-header-exclude-toggle' });
-        const excludeToggleControl = excludeToggleContainer.createDiv({ cls: 'setting-item-control' });
-        
-        const excludeToggle = excludeToggleControl.createEl('input', {
-            type: 'checkbox',
-            cls: 'setting-toggle exclude-file-toggle',
-            attr: { 
-                checked: isFileExcluded ? 'checked' : '',
-                title: `Exclude this file from changes for ${propertyKey}`
+    private calculateValueCount(propertyKey: string, targetValue: any): number {
+        let count = 0;
+        const totalFiles = this.files.length;
+        const targetValueString = JSON.stringify(targetValue);
+
+        for (const file of this.files) {
+            const fileProps = this.fileProperties.get(file.path);
+            if (fileProps && fileProps[propertyKey]) {
+                const actualFileValue = fileProps[propertyKey].value;
+                const actualFileValueString = JSON.stringify(actualFileValue);
+
+                if (actualFileValueString === targetValueString) {
+                    count++;
+                }
             }
-        });
-        
-        this.plugin.registerDomEvent(excludeToggle, 'change', (e) => {
-            const isChecked = (e.target as HTMLInputElement).checked;
-            
-            // Update state
-            if (isChecked) {
-                state.excludedFiles.add(file.path);
-                fileItem.classList.add('is-excluded');
-            } else {
-                state.excludedFiles.delete(file.path);
-                fileItem.classList.remove('is-excluded');
+        }
+        return count;
+    }
+
+    /**
+     * Parses user input from the editor based on the target type.
+     */
+    private parseUserInput(inputValue: string | null, targetType: string): any {
+        if (inputValue === null) return null;
+        const trimmedValue = inputValue.trim();
+
+        switch (targetType) {
+            case 'number':
+                const num = Number(trimmedValue);
+                return !isNaN(num) ? num : null;
+            case 'checkbox':
+                return trimmedValue.toLowerCase() === 'true';
+            case 'date':
+            case 'datetime':
+                return trimmedValue;
+            case 'list':
+                return trimmedValue.split(',')
+                    .map(s => s.trim())
+                    .filter(s => s.length > 0);
+            case 'text':
+            default:
+                return inputValue;
+        }
+    }
+
+    /**
+     * Helper to get the Obsidian-defined type for a property key.
+     */
+    private getObsidianDefinedType(propertyKey: string): string | null {
+        try {
+            const propKey = propertyKey.toLowerCase();
+            const metadataManager = (this.app as any).metadataTypeManager;
+            if (metadataManager) {
+                return metadataManager.properties?.[propKey]?.type || metadataManager.types?.[propKey]?.type || null;
             }
-            
-            // Update "Exclude All" toggle state
-            this.updateExcludeAllToggleState(propertyKey, container);
-        });
-        
-        // View file icon
-        const viewIcon = fileHeader.createEl('img', {
-            cls: 'file-view-icon',
-            attr: {
-                src: 'https://cdn.jsdelivr.net/npm/lucide-static@latest/icons/eye.svg',
-                title: 'View File',
-                alt: 'View File Icon'
+        } catch (error) {
+            console.error(`Error getting defined type for ${propertyKey}:`, error);
+        }
+        return null;
+    }
+
+    /**
+     * Processes an existing property value based on the property state and file actions.
+     * Handles type conversions and overrides.
+     */
+    private processPropertyValue(key: string, filePath: string, currentValue: any): any | undefined {
+        const state = this.propertiesState.get(key);
+        if (!state) return currentValue;
+
+        // Handle file exclusion first
+        if (state.excludedFiles.has(filePath)) {
+            return currentValue;
+        }
+
+        const fileActions = state.fileActions.get(filePath) || { type: false, value: false, add: false };
+
+        // Check if this property is disabled for editing
+        if (!state.enabled) {
+            const action = state.disabledAction === 'global'
+                ? this.globalSettings.disabledAction
+                : state.disabledAction;
+
+            if (action === 'remove') {
+                return undefined;
             }
-        });
-        
-        this.plugin.registerDomEvent(viewIcon, 'click', () => {
-            // Open the file in a new pane
-            this.app.workspace.getLeaf('tab').openFile(file);
-        });
-        
-        // File path
-        fileHeader.createSpan({ text: file.path });
-        
-        // Create content section
-        const fileContent = fileItem.createDiv({ cls: 'file-item-content' });
-        
-        // File details based on inconsistency type
-        if (inconsistencyTypes.missing) {
-            fileContent.createDiv({ cls: 'file-item-details', text: 'Property Missing' });
-            
-            // Add missing property toggle
-            new Setting(fileContent)
-                .setName('Add missing property')
-                .setDesc('Adds this property to the file. Type/Value determined by other options.')
-                .addToggle(toggle => {
-                    toggle
-                        .setValue(false)
-                        .onChange(value => {
-                            const fileActions = state.fileActions.get(file.path) || { 
-                                type: false, 
-                                value: false, 
-                                add: false 
-                            };
-                            fileActions.add = value;
-                            state.fileActions.set(file.path, fileActions);
-                        });
-                    return toggle;
-                });
-                
-            // Set common or override/add value
-            new Setting(fileContent)
-                .setName('Set common or override/add value')
-                .setDesc('Applies the most common value or the value entered in \'Override/Add Value\' above. (Only if \'Add missing property\' is checked).')
-                .addToggle(toggle => {
-                    toggle
-                        .setValue(false)
-                        .onChange(value => {
-                            const fileActions = state.fileActions.get(file.path) || { 
-                                type: false, 
-                                value: false, 
-                                add: false 
-                            };
-                            fileActions.value = value;
-                            state.fileActions.set(file.path, fileActions);
-                        });
-                    return toggle;
-                });
-                
-            // Set common or override/add type
-            new Setting(fileContent)
-                .setName('Set common or override/add type')
-                .setDesc('Applies the most common type or the type selected in \'Change Property Type\' above. (Only if \'Add missing property\' is checked).')
-                .addToggle(toggle => {
-                    toggle
-                        .setValue(false)
-                        .onChange(value => {
-                            const fileActions = state.fileActions.get(file.path) || { 
-                                type: false, 
-                                value: false, 
-                                add: false 
-                            };
-                            fileActions.type = value;
-                            state.fileActions.set(file.path, fileActions);
-                        });
-                    return toggle;
-                });
+            return currentValue;
+        }
+
+        // Property is ENABLED for editing
+        let newValue = currentValue;
+        const stats = this.propertyConsistency.get(key);
+        const targetType = state.changeType ||
+                      (stats ? stats.type.mostCommonType : null) ||
+                      this.plugin.propertyTypeService.detectPropertyType(currentValue) ||
+                      'text';
+
+        // Check if there's an override value specified by the user
+        const hasOverride = state.overrideValue !== null && state.overrideValue !== undefined;
+
+        if (hasOverride) {
+            // Use the override value, attempting conversion based on targetType
+            const override = state.overrideValue;
+
+            switch (targetType) {
+                case 'checkbox':
+                    if (typeof override === 'boolean') {
+                        newValue = override;
+                    } else {
+                        newValue = String(override).toLowerCase() === 'true';
+                    }
+                    break;
+                case 'number':
+                    if (typeof override === 'number') {
+                        newValue = override;
+                    } else {
+                        const num = Number(String(override).trim());
+                        newValue = !isNaN(num) ? num : 0;
+                    }
+                    break;
+                case 'date':
+                case 'datetime':
+                    newValue = String(override).trim();
+                    break;
+                case 'list':
+                    if (Array.isArray(override)) {
+                        newValue = [...override];
+                    } else {
+                        newValue = String(override).split(',').map((s: string) => s.trim()).filter(s => s);
+                    }
+                    break;
+                case 'text':
+                default:
+                    newValue = String(override);
+                    break;
+            }
         } else {
-            // Show current value and type
-            const typeDisplay = propertyType 
-                ? this.plugin.propertyTypeService.getPropertyTypeDisplayName(propertyType)
-                : 'Unknown';
+            newValue = currentValue;
+        }
+
+        // Add Parsing Logic
+        if (hasOverride && typeof newValue === 'string') {
+            const stringValue = newValue as string;
+            switch (targetType) {
+                case 'number':
+                    const parsedNum = Number(stringValue.trim());
+                    newValue = !isNaN(parsedNum) ? parsedNum : stringValue;
+                    break;
+                case 'checkbox':
+                    newValue = stringValue.trim().toLowerCase() === 'true';
+                    break;
+                case 'date':
+                case 'datetime':
+                    newValue = stringValue.trim();
+                    break;
+                case 'text':
+                default:
+                    newValue = stringValue;
+                    break;
+            }
+        } else if (hasOverride && targetType === 'list' && Array.isArray(state.overrideValue)) {
+            newValue = state.overrideValue;
+        }
+
+       return newValue;
+    }
+    
+    /**
+     * Determines the value for a property that is missing from a file, based on state.
+     */
+    private processMissingProperty(key: string, filePath: string): any | undefined {
+        const state = this.propertiesState.get(key);
+        if (!state) return undefined;
+
+        // Handle file exclusion first
+        if (state.excludedFiles.has(filePath)) {
+            return undefined;
+        }
+
+        const fileActions = state.fileActions.get(filePath) || { type: false, value: false, add: false };
+        const stats = this.propertyConsistency.get(key);
+        const targetType = state.changeType ||
+                        (stats ? stats.type.mostCommonType : null) ||
+                        getDefaultTypeForKey(key);
+
+        // Should we add this property?
+        let shouldAdd = false;
+        if (state.enabled) {
+            shouldAdd = state.overrideValue !== null && state.overrideValue !== undefined;
+        } else {
+            const action = state.disabledAction === 'global'
+                ? this.globalSettings.disabledAction
+                : state.disabledAction;
+            shouldAdd = (action === 'add_if_missing');
+        }
+
+        if (!shouldAdd) {
+            return undefined;
+        }
+
+        // Determine the value to add
+        const hasOverride = state.overrideValue !== null && state.overrideValue !== undefined;
+        let valueToAdd: any;
+
+        if (hasOverride) {
+            if (targetType === 'list' && Array.isArray(state.overrideValue)) {
+                valueToAdd = state.overrideValue;
+            } else if (typeof state.overrideValue === 'string') {
+                const stringValue = state.overrideValue as string;
+                switch (targetType) {
+                    case 'number':
+                        const parsedNum = Number(stringValue.trim());
+                        valueToAdd = !isNaN(parsedNum) ? parsedNum : null;
+                        break;
+                    case 'checkbox':
+                        valueToAdd = stringValue.trim().toLowerCase() === 'true';
+                        break;
+                    case 'list':
+                        valueToAdd = stringValue.split(',')
+                                        .map(s => s.trim())
+                                        .filter(s => s.length > 0);
+                        break;
+                    case 'date':
+                    case 'datetime':
+                        valueToAdd = stringValue.trim();
+                        break;
+                    case 'text':
+                    default:
+                        valueToAdd = stringValue;
+                        break;
+                }
+            } else {
+                valueToAdd = getEmptyValueForType(targetType);
+            }
+
+            return valueToAdd;
+        }
+    }
+
+    // =================================================================
+    // SECTION: UI Update Methods
+    // =================================================================
+
+    /**
+     * Handles changes to the "Overwrite with Defined Property Value" toggle in a file item
+     */
+    private handleOverwriteValueToggled(
+        propertyKey: string,
+        filePath: string,
+        fileItem: HTMLElement,
+        value: boolean
+    ): void {
+        // Skip if already updating from master toggle
+        if (this.isUpdatingFromIndividualToggle) return;
+        
+        const state = this.propertiesState.get(propertyKey);
+        if (!state) return;
+        
+        this.isUpdatingFromIndividualToggle = true;
+        
+        try {
+            // Update data model
+            const fileActions = state.fileActions.get(filePath) || { type: false, value: false, add: false };
+            fileActions.value = value;
+            state.fileActions.set(filePath, fileActions);
+            
+            // Update the file header appearance
+            this.updateFileHeaderAppearance(fileItem, propertyKey);
+            
+            // Update master toggle state through relationship
+            const relationship = this.toggleRelationships.get(`overwrite-values-all-${propertyKey}`);
+            if (relationship) {
+                relationship.updateFromIndividual();
+            }
+            
+            // Update property and value counters
+            this.updatePropertyCountersUI(propertyKey);
+            
+        } finally {
+            this.isUpdatingFromIndividualToggle = false;
+        }
+    }
+
+    /**
+     * Handles changes to the "Overwrite All Values" toggle
+     */
+    private handleOverwriteAllValuesToggled(propertyKey: string, value: boolean): void {
+        // Skip if already updating from individual toggles
+        if (this.isUpdatingFromIndividualToggle) return;
+        
+        const state = this.propertiesState.get(propertyKey);
+        if (!state) return;
+        
+        this.isUpdatingFromIndividualToggle = true;
+        
+        try {
+            // Get inconsistent files container to find UI elements
+            const inconsistentFilesContainer = this.propertiesListContainer?.querySelector(`#prop-${propertyKey} .inconsistent-files-container`) as HTMLElement | null;
+            if (!inconsistentFilesContainer) return;
+            
+            // Get files that have this property (not missing)
+            const inconsistentFiles = this.getInconsistentFiles(propertyKey);
+            const filesWithValues = inconsistentFiles.filter(file => {
+                const properties = this.fileProperties.get(file.path);
+                return properties && (propertyKey in properties);
+            });
+            
+            // Update each file
+            filesWithValues.forEach(file => {
+                // Update data model
+                const fileActions = state.fileActions.get(file.path) || { type: false, value: false, add: false };
+                fileActions.value = value;
+                state.fileActions.set(file.path, fileActions);
                 
-            const valuePreview = formatValuePreview(propertyValue, propertyType || undefined);
+                // Find this file's toggle in the DOM
+                const fileItem = inconsistentFilesContainer.querySelector(`.inconsistent-file-item[data-path="${file.path}"]`);
+                if (!fileItem) return;
+                
+                // Update "Overwrite Value" toggle
+                const overwriteValueToggleEl = fileItem.querySelector('.setting-item[data-action-key="overwriteValue"] .setting-item-control input[type="checkbox"]') as HTMLInputElement | null;
+                if (overwriteValueToggleEl) {
+                    overwriteValueToggleEl.checked = value;
+                    // Dispatch event to update UI
+                    overwriteValueToggleEl.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                
+                // Update header appearance
+                this.updateFileHeaderAppearance(fileItem as HTMLElement, propertyKey);
+            });
             
-            fileContent.createDiv({ 
-                cls: 'file-item-details',
-                text: `Current Value: `
-            }).createEl('code', { text: valuePreview });
+            // Update property and value counters
+            this.updatePropertyCountersUI(propertyKey);
             
-            fileContent.querySelector('.file-item-details')!.appendText(` (Type: ${typeDisplay})`);
+        } finally {
+            this.isUpdatingFromIndividualToggle = false;
+        }
+    }
+
+    /**
+     * Handles changes to the "Use Defined Property Value" toggle in a file item
+     */
+    private handleUseValueOnAddToggled(
+        propertyKey: string,
+        filePath: string,
+        fileItem: HTMLElement,
+        isChecked: boolean
+    ): void {
+        // Skip if already updating from master toggle
+        if (this.isUpdatingFromIndividualToggle) return;
+        
+        const state = this.propertiesState.get(propertyKey);
+        if (!state) return;
+        
+        this.isUpdatingFromIndividualToggle = true;
+        
+        try {
+            // Update data model
+            const fileActions = state.fileActions.get(filePath) || { type: false, value: false, add: false };
+            fileActions.value = isChecked;
+            state.fileActions.set(filePath, fileActions);
             
-            // Type mismatch action
-            if (inconsistencyTypes.type) {
-                new Setting(fileContent)
-                    .setName('Set to common or override/add type')
-                    .setDesc('Applies the most common type or the type selected in \'Change Property Type\' above.')
-                    .addToggle(toggle => {
-                        const fileActions = state.fileActions.get(file.path) || { 
-                            type: false, 
-                            value: false, 
-                            add: false 
-                        };
-                        
-                        toggle
-                            .setValue(fileActions.type)
-                            .onChange(value => {
-                                fileActions.type = value;
-                                state.fileActions.set(file.path, fileActions);
-                            });
-                        return toggle;
-                    });
+            // Update the file header appearance
+            this.updateFileHeaderAppearance(fileItem, propertyKey);
+            
+            // Update master toggle state through relationship
+            const relationship = this.toggleRelationships.get(`apply-value-all-${propertyKey}`);
+            if (relationship) {
+                relationship.updateFromIndividual();
             }
             
-            // Value mismatch action
-            if (inconsistencyTypes.value) {
-                new Setting(fileContent)
-                    .setName('Set to common or override/add value')
-                    .setDesc('Applies the most common value or the value entered in \'Override/Add Value\' above.')
-                    .addToggle(toggle => {
-                        const fileActions = state.fileActions.get(file.path) || { 
-                            type: false, 
-                            value: false, 
-                            add: false 
-                        };
+            // Update property and value counters
+            this.updatePropertyCountersUI(propertyKey);
+            
+        } finally {
+            this.isUpdatingFromIndividualToggle = false;
+        }
+    }
+
+    /**
+     * Handles changes to the "Apply Defined Property Value for All" toggle
+     */
+    private handleApplyValueToAllToggled(propertyKey: string, value: boolean): void {
+        // Skip if already updating from individual toggles
+        if (this.isUpdatingFromIndividualToggle) return;
+        
+        const state = this.propertiesState.get(propertyKey);
+        if (!state) return;
+        
+        this.isUpdatingFromIndividualToggle = true;
+        
+        try {
+            // Get inconsistent files container to find UI elements
+            const inconsistentFilesContainer = this.propertiesListContainer?.querySelector(`#prop-${propertyKey} .inconsistent-files-container`) as HTMLElement | null;
+            if (!inconsistentFilesContainer) return;
+            
+            // Get all files with missing properties where "Add Missing" is enabled
+            const inconsistentFiles = this.getInconsistentFiles(propertyKey);
+            const targetFiles = inconsistentFiles.filter(file => {
+                const properties = this.fileProperties.get(file.path);
+                if (properties && (propertyKey in properties)) return false; // Skip existing properties
+                
+                // Skip excluded files
+                if (state.excludedFiles.has(file.path)) return false;
+                
+                const fileActions = state.fileActions.get(file.path) || { type: false, value: false, add: false };
+                return fileActions.add; // Only include files where "Add Missing" is enabled
+            });
+            
+            // Update each file
+            targetFiles.forEach(file => {
+                // Update data model
+                const fileActions = state.fileActions.get(file.path) || { type: false, value: false, add: false };
+                fileActions.value = value;
+                state.fileActions.set(file.path, fileActions);
+                
+                // Find this file's toggle in the DOM
+                const fileItem = inconsistentFilesContainer.querySelector(`.inconsistent-file-item[data-path="${file.path}"]`);
+                if (!fileItem) return;
+                
+                // Update "Use Value" toggle
+                const useValueToggleEl = fileItem.querySelector('.setting-item[data-action-key="useValueOnAdd"] .setting-item-control input[type="checkbox"]') as HTMLInputElement | null;
+                if (useValueToggleEl) {
+                    useValueToggleEl.checked = value;
+                    // Dispatch event to update UI
+                    useValueToggleEl.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                
+                // Update header appearance
+                this.updateFileHeaderAppearance(fileItem as HTMLElement, propertyKey);
+            });
+            
+            // Update property and value counters
+            this.updatePropertyCountersUI(propertyKey);
+            
+        } finally {
+            this.isUpdatingFromIndividualToggle = false;
+        }
+    }
+
+    /**
+     * Handles changes to the "Add Missing Property" toggle in a file item
+     */
+    private handleAddMissingPropertyToggled(
+        propertyKey: string, 
+        filePath: string, 
+        fileItem: HTMLElement,
+        fileContent: HTMLElement,
+        isChecked: boolean
+    ): void {
+        // Skip if already updating from master toggle
+        if (this.isUpdatingFromIndividualToggle) return;
+        
+        const state = this.propertiesState.get(propertyKey);
+        if (!state) return;
+        
+        this.isUpdatingFromIndividualToggle = true;
+        
+        try {
+            // Update data model
+            const fileActions = state.fileActions.get(filePath) || { type: false, value: false, add: false };
+            fileActions.add = isChecked;
+            state.fileActions.set(filePath, fileActions);
+            
+            // Find and update the "Use Value" toggle
+            const useValueToggle = fileContent.querySelector('.setting-item[data-action-key="useValueOnAdd"]');
+            if (useValueToggle) {
+                // Find the actual toggle control element
+                const useValueControl = useValueToggle.querySelector('.setting-item-control');
+                
+                // Enable/disable the "Use Value" toggle based on "Add Missing" state
+                if (useValueControl instanceof HTMLElement) {
+                    if (isChecked) {
+                        // Enable the "Use Value" toggle
+                        useValueControl.classList.remove('is-disabled');
+                        useValueToggle.classList.remove('setting-disabled');
                         
-                        toggle
-                            .setValue(fileActions.value)
-                            .onChange(value => {
-                                fileActions.value = value;
-                                state.fileActions.set(file.path, fileActions);
-                            });
-                        return toggle;
-                    });
+                        // Find the checkbox and enable it
+                        const checkbox = useValueControl.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+                        if (checkbox) checkbox.disabled = false;
+                    } else {
+                        // Disable the "Use Value" toggle and turn it off
+                        useValueControl.classList.add('is-disabled');
+                        useValueToggle.classList.add('setting-disabled');
+                        
+                        // Find the checkbox and update it
+                        const checkbox = useValueControl.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+                        if (checkbox) {
+                            checkbox.checked = false;
+                            checkbox.disabled = true;
+                            // Dispatch event to update UI
+                            checkbox.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                        
+                        // Also update the data model
+                        fileActions.value = false;
+                        state.fileActions.set(filePath, fileActions);
+                    }
+                }
             }
+            
+            // Update the file header appearance
+            this.updateFileHeaderAppearance(fileItem, propertyKey);
+            
+            // Update master toggle state through relationship
+            const relationship = this.toggleRelationships.get(`add-all-missing-${propertyKey}`);
+            if (relationship) {
+                relationship.updateFromIndividual();
+            }
+            
+            // Update property and value counters
+            this.updatePropertyCountersUI(propertyKey);
+            
+        } finally {
+            this.isUpdatingFromIndividualToggle = false;
+        }
+    }
+
+    /**
+     * Handles changes to the "Add All Missing Properties" toggle
+     */
+    private handleAddAllMissingToggled(propertyKey: string, value: boolean): void {
+        // Skip processing if already updating from individual toggles
+        if (this.isUpdatingFromIndividualToggle) return;
+        
+        const state = this.propertiesState.get(propertyKey);
+        if (!state) return;
+        
+        // Set the updating flag to prevent circular updates
+        this.isUpdatingFromIndividualToggle = true;
+        
+        try {
+            // Get inconsistent files missing this property
+            const inconsistentFiles = this.getInconsistentFiles(propertyKey);
+            const missingFiles = inconsistentFiles.filter(file => {
+                const properties = this.fileProperties.get(file.path);
+                return !properties || !(propertyKey in properties);
+            });
+            
+            // Get container for finding UI elements
+            const inconsistentFilesContainer = this.propertiesListContainer?.querySelector(`#prop-${propertyKey} .inconsistent-files-container`) as HTMLElement | null;
+            if (!inconsistentFilesContainer) return;
+            
+            if (value) {
+                // TURNING ON "Add All Missing Properties"
+                
+                // 1. Process each inconsistent file
+                missingFiles.forEach(file => {
+                    // Check if the "Exclude File" toggle is ON or OFF
+                    const isExcluded = state.excludedFiles.has(file.path);
+                    
+                    if (!isExcluded) {
+                        // If "Exclude File" is OFF, turn ON "Add Missing Property"
+                        const fileActions = state.fileActions.get(file.path) || { type: false, value: false, add: false };
+                        fileActions.add = true;
+                        state.fileActions.set(file.path, fileActions);
+                        
+                        // Find this file's toggles in the DOM
+                        const fileItem = inconsistentFilesContainer.querySelector(`.inconsistent-file-item[data-path="${file.path}"]`);
+                        if (!fileItem) return;
+                        
+                        // Update "Add Missing Property" toggle
+                        const addMissingToggleEl = fileItem.querySelector('.setting-item[data-action-key="addMissing"] .setting-item-control input[type="checkbox"]') as HTMLInputElement | null;
+                        if (addMissingToggleEl) {
+                            addMissingToggleEl.checked = true;
+                            // Dispatch event to update UI
+                            addMissingToggleEl.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+                        
+                        // 2. Enable "Use Defined Property Value" toggle
+                        const useValueToggleEl = fileItem.querySelector('.setting-item[data-action-key="useValueOnAdd"] .setting-item-control input[type="checkbox"]') as HTMLInputElement | null;
+                        const useValueSettingItem = useValueToggleEl?.closest('.setting-item');
+                        
+                        if (useValueToggleEl && useValueSettingItem) {
+                            // Enable the toggle
+                            useValueSettingItem.classList.remove('setting-disabled');
+                            useValueToggleEl.disabled = false;
+                        }
+                        
+                        // Update header appearance
+                        this.updateFileHeaderAppearance(fileItem as HTMLElement, propertyKey);
+                    }
+                });
+                
+                // Enable the "Apply Value To All" toggle
+                this.updateApplyValueToAllToggleState(propertyKey, false);
+                
+            } else {
+                // TURNING OFF "Add All Missing Properties"
+                
+                // 1. Process each inconsistent file
+                missingFiles.forEach(file => {
+                    // Check if the "Exclude File" toggle is ON or OFF
+                    const isExcluded = state.excludedFiles.has(file.path);
+                    
+                    if (!isExcluded) {
+                        // Find this file's DOM elements
+                        const fileItem = inconsistentFilesContainer.querySelector(`.inconsistent-file-item[data-path="${file.path}"]`);
+                        if (!fileItem) return;
+                        
+                        // Get file actions
+                        const fileActions = state.fileActions.get(file.path) || { type: false, value: false, add: false };
+                        
+                        // Check if "Add Missing Property" is ON or OFF
+                        if (fileActions.add) {
+                            // Case: "Add Missing Property" is ON
+                            
+                            // Check if "Use Defined Property Value" is ON or OFF
+                            // Always disable the "Use Defined Property Value" toggle regardless of its current state
+                            const useValueToggleEl = fileItem.querySelector('.setting-item[data-action-key="useValueOnAdd"] .setting-item-control input[type="checkbox"]') as HTMLInputElement | null;
+                            const useValueSettingItem = useValueToggleEl?.closest('.setting-item');
+
+                            if (useValueToggleEl && useValueSettingItem) {
+                                // Turn OFF the toggle state in the data model
+                                fileActions.value = false;
+                                
+                                // Make sure the toggle is OFF and disabled visually
+                                useValueToggleEl.checked = false;
+                                useValueToggleEl.disabled = true;
+                                useValueToggleEl.dispatchEvent(new Event('change', { bubbles: true }));
+                                useValueSettingItem.classList.add('setting-disabled');
+                            }
+                            
+                            // Toggle OFF "Add Missing Property"
+                            fileActions.add = false;
+                            
+                            // Update "Add Missing Property" toggle in the UI
+                            const addMissingToggleEl = fileItem.querySelector('.setting-item[data-action-key="addMissing"] .setting-item-control input[type="checkbox"]') as HTMLInputElement | null;
+                            if (addMissingToggleEl) {
+                                addMissingToggleEl.checked = false;
+                                addMissingToggleEl.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+                        }
+                        
+                        // Save the updated actions
+                        state.fileActions.set(file.path, fileActions);
+                        
+                        // Update header appearance
+                        this.updateFileHeaderAppearance(fileItem as HTMLElement, propertyKey);
+                    }
+                });
+                
+                // Turn OFF and disable the main "Apply Value To All" toggle
+                this.updateApplyValueToAllToggleState(propertyKey, true);
+            }
+            
+            // Update property counters in the UI
+            this.updatePropertyCountersUI(propertyKey);
+            
+        } finally {
+            // Always reset the flag when done
+            this.isUpdatingFromIndividualToggle = false;
+        }
+    }
+
+    /**
+     * Handles changes to file exclusion toggles
+     */
+    private handleExcludeFileToggled(propertyKey: string, filePath: string, fileItem: HTMLElement, value: boolean): void {
+        const state = this.propertiesState.get(propertyKey);
+        if (!state) return;
+        
+        // Update our data model
+        if (value) {
+            // When excluding a file, turn off any action toggles
+            const fileActions = state.fileActions.get(filePath) || { type: false, value: false, add: false };
+            
+            // If "Add Missing Property" is enabled, turn it off
+            if (fileActions.add) {
+                fileActions.add = false;
+                fileActions.value = false; // Also turn off "Use Value"
+                state.fileActions.set(filePath, fileActions);
+                
+                // Update the toggles using our relationship structure 
+                // Find the add missing toggle handler
+                const addMissingToggleEl = fileItem.querySelector('.setting-item[data-action-key="addMissing"] .setting-item-control');
+                if (addMissingToggleEl instanceof HTMLElement) {
+                    const toggleInput = addMissingToggleEl.querySelector('input[type="checkbox"]');
+                    if (toggleInput instanceof HTMLInputElement) {
+                        toggleInput.checked = false;
+                        // Dispatch a change event to ensure UI updates
+                        toggleInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+                
+                // Find and update the "Use Value" toggle
+                const useValueToggleEl = fileItem.querySelector('.setting-item[data-action-key="useValueOnAdd"] .setting-item-control');
+                if (useValueToggleEl instanceof HTMLElement) {
+                    const toggleInput = useValueToggleEl.querySelector('input[type="checkbox"]');
+                    if (toggleInput instanceof HTMLInputElement) {
+                        toggleInput.checked = false;
+                        toggleInput.disabled = true;
+                        // Dispatch a change event to ensure UI updates
+                        toggleInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                    
+                    // Disable the entire setting
+                    const settingItem = useValueToggleEl.closest('.setting-item');
+                    if (settingItem) {
+                        settingItem.classList.add('setting-disabled');
+                    }
+                }
+            }
+            
+            // If "Overwrite Value" is enabled for existing properties, turn it off
+            if (fileActions.value && !fileActions.add) {
+                fileActions.value = false;
+                state.fileActions.set(filePath, fileActions);
+                
+                // Find and update the "Overwrite Value" toggle
+                const overwriteToggleEl = fileItem.querySelector('.setting-item[data-action-key="overwriteValue"] .setting-item-control');
+                if (overwriteToggleEl instanceof HTMLElement) {
+                    const toggleInput = overwriteToggleEl.querySelector('input[type="checkbox"]');
+                    if (toggleInput instanceof HTMLInputElement) {
+                        toggleInput.checked = false;
+                        // Dispatch a change event to ensure UI updates
+                        toggleInput.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+            }
+            
+            // Add to excluded files
+            state.excludedFiles.add(filePath);
+            fileItem.classList.add('is-excluded');
+        } else {
+            // Remove from excluded files
+            state.excludedFiles.delete(filePath);
+            fileItem.classList.remove('is-excluded');
         }
         
-        // Add data attributes for filtering
-        if (inconsistencyTypes.missing) {
-            fileItem.setAttribute('data-inconsistency-missing', 'true');
+        // Update related UI
+        this.updateFileHeaderAppearance(fileItem, propertyKey);
+        this.updateInternalTogglesState(fileItem, value);
+        
+        // Update the master toggle through the relationship
+        const excludeAllRelationship = this.toggleRelationships.get(`exclude-all-${propertyKey}`);
+        if (excludeAllRelationship) {
+            excludeAllRelationship.updateFromIndividual();
         }
         
-        if (inconsistencyTypes.type) {
-            fileItem.setAttribute('data-inconsistency-type', 'true');
+        // Update property and value counters
+        this.updatePropertyCountersUI(propertyKey);
+    }
+
+    /**
+     * Handles state changes on the "Exclude All Files" toggle
+     */
+    private handleExcludeAllToggled(propertyKey: string, value: boolean): void {
+        const state = this.propertiesState.get(propertyKey);
+        if (!state) return;
+        
+        // Get the inconsistent files and container
+        const inconsistentFiles = this.getInconsistentFiles(propertyKey);
+        const inconsistentFilesContainer = this.propertiesListContainer?.querySelector(`#prop-${propertyKey} .inconsistent-files-container`) as HTMLElement | null;
+        if (!inconsistentFilesContainer) return;
+        
+        // Update file exclusions based on the toggle state
+        if (value) {
+            // TURNING ON - exclude all files
+            
+            // Step 1: Turn off all individual toggles for files
+            inconsistentFiles.forEach(file => {
+                // Add to excluded files in state
+                state.excludedFiles.add(file.path);
+                
+                // Reset file actions
+                state.fileActions.set(file.path, { add: false, value: false, type: false });
+                
+                // Find and update the file item in the UI
+                const fileItem = inconsistentFilesContainer.querySelector(`.inconsistent-file-item[data-path="${file.path}"]`) as HTMLElement | null;
+                if (fileItem) {
+                    // Add excluded class to the file item
+                    fileItem.classList.add('is-excluded');
+                    
+                    // Update file header appearance
+                    this.updateFileHeaderAppearance(fileItem, propertyKey);
+                    
+                    // Get file toggle handler from relationship
+                    const relationship = this.toggleRelationships.get(`exclude-file-${propertyKey}`);
+                    if (relationship) {
+                        const fileToggles = relationship.getIndividualToggles();
+                        const fileToggle = fileToggles.find(t => 
+                            t.getElement()?.closest(`.inconsistent-file-item[data-path="${file.path}"]`)
+                        );
+                        if (fileToggle) {
+                            fileToggle.setValue(true);
+                        }
+                    }
+                }
+            });
+            
+            // Step 2: Disable action toggles
+            this.updateAddAllMissingToggleState(propertyKey, true);
+            this.updateApplyValueToAllToggleState(propertyKey, true);
+            this.updateOverwriteAllValuesToggleState(propertyKey, true);
+            
+        } else {
+            // TURNING OFF - Un-exclude all files
+            
+            // Reset exclusions in state
+            inconsistentFiles.forEach(file => {
+                state.excludedFiles.delete(file.path);
+                
+                // Find and update the file item in the UI
+                const fileItem = inconsistentFilesContainer.querySelector(`.inconsistent-file-item[data-path="${file.path}"]`) as HTMLElement | null;
+                if (fileItem) {
+                    // Remove excluded class from the file item
+                    fileItem.classList.remove('is-excluded');
+                    
+                    // Update file header appearance
+                    this.updateFileHeaderAppearance(fileItem, propertyKey);
+                    
+                    // Update individual toggles through relationship
+                    const relationship = this.toggleRelationships.get(`exclude-file-${propertyKey}`);
+                    if (relationship) {
+                        const fileToggles = relationship.getIndividualToggles();
+                        const fileToggle = fileToggles.find(t => 
+                            t.getElement()?.closest(`.inconsistent-file-item[data-path="${file.path}"]`)
+                        );
+                        if (fileToggle) {
+                            fileToggle.setValue(false);
+                        }
+                    }
+                }
+            });
+            
+            // Enable action toggles
+            this.updateAddAllMissingToggleState(propertyKey, false);
+            this.updateApplyValueToAllToggleState(propertyKey, false);
+            this.updateOverwriteAllValuesToggleState(propertyKey, false);
         }
         
-        if (inconsistencyTypes.value) {
-            fileItem.setAttribute('data-inconsistency-value', 'true');
+        // Update property and value counters
+        this.updatePropertyCountersUI(propertyKey);
+    }
+
+    /**
+     * Updates the Expand/Collapse All button text and tooltip based on the current state.
+     */
+    private updateExpandCollapseButtonState() {
+        if (!this.expandCollapseButton) return;
+
+        if (this.globalSettings.expandAll) {
+            this.expandCollapseButton.setButtonText("Collapse All");
+            this.expandCollapseButton.setTooltip('Collapse all properties');
+        } else {
+            this.expandCollapseButton.setButtonText("Expand All");
+            this.expandCollapseButton.setTooltip('Expand all properties');
         }
     }
     
     /**
-     * Updates the "Exclude All Files" toggle state based on individual file toggles
+     * Updates all property toggle states based on the master toggle
      */
-    private updateExcludeAllToggleState(propertyKey: string, container: HTMLElement) {
-        const excludeAllToggle = container.querySelector('.exclude-all-files-toggle') as HTMLInputElement;
-        if (!excludeAllToggle) return;
+    private updateAllPropertyToggles(enabled: boolean) {
+        // Update each property's enabled state in the model
+        this.propertiesState.forEach((state, key) => {
+            state.enabled = enabled;
+        });
+        
+        // Use our standardized toggle handlers to update UI
+        this.propertyToggleHandlers.forEach((handler, key) => {
+            handler.setValue(enabled);
+        });
+        
+        // Process links in all editors after toggling all
+        if (this.propertiesListContainer) {
+            const editors = this.propertiesListContainer.querySelectorAll('.property-value-editor');
+            editors.forEach(editor => {
+                if (editor instanceof HTMLElement) {
+                    // Find the property key for this editor
+                    const propertyItem = editor.closest('.bulk-property-item');
+                    if (propertyItem && propertyItem.id.startsWith('prop-')) {
+                        const key = propertyItem.id.substring(5);
+                        const state = this.propertiesState.get(key);
+                        const editorType = state?.changeType || 
+                                        this.propertyConsistency.get(key)?.type.mostCommonType || 
+                                        'text';
+                        this.processLinksInEditor(editor, editorType);
+                    }
+                }
+            });
+        }
+        
+        // Also update our relationship if it exists
+        const globalEnableRelationship = this.toggleRelationships.get('global-enable');
+        if (globalEnableRelationship) {
+            globalEnableRelationship.updateFromMaster(enabled);
+        }
+    }
     
-        const fileToggles = container.querySelectorAll('.exclude-file-toggle');
-        if (fileToggles.length === 0) {
-            excludeAllToggle.checked = false;
+    /**
+     * Updates the expanded/collapsed state of all properties
+     */
+    private updateAllExpansionState(expanded: boolean) {
+        // Update each property's expansion state
+        this.propertiesState.forEach((state, key) => {
+            state.expanded = expanded;
+        });
+
+        // Update the UI
+        const propertyItems = this.propertiesListContainer?.querySelectorAll('.bulk-property-item') || [];
+        propertyItems.forEach(item => {
+            const header = item.querySelector('.setting-item.bulk-property-item-header-setting');
+            const contentContainer = item.querySelector('.property-content') as HTMLElement | null;
+
+            if (expanded) {
+                item.classList.remove('is-collapsed');
+                if (contentContainer) contentContainer.style.display = '';
+                if (header) header.setAttribute('aria-expanded', 'true');
+            } else {
+                item.classList.add('is-collapsed');
+                if (contentContainer) contentContainer.style.display = 'none';
+                if (header) header.setAttribute('aria-expanded', 'false');
+            }
+
+            // Update hint text
+            const hintSpan = item.querySelector('.property-toggle-hint');
+            if (hintSpan) {
+                hintSpan.textContent = expanded ? 'Click to hide options.' : 'Click to display options.';
+            }
+        });
+    }
+
+    /**
+     * Updates the unified editor's value when the property type changes.
+     */
+    private updateValueControl(
+        valueControlContainer: HTMLElement,
+        key: string,
+        selectedType: string | null
+    ): void {
+        const state = this.propertiesState.get(key);
+        const stats = this.propertyConsistency.get(key);
+        if (!state || !stats) return;
+    
+        const mostCommonTypeValue = stats.type.mostCommonType;
+        const actualType = selectedType || mostCommonTypeValue || 'text';
+    
+        // Clear the container and recreate the unified value container
+        valueControlContainer.empty();
+        
+        // Update container classes for the new type
+        valueControlContainer.className = 'dynamic-value-input-container';
+        valueControlContainer.classList.add(`value-input-container-${actualType}`);
+        
+        // Create a new unified value container
+        this.createUnifiedValueContainer(
+            valueControlContainer,
+            key,
+            actualType
+        );
+    }
+
+    /**
+     * Updates the description text and consistency icon for the property value counter.
+     */
+    private updateValueCounterUI(propertyKey: string, count: number) {
+        const propertyItemEl = this.propertiesListContainer?.querySelector(`#prop-${propertyKey}`);
+        const valueDescEl = propertyItemEl?.querySelector('.value-description-container');
+        const counterSpan = valueDescEl?.querySelector('.value-counter-span');
+        const stats = this.propertyConsistency.get(propertyKey);
+
+        if (counterSpan && stats) {
+            counterSpan.empty();
+
+            const filesWithProperty = stats.property.present;
+
+            // Set the main text content including the period
+            counterSpan.appendText('Current value present in ' + count + '/' + filesWithProperty + (filesWithProperty === 1 ? ' file.' : ' files.'));
+
+            // Determine consistency
+            const isConsistent = filesWithProperty > 0 && count === filesWithProperty;
+
+            // Add the icon span AFTER the period
+            counterSpan.createSpan({
+                cls: `property-header-stat-icon ${isConsistent ? 'is-consistent' : 'is-inconsistent'}`,
+                text: isConsistent ? ' ✓' : ' ⚠'
+            });
+        } else if (counterSpan) {
+            counterSpan.empty();
+            counterSpan.textContent = 'Current value present in ' + count + '/? files.';
+        }
+    }
+
+    /**
+     * Updates the property counter and value counter in the property header.
+     * Used when "Add Missing Property" toggles change the effective property count.
+     */
+    private updatePropertyCountersUI(propertyKey: string) {
+        const stats = this.propertyConsistency.get(propertyKey);
+        const state = this.propertiesState.get(propertyKey);
+        if (!stats || !state) return;
+
+        const propertyItemEl = this.propertiesListContainer?.querySelector(`#prop-${propertyKey}`);
+        if (!propertyItemEl) return;
+        
+        // Find counter rows in the header
+        const propertyCounterRow = propertyItemEl.querySelector('.property-header-stat-row:nth-child(1)');
+        const valueCounterRow = propertyItemEl.querySelector('.property-header-stat-row:nth-child(2)');
+        
+        if (!propertyCounterRow || !valueCounterRow) return;
+        
+        // Calculate effective property present count
+        let effectivePresentCount = stats.property.present;
+        
+        // Track files that will have the same value
+        let effectiveConsistentCount = stats.value.consistent;
+        
+        // Get the defined value (from input or most common)
+        const definedValue = state.overrideValue !== null ? 
+            state.overrideValue : 
+            stats.value.mostCommonValue;
+        
+        // Count files where property is missing but will be added
+        this.files.forEach(file => {
+            const properties = this.fileProperties.get(file.path);
+            const propertyExists = properties && propertyKey in properties;
+            
+            // Skip excluded files
+            if (state.excludedFiles.has(file.path)) return;
+            
+            // If property doesn't exist but will be added
+            if (!propertyExists) {
+                const fileActions = state.fileActions.get(file.path) || { type: false, value: false, add: false };
+                
+                if (fileActions.add) {
+                    // This file will have the property added, count it
+                    effectivePresentCount++;
+                    
+                    // If "Use Defined Property Value" is enabled, count as consistent
+                    if (fileActions.value) {
+                        effectiveConsistentCount++;
+                    }
+                }
+            } 
+            // If property exists but value will be overwritten
+            else if (propertyExists) {
+                const fileActions = state.fileActions.get(file.path) || { type: false, value: false, add: false };
+                const currentValue = properties[propertyKey].value;
+                
+                // Check if value matches the defined value
+                const valueMatches = JSON.stringify(currentValue) === JSON.stringify(definedValue);
+                
+                // If the value doesn't match but will be overwritten, count as consistent
+                if (!valueMatches && fileActions.value) {
+                    effectiveConsistentCount++;
+                }
+                // If the value matches but overwrite is off, it's already counted 
+            }
+        });
+        
+        // Calculate effective consistency
+        const effectiveTypeTotal = effectivePresentCount; // Types total equals properties present
+        
+        // Update property counter text
+        const propertyValueSpan = propertyCounterRow.querySelector('.property-header-stat-value');
+        if (propertyValueSpan) {
+            propertyValueSpan.textContent = `${effectivePresentCount}/${stats.property.total}`;
+        }
+        
+        // Update property counter icon based on consistency
+        const propertyIconSpan = propertyCounterRow.querySelector('.property-header-stat-icon');
+        if (propertyIconSpan) {
+            const isConsistent = effectivePresentCount === stats.property.total;
+            propertyIconSpan.className = `property-header-stat-icon ${isConsistent ? 'is-consistent' : 'is-inconsistent'}`;
+            propertyIconSpan.textContent = isConsistent ? '✓' : '⚠';
+        }
+        
+        // Update value counter text
+        const valueValueSpan = valueCounterRow.querySelector('.property-header-stat-value');
+        if (valueValueSpan) {
+            valueValueSpan.textContent = `${effectiveConsistentCount}/${effectiveTypeTotal}`;
+        }
+        
+        // Update value counter icon based on consistency
+        const valueIconSpan = valueCounterRow.querySelector('.property-header-stat-icon');
+        if (valueIconSpan) {
+            const isConsistent = effectiveConsistentCount === effectiveTypeTotal;
+            valueIconSpan.className = `property-header-stat-icon ${isConsistent ? 'is-consistent' : 'is-inconsistent'}`;
+            valueIconSpan.textContent = isConsistent ? '✓' : '⚠';
+        }
+    }
+
+    /**
+     * Updates the master enable toggle state based on individual property states
+     */
+    private updateMasterEnableToggleState() {
+        if (!this.enableDisableToggle) return;
+        
+        // Don't update while loading
+        if (this.propertyToggleHandlers.size === 0) return;
+        
+        let allEnabled = true;
+        
+        this.propertiesState.forEach(state => {
+            if (!state.enabled) {
+                allEnabled = false;
+            }
+        });
+        
+        this.enableDisableToggle.setValue(allEnabled);
+        this.globalSettings.enableAll = allEnabled;
+    }
+
+    /**
+     * Gets the master Exclude All Files toggle element by its ID
+     */
+    private getMasterToggleElement(propertyKey: string): HTMLInputElement | null {
+        const settingId = `exclude-all-${propertyKey.replace(/\s+/g, '-')}`;
+        const settingEl = document.getElementById(settingId);
+        if (!settingEl) return null;
+        
+        // Find the checkbox input within this setting
+        const toggleEl = settingEl.querySelector('input[type="checkbox"]');
+        return toggleEl instanceof HTMLInputElement ? toggleEl : null;
+    }
+
+    /**
+     * Updates the state of internal toggles when a file is excluded/included
+     */
+    private updateInternalTogglesState(fileItem: HTMLElement, isExcluded: boolean) {
+        // Find all settings in the file content
+        const settingItems = fileItem.querySelectorAll('.file-item-content .setting-item');
+        
+        settingItems.forEach(item => {
+            // Apply the disabled state to the entire setting
+            if (isExcluded) {
+                item.classList.add('setting-disabled');
+            } else {
+                item.classList.remove('setting-disabled');
+            }
+            
+            // Find the checkbox input and update its state
+            const checkbox = item.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+            if (checkbox) {
+                checkbox.disabled = isExcluded;
+            }
+            
+            // Find the toggle control and update its classes
+            const toggleControl = item.querySelector('.setting-item-control') as HTMLElement | null;
+            if (toggleControl) {
+                if (isExcluded) {
+                    toggleControl.classList.add('is-disabled');
+                } else {
+                    toggleControl.classList.remove('is-disabled');
+                }
+            }
+        });
+    }
+
+    /**
+     * Registers a toggle handler with a relationship
+     */
+    private registerToggleWithRelationship(
+        toggleHandler: ToggleHandler,
+        relationshipKey: string,
+        isMaster: boolean = false
+    ): void {
+        // Get or create the relationship
+        let relationship = this.toggleRelationships.get(relationshipKey);
+        if (!relationship && isMaster) {
+            // Create new relationship with this toggle as master
+            relationship = new ToggleRelationship(toggleHandler);
+            this.toggleRelationships.set(relationshipKey, relationship);
+        } else if (!relationship) {
+            // Can't add to non-existent relationship
             return;
         }
         
-        let allChecked = true;
-        fileToggles.forEach(toggle => {
-            if (toggle instanceof HTMLInputElement && !toggle.checked) {
-                allChecked = false;
+        if (!isMaster) {
+            // Add as individual toggle
+            relationship?.addIndividualToggle(toggleHandler);
+        }
+    }
+
+    /**
+     * Unified method to sync states between master "Exclude All" toggle 
+     * and individual file toggles
+     */
+    private syncExclusionToggles(propertyKey: string, source: 'master' | 'individual' = 'individual') {
+        // This functionality is now handled through our ToggleRelationship system
+        const relationship = this.toggleRelationships.get(`exclude-all-${propertyKey}`);
+        if (!relationship) return;
+        
+        if (source === 'master') {
+            // Update individuals from master
+            const masterToggle = relationship.getMasterToggle();
+            relationship.updateFromMaster(masterToggle.getValue());
+        } else {
+            // Update master from individuals
+            relationship.updateFromIndividual();
+        }
+    }
+
+    /**
+     * Checks if "Add All Missing Properties" toggle should be on or off
+     * based on the state of individual file toggles
+     * @param propertyKey The property key
+     * @param forceDisabled Whether to force the toggle to be disabled
+     */
+    private updateAddAllMissingToggleState(propertyKey: string, forceDisabled?: boolean) {
+        const state = this.propertiesState.get(propertyKey);
+        if (!state) return;
+        
+        const masterToggle = this.addAllMissingToggles.get(propertyKey);
+        if (!masterToggle) return;
+        
+        // If forceDisabled parameter is provided, handle disable state directly
+        if (forceDisabled !== undefined) {
+            masterToggle.setDisabled(forceDisabled);
+            // If disabling the toggle, also set it to OFF
+            if (forceDisabled && masterToggle.getValue()) {
+                masterToggle.setValue(false);
+            }
+            return;
+        }
+        
+        // Continue with original functionality for state syncing
+        // Get inconsistent files missing this property
+        const inconsistentFiles = this.getInconsistentFiles(propertyKey);
+        const missingFiles = inconsistentFiles.filter(file => {
+            const properties = this.fileProperties.get(file.path);
+            return !properties || !(propertyKey in properties);
+        });
+        
+        if (missingFiles.length === 0) return;
+        
+        // Check if all missing files have their "Add Missing Property" toggle ON
+        const allMissingEnabled = missingFiles.every(file => {
+            const fileActions = state.fileActions.get(file.path) || { type: false, value: false, add: false };
+            return fileActions.add;
+        });
+        
+        // Only update if actually changing
+        if (masterToggle.getValue() !== allMissingEnabled) {
+            // Use the toggle handler directly instead of forceToggleVisualUpdate
+            masterToggle.setValue(allMissingEnabled);
+        }
+    }
+
+    /**
+     * Updates the "Apply Value To All" toggle state based on individual toggles
+     * @param propertyKey The property key
+     * @param forceDisabled Whether to force the toggle to be disabled
+     */
+    private updateApplyValueToAllToggleState(propertyKey: string, forceDisabled?: boolean) {
+        const state = this.propertiesState.get(propertyKey);
+        if (!state) return;
+        
+        const masterToggle = this.applyValueToAllToggles.get(propertyKey);
+        if (!masterToggle) return;
+        
+        // If forceDisabled parameter is provided, handle disable state directly
+        if (forceDisabled !== undefined) {
+            masterToggle.setDisabled(forceDisabled);
+            // If disabling the toggle, also set it to OFF
+            if (forceDisabled && masterToggle.getValue()) {
+                masterToggle.setValue(false);
+            }
+            return;
+        }
+        
+        // Continue with original functionality
+        // Get all files with missing properties
+        const inconsistentFiles = this.getInconsistentFiles(propertyKey);
+        const missingPropertyFiles = inconsistentFiles.filter(file => {
+            const properties = this.fileProperties.get(file.path);
+            return !properties || !(propertyKey in properties);
+        });
+        
+        // If no files are missing this property, disable the toggle
+        if (missingPropertyFiles.length === 0) {
+            masterToggle.setDisabled(true);
+            if (masterToggle.getValue()) {
+                masterToggle.setValue(false);
+            }
+            return;
+        }
+        
+        // Get the "Add All Missing" toggle state
+        const addAllToggle = this.addAllMissingToggles.get(propertyKey);
+        const isAddAllEnabled = addAllToggle ? addAllToggle.getValue() : false;
+        
+        // The "Apply Value To All" toggle should be disabled if "Add All Missing" is OFF
+        if (!isAddAllEnabled) {
+            masterToggle.setDisabled(true);
+            if (masterToggle.getValue()) {
+                masterToggle.setValue(false);
+            }
+            return;
+        }
+        
+        // Enable the toggle since "Add All Missing" is ON
+        masterToggle.setDisabled(false);
+        
+        // Count how many files with missing properties have "Use Value" enabled
+        let filesWithUseValueEnabled = 0;
+        
+        missingPropertyFiles.forEach(file => {
+            const fileActions = state.fileActions.get(file.path) || { type: false, value: false, add: false };
+            if (fileActions.value) {
+                filesWithUseValueEnabled++;
             }
         });
         
-        excludeAllToggle.checked = allChecked;
+        // The master toggle should be ON only when ALL files with missing properties
+        // have "Use Value" enabled
+        const allFilesHaveUseValueEnabled = missingPropertyFiles.length > 0 && 
+                                            filesWithUseValueEnabled === missingPropertyFiles.length;
+        
+        // Update the toggle state if needed
+        if (masterToggle.getValue() !== allFilesHaveUseValueEnabled) {
+            // Use the toggle handler directly
+            masterToggle.setValue(allFilesHaveUseValueEnabled);
+        }
     }
-    
+
+    /**
+     * Updates the "Overwrite All Values" toggle state based on individual toggles
+     * @param propertyKey The property key
+     * @param forceDisabled Whether to force the toggle to be disabled
+     */
+    private updateOverwriteAllValuesToggleState(propertyKey: string, forceDisabled?: boolean) {
+        const state = this.propertiesState.get(propertyKey);
+        if (!state) return;
+        
+        const masterToggle = this.overwriteAllValuesToggles.get(propertyKey);
+        if (!masterToggle) return;
+        
+        // If forceDisabled parameter is provided, handle disable state directly
+        if (forceDisabled !== undefined) {
+            masterToggle.setDisabled(forceDisabled);
+            // If disabling the toggle, also set it to OFF
+            if (forceDisabled && masterToggle.getValue()) {
+                masterToggle.setValue(false);
+            }
+            return;
+        }
+        
+        // Continue with original functionality
+        // Get all files with this property (not missing)
+        const inconsistentFiles = this.getInconsistentFiles(propertyKey);
+        const filesWithValues = inconsistentFiles.filter(file => {
+            const properties = this.fileProperties.get(file.path);
+            return properties && (propertyKey in properties);
+        });
+        
+        // If no files have this property, disable the toggle
+        if (filesWithValues.length === 0) {
+            masterToggle.setDisabled(true);
+            if (masterToggle.getValue()) {
+                masterToggle.setValue(false);
+            }
+            return;
+        }
+        
+        // Enable the toggle since there are files with values
+        masterToggle.setDisabled(false);
+        
+        // Count how many files have "Overwrite Value" enabled
+        let filesWithOverwriteEnabled = 0;
+        
+        filesWithValues.forEach(file => {
+            const fileActions = state.fileActions.get(file.path) || { type: false, value: false, add: false };
+            if (fileActions.value) {
+                filesWithOverwriteEnabled++;
+            }
+        });
+        
+        // The master toggle should be ON only when ALL files with values
+        // have "Overwrite Value" enabled
+        const allFilesHaveOverwriteEnabled = filesWithValues.length > 0 && 
+                                        filesWithOverwriteEnabled === filesWithValues.length;
+        
+        // Update the toggle state if needed
+        if (masterToggle.getValue() !== allFilesHaveOverwriteEnabled) {
+            // Use the toggle handler directly
+            masterToggle.setValue(allFilesHaveOverwriteEnabled);
+        }
+    }
+
     /**
      * Updates exclusion state for all files under a property
      */
@@ -1690,8 +3992,151 @@ export class BulkEditor extends Modal {
                 state.excludedFiles.delete(file.path);
             }
         });
+        
+        // Sync the toggle state with 'master' as source to avoid unnecessary DOM updates
+        this.syncExclusionToggles(propertyKey, 'master');
+        
+        // Update the missing files counter - ADD THIS LINE
+        const inconsistentFilesContainer = this.propertiesListContainer?.querySelector(`#prop-${propertyKey} .inconsistent-files-container`);
+        if (inconsistentFilesContainer) {
+            this.updateMissingFilesCounter(propertyKey, inconsistentFilesContainer as HTMLElement);
+            this.updateInconsistentValuesCounter(propertyKey, inconsistentFilesContainer as HTMLElement);
+            
+            // Update toggle visibility based on missing properties
+            this.updateMissingPropertyTogglesVisibility(propertyKey, inconsistentFilesContainer as HTMLElement);
+        }
+
+        // NEW: Update property and value counters in the property header
+        this.updatePropertyCountersUI(propertyKey);
     }
-    
+
+    /**
+     * Updates the file header appearance based on action toggle states.
+     */
+    private updateFileHeaderAppearance(fileItemEl: HTMLElement, propertyKey: string) {
+        const headerEl = fileItemEl.querySelector('.bulk-editor-file-header');
+        if (!headerEl) return;
+
+        const state = this.propertiesState.get(propertyKey);
+        const filePath = fileItemEl.dataset.path;
+        const fileActions = filePath ? (state?.fileActions.get(filePath) || { add: false, value: false, type: false }) : { add: false, value: false, type: false };
+
+        const isMissing = fileItemEl.hasAttribute('data-inconsistency-missing');
+        const isValueMismatch = fileItemEl.hasAttribute('data-inconsistency-value');
+
+        let isResolved = false;
+        const contentEl = fileItemEl.querySelector('.file-item-content');
+        if (contentEl) {
+            if (isMissing) {
+                const addMissingToggle = contentEl.querySelector('.setting-item[data-action-key="addMissing"] input[type="checkbox"]') as HTMLInputElement | null;
+                isResolved = addMissingToggle?.checked || fileActions.add;
+            } else if (isValueMismatch) {
+                const overwriteToggle = contentEl.querySelector('.setting-item[data-action-key="overwriteValue"] input[type="checkbox"]') as HTMLInputElement | null;
+                isResolved = overwriteToggle?.checked || fileActions.value;
+            }
+        } else {
+            if (isMissing && fileActions.add) {
+                isResolved = true;
+            } else if (isValueMismatch && fileActions.value) {
+                isResolved = true;
+            }
+        }
+
+        // Remove existing state classes first
+        headerEl.classList.remove('file-header-state-warning', 'file-header-state-resolved');
+
+        // Add the appropriate class
+        if (isResolved) {
+            headerEl.classList.add('file-header-state-resolved');
+        } else if (isMissing || isValueMismatch) {
+            headerEl.classList.add('file-header-state-warning');
+        }
+    }
+
+    /**
+     * Consistently updates the visual state of a toggle and its DOM elements
+     */
+    private updateToggleState(toggleEl: HTMLElement, checked: boolean, isDisabled = false): void {
+        // Update the checkbox input directly
+        const input = toggleEl.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+        if (input) {
+            // Set properties directly on the input element
+            input.checked = checked;
+            input.disabled = isDisabled;
+            
+            // Force a change event if needed (for state synchronization)
+            if (input.checked !== checked) {
+                const event = new Event('change', { bubbles: true });
+                input.dispatchEvent(event);
+            }
+        }
+        
+        // Update checkbox container classes for visual feedback
+        const container = toggleEl.closest('.checkbox-container');
+        if (container) {
+            if (checked) {
+                container.classList.add('is-enabled');
+            } else {
+                container.classList.remove('is-enabled');
+            }
+            
+            if (isDisabled) {
+                container.classList.add('is-disabled');
+            } else {
+                container.classList.remove('is-disabled');
+            }
+        }
+        
+        // Handle the parent container - make sure it shows correct visual state
+        const settingItem = toggleEl.closest('.setting-item');
+        if (settingItem && isDisabled) {
+            settingItem.classList.add('setting-disabled');
+        } else if (settingItem) {
+            settingItem.classList.remove('setting-disabled');
+        }
+    }
+
+    /**
+     * Refreshes the UI of the inconsistent files list for a specific property.
+     */
+    private refreshInconsistentFilesUI(propertyItemEl: Element, propertyKey: string) {
+        const inconsistentFilesContainer = propertyItemEl.querySelector('.inconsistent-files-container');
+        if (!inconsistentFilesContainer) return;
+
+        // Get inconsistent files
+        const inconsistentFiles = this.getInconsistentFiles(propertyKey);
+        const hasInconsistentFiles = inconsistentFiles.length > 0;
+
+        // Reset "Exclude All" toggle
+        const excludeAllToggle = inconsistentFilesContainer.querySelector('.inconsistent-files-controls input[type="checkbox"]') as HTMLInputElement | null;
+        if(excludeAllToggle) {
+            excludeAllToggle.checked = false;
+            excludeAllToggle.disabled = !hasInconsistentFiles;
+            
+            // Also disable the setting item if needed
+            const excludeAllSetting = inconsistentFilesContainer.querySelector('.inconsistent-files-controls .setting-item:first-child');
+            if (excludeAllSetting instanceof HTMLElement) {
+                if (!hasInconsistentFiles) {
+                    excludeAllSetting.classList.add('setting-disabled');
+                } else {
+                    excludeAllSetting.classList.remove('setting-disabled');
+                }
+            }
+        }
+
+        // Reset individual file items
+        const fileItems = inconsistentFilesContainer.querySelectorAll('.inconsistent-file-item');
+        fileItems.forEach(item => {
+            item.classList.remove('is-excluded');
+            const excludeToggle = item.querySelector('.exclude-file-toggle') as HTMLInputElement | null;
+            if (excludeToggle) excludeToggle.checked = false;
+
+            // Reset file action toggles within the item
+            const actionToggles = item.querySelectorAll('.file-item-content .setting-item-control input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+            actionToggles.forEach(toggle => toggle.checked = false);
+        });
+    }
+
     /**
      * Reorders and filters the inconsistent files list based on dropdown selections
      */
@@ -1707,11 +4152,9 @@ export class BulkEditor extends Modal {
         // Apply filtering
         fileItems.forEach(item => {
             const element = item as HTMLElement;
-            
+
             if (filterBy === 'all') {
                 element.style.display = '';
-            } else if (filterBy === 'type') {
-                element.style.display = element.hasAttribute('data-inconsistency-type') ? '' : 'none';
             } else if (filterBy === 'value') {
                 element.style.display = element.hasAttribute('data-inconsistency-value') ? '' : 'none';
             } else if (filterBy === 'missing') {
@@ -1730,7 +4173,7 @@ export class BulkEditor extends Modal {
                 return;
             }
             
-            const message = container.createEl('p', { 
+            container.createEl('p', { 
                 cls: 'no-visible-files-message',
                 text: 'No files match the current filter.'
             });
@@ -1746,11 +4189,32 @@ export class BulkEditor extends Modal {
         visibleItems.sort((a, b) => {
             const pathA = a.getAttribute('data-path') || '';
             const pathB = b.getAttribute('data-path') || '';
-            
-            if (orderBy === 'name-asc') {
-                return pathA.localeCompare(pathB);
-            } else {
-                return pathB.localeCompare(pathA);
+
+            // Helper function for name comparison as fallback
+            const compareByName = (order: 'asc' | 'desc' = 'asc') => {
+                return order === 'asc' ? pathA.localeCompare(pathB) : pathB.localeCompare(pathA);
+            };
+
+            // Get inconsistency flags
+            const aHasValueMismatch = a.hasAttribute('data-inconsistency-value');
+            const bHasValueMismatch = b.hasAttribute('data-inconsistency-value');
+            const aIsMissing = a.hasAttribute('data-inconsistency-missing');
+            const bIsMissing = b.hasAttribute('data-inconsistency-missing');
+
+            if (orderBy === 'value-mismatch') {
+                // Prioritize value mismatches
+                if (aHasValueMismatch && !bHasValueMismatch) return -1;
+                if (!aHasValueMismatch && bHasValueMismatch) return 1;
+                return compareByName('asc');
+            } else if (orderBy === 'missing-first') {
+                // Prioritize missing properties
+                if (aIsMissing && !bIsMissing) return -1;
+                if (!aIsMissing && bIsMissing) return 1;
+                return compareByName('asc');
+            } else if (orderBy === 'name-desc') {
+                return compareByName('desc');
+            } else { // Default to 'name-asc'
+                return compareByName('asc');
             }
         });
         
@@ -1758,97 +4222,183 @@ export class BulkEditor extends Modal {
         visibleItems.forEach(item => {
             container.appendChild(item);
         });
+        const inconsistentFilesContainer = container.closest('.inconsistent-files-container') as HTMLElement;
+        // Update the missing files counter based on the current view
+        this.updateMissingFilesCounter(propertyKey, container.closest('.inconsistent-files-container') as HTMLElement);
+
+        this.updateInconsistentValuesCounter(propertyKey, inconsistentFilesContainer);
+
+        // Update toggle visibility based on missing properties
+        this.updateMissingPropertyTogglesVisibility(propertyKey, inconsistentFilesContainer);
     }
-    
+
     /**
-     * Creates an array value display with expand/collapse functionality
+     * Updates the missing files counter for a property
      */
-    private createArrayValueDisplay(container: HTMLElement, arrayValue: any[], propertyType: string | null) {
-        // Collapsed view
-        const collapsedView = container.createSpan({ cls: 'array-property-collapsed-view' });
+    private updateMissingFilesCounter(propertyKey: string, container: HTMLElement) {
+        // Find the counter container
+        const missingFilesCounter = container.querySelector('.setting-item:nth-child(2) .property-header-stat-row');
+        if (!missingFilesCounter) return;
         
-        // Display first item
-        if (arrayValue.length > 0) {
-            const firstItem = arrayValue[0];
-            const firstItemPreview = formatValuePreview(firstItem, propertyType || undefined);
-            collapsedView.createSpan({ text: firstItemPreview });
+        // Clear existing content
+        missingFilesCounter.empty();
+        
+        // Get files with inconsistencies
+        const inconsistentFiles = this.getInconsistentFiles(propertyKey);
+        
+        // Count files missing this property
+        const missingFilesCount = inconsistentFiles.filter(file => {
+            const properties = this.fileProperties.get(file.path);
+            return !properties || !(propertyKey in properties);
+        }).length;
+
+        // Check if there are any files missing this property
+        const hasMissingPropertyFiles = missingFilesCount > 0;
+        
+        // Add the appropriate icon and text based on count
+        if (missingFilesCount > 0) {
+            missingFilesCounter.createSpan({
+                cls: "property-header-stat-icon is-inconsistent",
+                text: "⚠"
+            });
+            missingFilesCounter.createSpan({
+                text: ` ${missingFilesCount} ${missingFilesCount === 1 ? 'file is' : 'files are'} missing this property`,
+                cls: "missing-files-text is-inconsistent"
+            });
+        } else {
+            missingFilesCounter.createSpan({
+                cls: "property-header-stat-icon is-consistent",
+                text: "✓"
+            });
+            missingFilesCounter.createSpan({
+                text: " No files are missing this property",
+                cls: "missing-files-text is-consistent"
+            });
+        }
+
+        // After updating the counter, also update toggle visibility
+        this.updateMissingPropertyTogglesVisibility(propertyKey, container);
+    }
+
+    /**
+     * Updates the inconsistent values counter for a property
+     */
+    private updateInconsistentValuesCounter(propertyKey: string, container: HTMLElement) {
+        // Find the counter container - this is in the third setting item (Overwrite All Values)
+        const inconsistentValuesCounter = container.querySelector('.setting-item:nth-child(4) .property-header-stat-row');
+        if (!inconsistentValuesCounter) return;
+        
+        // Clear existing content
+        inconsistentValuesCounter.empty();
+        
+        // Get files with inconsistencies
+        const inconsistentFiles = this.getInconsistentFiles(propertyKey);
+        
+        // Count files with inconsistent values
+        const filesWithInconsistentValues = inconsistentFiles.filter(file => {
+            const properties = this.fileProperties.get(file.path);
+            // File has the property but the value is inconsistent (not the most common value)
+            if (properties && propertyKey in properties) {
+                const fileValue = properties[propertyKey].value;
+                const stats = this.propertyConsistency.get(propertyKey);
+                if (stats && stats.value.mostCommonValue !== null) {
+                    // Compare values - if different, it's inconsistent
+                    return JSON.stringify(fileValue) !== JSON.stringify(stats.value.mostCommonValue);
+                }
+            }
+            return false;
+        }).length;
+        
+        // Add the appropriate icon and text based on count
+        if (filesWithInconsistentValues > 0) {
+            inconsistentValuesCounter.createSpan({
+                cls: "property-header-stat-icon is-inconsistent",
+                text: "⚠"
+            });
+            inconsistentValuesCounter.createSpan({
+                text: ` ${filesWithInconsistentValues} ${filesWithInconsistentValues === 1 ? 'file has' : 'files have'} inconsistent value`,
+                cls: "missing-files-text is-inconsistent"
+            });
+        } else {
+            inconsistentValuesCounter.createSpan({
+                cls: "property-header-stat-icon is-consistent",
+                text: "✓"
+            });
+            inconsistentValuesCounter.createSpan({
+                text: " No files have inconsistent value",
+                cls: "missing-files-text is-consistent"
+            });
         }
         
-        // Add expand link if more than one item
-        if (arrayValue.length > 1) {
-            const remainingCount = arrayValue.length - 1;
-            const itemText = remainingCount === 1 ? 'item' : 'items';
-            
-            const expandLink = collapsedView.createSpan({ cls: 'array-property-toggle-link' });
-            expandLink.appendText('(');
-            expandLink.createSpan({ 
-                cls: 'underline-target',
-                text: `Expand, ${remainingCount} more ${itemText}`
-            });
-            expandLink.appendText(')');
-            
-            // Add click handler
-            this.plugin.registerDomEvent(expandLink, 'click', (e) => {
-                e.stopPropagation();
-                collapsedView.addClass('is-hidden');
-                expandedView.removeClass('is-hidden');
-            });
+        // Find and update the toggle visibility
+        const overwriteAllToggleControl = container.querySelector('.setting-item:nth-child(4) .setting-item-control');
+        if (overwriteAllToggleControl instanceof HTMLElement) {
+            overwriteAllToggleControl.style.display = filesWithInconsistentValues > 0 ? '' : 'none';
+        }
+    }
+
+    /**
+     * Updates visibility of missing-property related toggles based on whether any files are missing the property
+     */
+    private updateMissingPropertyTogglesVisibility(propertyKey: string, container: HTMLElement) {
+        // Get files with inconsistencies
+        const inconsistentFiles = this.getInconsistentFiles(propertyKey);
+        
+        // Count files missing this property
+        const hasMissingPropertyFiles = inconsistentFiles.some(file => {
+            const properties = this.fileProperties.get(file.path);
+            return !properties || !(propertyKey in properties);
+        });
+        
+        // Check if there are any inconsistent files at all
+        const hasInconsistentFiles = inconsistentFiles.length > 0;
+        
+        // Find the elements
+        const excludeAllSetting = container.querySelector('.setting-item:nth-child(1)');
+        const addAllMissingSetting = container.querySelector('.setting-item:nth-child(2)');
+        const addAllMissingToggleControl = addAllMissingSetting ? addAllMissingSetting.querySelector('.setting-item-control') : null;
+        const applyValueSetting = container.querySelector('.setting-item:nth-child(3)');
+        const inconsistentFilesList = container.querySelector('.inconsistent-files-list');
+        
+        // Update visibility - for Add All Missing, just hide the toggle control
+        if (addAllMissingToggleControl instanceof HTMLElement) {
+            addAllMissingToggleControl.style.display = hasMissingPropertyFiles ? '' : 'none';
         }
         
-        // Expanded view
-        const expandedView = container.createSpan({ 
-            cls: 'array-property-expanded-container is-hidden' 
-        });
+        // For Apply Value, hide the entire setting
+        if (applyValueSetting instanceof HTMLElement) {
+            applyValueSetting.style.display = hasMissingPropertyFiles ? '' : 'none';
+        }
         
-        // Add all items
-        arrayValue.forEach((item, index) => {
-            const itemPreview = formatValuePreview(item, propertyType || undefined);
-            expandedView.createSpan({ text: itemPreview });
+        // For Exclude All, hide the entire setting if no inconsistent files
+        if (excludeAllSetting instanceof HTMLElement) {
+            excludeAllSetting.style.display = hasInconsistentFiles ? '' : 'none';
             
-            // Add comma separator between items
-            if (index < arrayValue.length - 1) {
-                expandedView.appendText(', ');
+            // Handle Add All Missing Properties top border based on Exclude All visibility
+            if (addAllMissingSetting instanceof HTMLElement) {
+                if (!hasInconsistentFiles) {
+                    // Remove top border when it becomes the first visible item
+                    addAllMissingSetting.style.borderTop = 'none';
+                    // Add some top padding to maintain spacing
+                    addAllMissingSetting.style.paddingTop = '8px';
+                } else {
+                    // Restore default styling when Exclude All is visible
+                    addAllMissingSetting.style.borderTop = '';
+                    addAllMissingSetting.style.paddingTop = '';
+                }
             }
-        });
+        }
         
-        // Add collapse link
-        const collapseLink = expandedView.createSpan({ cls: 'array-property-toggle-link' });
-        collapseLink.appendText('(');
-        collapseLink.createSpan({ 
-            cls: 'underline-target',
-            text: 'Collapse'
-        });
-        collapseLink.appendText(')');
-        
-        // Add click handler
-        this.plugin.registerDomEvent(collapseLink, 'click', (e) => {
-            e.stopPropagation();
-            expandedView.addClass('is-hidden');
-            collapsedView.removeClass('is-hidden');
-        });
+        // Hide the inconsistent files list container if empty
+        if (inconsistentFilesList instanceof HTMLElement) {
+            inconsistentFilesList.style.display = hasInconsistentFiles ? '' : 'none';
+        }
     }
-    
-    /**
-     * Updates the master enable toggle state based on individual property states
-     */
-    private updateMasterEnableToggleState() {
-        if (!this.enableDisableToggle) return;
-        
-        // Don't update while loading
-        if (!this.propertyToggles.length) return;
-        
-        let allEnabled = true;
-        
-        this.propertiesState.forEach(state => {
-            if (!state.enabled) {
-                allEnabled = false;
-            }
-        });
-        
-        this.enableDisableToggle.setValue(allEnabled);
-        this.globalSettings.enableAll = allEnabled;
-    }
-    
+
+    // =================================================================
+    // SECTION: Drag and Drop for Property Ordering
+    // =================================================================
+
     /**
      * Sets up drag and drop for property item reordering
      */
@@ -1863,10 +4413,7 @@ export class BulkEditor extends Modal {
         // Add event listeners to each drag handle
         const dragHandles = this.propertiesListContainer.querySelectorAll('.drag-handle');
         dragHandles.forEach(handle => { 
-            // Tell TypeScript that 'handle' is definitely an HTMLElement
             const htmlHandle = handle as HTMLElement; 
-
-            // Now use htmlHandle, which has the correct type
             this.plugin.registerDomEvent(htmlHandle, 'dragstart', this.handleDragStart.bind(this)); 
             this.plugin.registerDomEvent(htmlHandle, 'dragend', this.handleDragEnd.bind(this));   
         });
@@ -2001,11 +4548,388 @@ export class BulkEditor extends Modal {
             }
         });
     }
+
+    // =================================================================
+    // SECTION: Utility Methods
+    // =================================================================
+
+    /**
+     * Simple confirmation dialog.
+     */
+    private async confirmRevert(message: string): Promise<boolean> {
+        return new Promise((resolve) => {
+            const confirmModal = new Modal(this.app);
+            confirmModal.contentEl.addClass("confirm-modal");
+            confirmModal.contentEl.createEl("p", { text: message });
+
+            const buttonContainer = confirmModal.contentEl.createDiv("modal-button-container");
+
+            buttonContainer.createEl("button", { text: "Cancel", cls: "mod-cancel" })
+                .addEventListener("click", () => {
+                    confirmModal.close();
+                    resolve(false);
+                });
+
+            buttonContainer.createEl("button", { text: "Revert", cls: "mod-warning" })
+                .addEventListener("click", () => {
+                    confirmModal.close();
+                    resolve(true);
+                });
+
+            confirmModal.open();
+        });
+    }
     
+    /**
+     * Returns the appropriate placeholder text based on property type.
+     */
+    private getPlaceholderForType(type: string): string {
+        switch (type) {
+            case 'text':
+            case 'list':
+            case 'number':
+                return 'Empty';
+            case 'date':
+                return 'YYYY-MM-DD';
+            case 'datetime':
+                return 'YYYY-MM-DD HH:MM';
+            case 'checkbox':
+                return '';
+            default:
+                return `Enter ${type} value...`;
+        }
+    }
+
+    /**
+     * Validates if a given string value is compatible with the target property type.
+     */
+    private validateInputValue(value: string | null, type: string): boolean {
+        if (value === null) return true;
+        const trimmedValue = value.trim();
+
+        // Allow empty input as valid (user might be deleting)
+        if (trimmedValue === '') {
+            return true;
+        }
+
+        switch (type) {
+            case 'number':
+                return !isNaN(Number(trimmedValue)) && trimmedValue !== '';
+            case 'date':
+                if (window.moment) {
+                    return window.moment(trimmedValue, 'YYYY-MM-DD', true).isValid();
+                } else {
+                    return /^\d{4}-\d{2}-\d{2}$/.test(trimmedValue);
+                }
+            case 'datetime':
+                if (window.moment) {
+                    return window.moment(trimmedValue, 'YYYY-MM-DD HH:mm', true).isValid() ||
+                           window.moment(trimmedValue, moment.ISO_8601, true).isValid();
+                } else {
+                    return /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2})?/.test(trimmedValue);
+                }
+            case 'text':
+            case 'list':
+            case 'checkbox':
+            default:
+                return true;
+        }
+    }
+    
+    /**
+     * Processes text content in the editor to identify and make links clickable.
+     */
+    private processLinksInEditor(element: HTMLElement, type: string): void {
+        // Skip if this is not a link-compatible type, or if content has multiple lines
+        if ((type !== 'text' && type !== 'list') || 
+            (element.textContent && element.textContent.includes('\n'))) {
+            return;
+        }
+        
+        // Get the current content
+        const currentContent = element.textContent || '';
+        
+        // Process based on type
+        if (type === 'text') {
+            // For text fields, ONLY make the entire content clickable if it's a valid URL
+            if (this.isValidUrl(currentContent)) {
+                // Only modify the DOM if needed
+                if (!element.querySelector('.metadata-link') || 
+                    element.querySelector('.metadata-link')?.textContent !== currentContent) {
+                    
+                    // Clear the element
+                    element.innerHTML = '';
+                    
+                    // Create a clickable link element
+                    const linkElement = this.createClickableLinkElement(currentContent);
+                    element.appendChild(linkElement);
+                }
+            } else {
+                // If it's not a valid URL anymore, convert any link spans back to plain text
+                const linkSpans = element.querySelectorAll('.metadata-link');
+                if (linkSpans.length > 0) {
+                    linkSpans.forEach(span => {
+                        const textNode = document.createTextNode(span.textContent || '');
+                        span.parentNode?.replaceChild(textNode, span);
+                    });
+                }
+            }
+        }
+    }
+
+    /**
+     * Checks if a string is a valid URL with a stricter validation
+     */
+    private isValidUrl(text: string): boolean {
+        const urlRegex = /^(https?:\/\/)(www\.)?([a-zA-Z0-9-]+(\.[a-zA-Z0-9-]+)+)(\/[^\s]*)?$/;
+        return urlRegex.test(text);
+    }
+    
+    /**
+     * Creates a clickable link element for the editor
+     */
+    private createClickableLinkElement(link: string): HTMLElement {
+        // Create the link element
+        const linkElement = document.createElement('span');
+        linkElement.className = 'metadata-link';
+        linkElement.textContent = link;
+        
+        // Add click handler
+        this.plugin.registerDomEvent(linkElement, 'click', (e: MouseEvent) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleLinkClick(this.app, link, e);
+        });
+        
+        return linkElement;
+    }
+
+    /**
+     * Counts the actual visual lines in a contenteditable element.
+     */
+    private countVisualLines(element: HTMLElement): number {
+        // Get the computed line height
+        const computedStyle = window.getComputedStyle(element);
+        let lineHeight = parseInt(computedStyle.lineHeight);
+        if (isNaN(lineHeight)) {
+            const fontSize = parseInt(computedStyle.fontSize);
+            lineHeight = Math.round(fontSize * 1.5);
+        }
+        
+        // Create a clone to measure without affecting the original
+        const clone = element.cloneNode(true) as HTMLElement;
+        clone.style.position = 'absolute';
+        clone.style.visibility = 'hidden';
+        clone.style.height = 'auto';
+        clone.style.width = element.offsetWidth + 'px';
+        document.body.appendChild(clone);
+        
+        // Get the height of the content
+        const contentHeight = clone.scrollHeight;
+        document.body.removeChild(clone);
+        
+        // Get padding
+        const paddingTop = parseInt(computedStyle.paddingTop) || 0;
+        const paddingBottom = parseInt(computedStyle.paddingBottom) || 0;
+        
+        // Calculate the actual content height without padding
+        const textHeight = contentHeight - paddingTop - paddingBottom;
+        
+        // Estimate the number of lines
+        const lines = Math.max(1, Math.round(textHeight / lineHeight));
+        
+        return lines;
+    }
+
+    /**
+     * Automatically adjusts the height of a contenteditable div based on its content.
+     */
+    private autoResizeEditableDiv(element: HTMLElement): void {
+        // Prevent resizing logic for list editor containers
+        if (element.classList.contains('list-editor-container')) {
+            return;
+        }
+    
+        // Use the new method to count visual lines
+        const lineCount = this.countVisualLines(element);
+        
+        // Get current focus state
+        const isFocused = document.activeElement === element;
+        
+        // Remove all sizing classes first
+        element.classList.remove('editor-lines-1', 'editor-lines-2', 'editor-lines-3', 'editor-lines-many');
+        
+        // Add focus class if focused
+        element.classList.toggle('editor-focused', isFocused);
+        
+        // Add appropriate line count class
+        if (lineCount <= 3) {
+            element.classList.add(`editor-lines-${lineCount}`);
+        } else {
+            element.classList.add('editor-lines-many');
+        }
+    }
+
+    /**
+     * Creates an array value display with expand/collapse functionality
+     */
+    private createArrayValueDisplay(container: HTMLElement, arrayValue: any[], propertyType: string | null) {
+        // Collapsed view
+        const collapsedView = container.createSpan({ cls: 'array-property-collapsed-view' });
+        
+        // Display first item
+        if (arrayValue.length > 0) {
+            const firstItem = arrayValue[0];
+            const firstItemPreview = formatValuePreview(firstItem, propertyType || undefined);
+            collapsedView.createSpan({ text: firstItemPreview });
+        }
+        
+        // Add expand link if more than one item
+        if (arrayValue.length > 1) {
+            const remainingCount = arrayValue.length - 1;
+            const itemText = remainingCount === 1 ? 'item' : 'items';
+            
+            const expandLink = collapsedView.createSpan({ cls: 'array-property-toggle-link' });
+            expandLink.appendText('(');
+            expandLink.createSpan({ 
+                cls: 'underline-target',
+                text: `Expand, ${remainingCount} more ${itemText}`
+            });
+            expandLink.appendText(')');
+            
+            // Add click handler
+            this.plugin.registerDomEvent(expandLink, 'click', (e) => {
+                e.stopPropagation();
+                collapsedView.addClass('is-hidden');
+                expandedView.removeClass('is-hidden');
+            });
+        }
+        
+        // Expanded view
+        const expandedView = container.createSpan({ 
+            cls: 'array-property-expanded-container is-hidden' 
+        });
+        
+        // Add all items
+        arrayValue.forEach((item, index) => {
+            const itemPreview = formatValuePreview(item, propertyType || undefined);
+            expandedView.createSpan({ text: itemPreview });
+            
+            // Add comma separator between items
+            if (index < arrayValue.length - 1) {
+                expandedView.appendText(', ');
+            }
+        });
+        
+        // Add collapse link
+        const collapseLink = expandedView.createSpan({ cls: 'array-property-toggle-link' });
+        collapseLink.appendText('(');
+        collapseLink.createSpan({ 
+            cls: 'underline-target',
+            text: 'Collapse'
+        });
+        collapseLink.appendText(')');
+        
+        // Add click handler
+        this.plugin.registerDomEvent(collapseLink, 'click', (e) => {
+            e.stopPropagation();
+            expandedView.addClass('is-hidden');
+            collapsedView.removeClass('is-hidden');
+        });
+    }
+
+    /**
+     * Applies property value toggles to all files with missing properties
+     */
+    private applyPropertyValueToggles(propertyKey: string, checked: boolean): void {
+        const state = this.propertiesState.get(propertyKey);
+        if (!state) return;
+        
+        // Get files with inconsistencies
+        const inconsistentFiles = this.getInconsistentFiles(propertyKey);
+        
+        // Filter to get only files with missing properties where "Add Missing" is enabled
+        const targetFiles = inconsistentFiles.filter(file => {
+            const properties = this.fileProperties.get(file.path);
+            if (properties && (propertyKey in properties)) return false; // Skip existing properties
+            
+            // Skip excluded files
+            if (state.excludedFiles.has(file.path)) return false;
+            
+            const fileActions = state.fileActions.get(file.path) || { type: false, value: false, add: false };
+            return fileActions.add; // Only include files where "Add Missing" is enabled
+        });
+        
+        // Get relevant container
+        const inconsistentFilesContainer = this.propertiesListContainer?.querySelector(`#prop-${propertyKey} .inconsistent-files-container`);
+        if (!inconsistentFilesContainer) return;
+        
+        // Update each file
+        targetFiles.forEach(file => {
+            // Update data model
+            const fileActions = state.fileActions.get(file.path) || { type: false, value: false, add: false };
+            fileActions.value = checked;
+            state.fileActions.set(file.path, fileActions);
+            
+            // Find this file's toggle in the DOM
+            const fileItem = inconsistentFilesContainer.querySelector(`.inconsistent-file-item[data-path="${file.path}"]`);
+            if (!fileItem) return;
+            
+            // Update "Use Value" toggle
+            const useValueToggleEl = fileItem.querySelector('.setting-item[data-action-key="useValueOnAdd"] .setting-item-control') as HTMLElement | null;
+            
+            // Update header appearance
+            this.updateFileHeaderAppearance(fileItem as HTMLElement, propertyKey);
+        });
+        
+        // Update property and value counters in the property header
+        this.updatePropertyCountersUI(propertyKey);
+    }
+
+    /**
+     * Disables or enables a setting item and all its toggles
+     */
+    private updateSettingItemState(settingItem: Element | null, disabled: boolean): void {
+        if (!settingItem) return;
+        
+        if (disabled) {
+            settingItem.addClass('setting-disabled');
+            
+            // Disable any checkbox inputs within the setting
+            const toggleInputs = settingItem.querySelectorAll('input[type="checkbox"]');
+            toggleInputs.forEach(input => {
+                if (input instanceof HTMLInputElement) {
+                    input.disabled = true;
+                }
+            });
+        } else {
+            settingItem.removeClass('setting-disabled');
+            
+            // Enable any checkbox inputs within the setting
+            const toggleInputs = settingItem.querySelectorAll('input[type="checkbox"]');
+            toggleInputs.forEach(input => {
+                if (input instanceof HTMLInputElement) {
+                    input.disabled = false;
+                }
+            });
+        }
+    }
+
+    // =================================================================
+    // SECTION: Apply Changes and Action Handlers
+    // =================================================================
+
+    /**
+     * Handler for adding new property
+     */
+    private handleAddProperty() {
+        new Notice('Add Property functionality coming soon!');
+    }
+
     /**
      * Applies changes to all selected files
      */
-    async applyChanges() {
+    private async applyChanges() {
         // Show progress notice
         const notice = new Notice('Applying changes to files...', 0);
         
@@ -2138,234 +5062,5 @@ export class BulkEditor extends Modal {
             notice.hide();
             new Notice('Error applying changes. Please try again.');
         }
-    }
-    
-    /**
-     * Processes an existing property value based on the property state and file actions.
-     * Handles type conversions and overrides.
-     */
-    private processPropertyValue(key: string, filePath: string, currentValue: any): any | undefined {
-        const state = this.propertiesState.get(key);
-        // Should not happen if called correctly, but safeguard
-        if (!state) return currentValue;
-
-        // Handle file exclusion first
-        if (state.excludedFiles.has(filePath)) {
-            return currentValue; // Keep original value if file excluded for this prop
-        }
-
-        const fileActions = state.fileActions.get(filePath) || { type: false, value: false, add: false };
-
-        // Check if this property is disabled for editing
-        if (!state.enabled) {
-            const action = state.disabledAction === 'global'
-                ? this.globalSettings.disabledAction
-                : state.disabledAction;
-
-            if (action === 'remove') {
-                return undefined; // Signal removal
-            }
-            // For 'keep' or 'add_if_missing' (it exists here), keep current value
-            return currentValue;
-        }
-
-        // --- Property is ENABLED for editing ---
-
-        let newValue = currentValue; // Start with current value
-        const stats = this.propertyConsistency.get(key);
-        // Determine the target type based on user selection or detection
-        const targetType = state.changeType ||
-                       (stats ? stats.type.mostCommonType : null) ||
-                       this.plugin.propertyTypeService.detectPropertyType(currentValue) ||
-                       'text';
-
-        // Check if there's an override value specified by the user
-        const hasOverride = state.overrideValue !== null && state.overrideValue !== undefined;
-
-        if (hasOverride) {
-            // Use the override value, attempting conversion based on targetType
-            const override = state.overrideValue;
-
-            switch (targetType) {
-                case 'checkbox':
-                    // Convert override to boolean ('true'/'false' string or existing boolean)
-                    if (typeof override === 'boolean') {
-                        newValue = override;
-                    } else {
-                        newValue = String(override).toLowerCase() === 'true';
-                    }
-                    break;
-                case 'number':
-                    // Convert override to number; handle invalid input
-                    if (typeof override === 'number') {
-                        newValue = override;
-                    } else {
-                        const num = Number(String(override).trim());
-                        // Keep invalid string override *as string*? Or use default?
-                        // Let's default to 0 for invalid numbers on apply for now.
-                        newValue = !isNaN(num) ? num : 0;
-                    }
-                    break;
-                case 'date':
-                case 'datetime':
-                    // Store as string, potentially validate format here if needed
-                    // For now, assume string from validation step is acceptable
-                    newValue = String(override).trim() || null; // Store empty as null? Or ""? Let's use ""
-                    if (newValue === "") newValue = null; // Treat empty override as null maybe? Or keep ""? Stick with "" for now.
-                    newValue = String(override).trim();
-                    // TODO: Add final moment.js validation if desired
-                    break;
-                case 'list':
-                    // Expect overrideValue to be string[] from custom component
-                    if (Array.isArray(override)) {
-                        newValue = [...override]; // Use the array directly
-                    } else {
-                        // Fallback: if somehow it's still a string, parse it
-                        newValue = String(override).split(',').map((s: string) => s.trim()).filter(s => s);
-                    }
-                    break;
-                case 'text':
-                default: // Treat 'multitext' as text
-                    newValue = String(override); // Ensure it's a string
-                    break;
-            }
-        } else {
-            // No override value - potentially apply type change to existing value?
-            // This part is tricky - if type changes but no override is given, what should happen?
-            // Option A: Keep existing value as-is (simplest)
-            // Option B: Try to convert existing value to new type (complex, lossy)
-            // Let's stick with Option A for now: If no override, only type metadata changes, not value.
-            // The applyProperties logic using processFrontMatter handles type hints later if needed.
-            newValue = currentValue;
-
-            // However, if the *only* change is the type dropdown, ensure value fits?
-            // Maybe this logic belongs solely in how Obsidian handles frontmatter changes.
-            // Let's keep it simple: no override = keep current value structure.
-        }
-
-        // --- Add Parsing Logic Here ---
-        // If the newValue came from the textarea override, parse it based on targetType
-        if (hasOverride && typeof newValue === 'string') { // Ensure we're parsing the string from the textarea
-            const stringValue = newValue as string; // Explicitly type as string
-            switch (targetType) {
-                case 'number':
-                    const parsedNum = Number(stringValue.trim());
-                    // Keep invalid input as string or use null/0? Let's keep the string for now.
-                    newValue = !isNaN(parsedNum) ? parsedNum : stringValue; // Keep original string if invalid
-                    break;
-                case 'checkbox':
-                    newValue = stringValue.trim().toLowerCase() === 'true';
-                    break;
-                case 'list':
-                    // Split by comma, trim whitespace, filter empty strings
-                    newValue = stringValue.split(',')
-                                     .map(s => s.trim())
-                                     .filter(s => s.length > 0);
-                    // If the result is an empty array, represent it as such, not null
-                    if (newValue.length === 0 && stringValue.trim() === '') {
-                        // If the original string was empty/whitespace, result is empty array
-                        newValue = [];
-                    } else if (newValue.length === 0 && stringValue.trim() !== '') {
-                         // If original string wasn't empty but parsing resulted in empty
-                         // (e.g., just commas), maybe keep original string or single element array?
-                         // Let's default to an empty array for simplicity.
-                         newValue = [];
-                    }
-                    break;
-                case 'date':
-                case 'datetime':
-                    // Keep as string, Obsidian handles parsing/validation if format is correct
-                    newValue = stringValue.trim();
-                    break;
-                case 'text':
-                default:
-                    // Already a string, no further parsing needed
-                    newValue = stringValue;
-                    break;
-            }
-        }
-       // --- End Parsing Logic ---
-
-       return newValue;
-   }
-    
-    /**
-     * Determines the value for a property that is missing from a file, based on state.
-     */
-    private processMissingProperty(key: string, filePath: string): any | undefined {
-        const state = this.propertiesState.get(key);
-        if (!state) return undefined; // Don't add if no state defined
-
-        // Handle file exclusion first
-        if (state.excludedFiles.has(filePath)) {
-            return undefined; // Don't add if file excluded for this prop
-        }
-
-        const fileActions = state.fileActions.get(filePath) || { type: false, value: false, add: false };
-        const stats = this.propertyConsistency.get(key);
-        // Determine target type: user override > detected > default guess
-        const targetType = state.changeType ||
-                        (stats ? stats.type.mostCommonType : null) ||
-                        getDefaultTypeForKey(key); // Guess type based on key
-
-        // Should we add this property? Check based on enabled state and actions
-        let shouldAdd = false;
-        if (state.enabled) {
-            // If editing is enabled, add if an override value exists, OR if fileAction.add is true?
-            // Let's simplify: Add if an override exists, OR if action is 'add_if_missing' implicitly?
-            // Let's default to adding if override exists, otherwise respect disabled actions.
-            shouldAdd = state.overrideValue !== null && state.overrideValue !== undefined;
-            // TODO: Revisit if fileActions.add should also trigger adding without an override value? Maybe not.
-        } else {
-            // If editing is disabled, check the action for disabled properties
-            const action = state.disabledAction === 'global'
-                ? this.globalSettings.disabledAction
-                : state.disabledAction;
-            shouldAdd = (action === 'add_if_missing');
-        }
-
-        if (!shouldAdd) {
-            return undefined; // Don't add the property
-        }
-
-        // --- Determine the value to add ---
-        const hasOverride = state.overrideValue !== null && state.overrideValue !== undefined;
-        let valueToAdd: any;
-
-        if (hasOverride) {
-            const stringValue = state.overrideValue as string; // It's always a string from textarea
-            switch (targetType) {
-                case 'number':
-                    const parsedNum = Number(stringValue.trim());
-                    valueToAdd = !isNaN(parsedNum) ? parsedNum : null; // Add null if invalid number? Or 0? Let's use null.
-                    break;
-                case 'checkbox':
-                    valueToAdd = stringValue.trim().toLowerCase() === 'true';
-                    break;
-                case 'list':
-                    valueToAdd = stringValue.split(',')
-                                     .map(s => s.trim())
-                                     .filter(s => s.length > 0);
-                    break;
-                case 'date':
-                case 'datetime':
-                    valueToAdd = stringValue.trim(); // Add as string
-                    break;
-                case 'text':
-                default:
-                    valueToAdd = stringValue; // Add as string
-                    break;
-            }
-        } else {
-            // No override, add empty value based on the target type
-            valueToAdd = getEmptyValueForType(targetType);
-        }
-
-        return valueToAdd;
-    }
-
-    onClose() {
-        const { contentEl } = this;
-        contentEl.empty();
     }
 }

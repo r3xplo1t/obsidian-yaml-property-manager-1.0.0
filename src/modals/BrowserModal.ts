@@ -134,8 +134,11 @@ export class BrowserModal extends Modal {
             cls: 'mod-cta',
             attr: { type: 'button' }
         });
-        
-        confirmButton.disabled = this.selectedFiles.length === 0 && this.selectedFolders.length === 0;
+
+        // Initial state
+        confirmButton.disabled = this.singleFileSelectionMode ? 
+            this.selectedFiles.length !== 1 : 
+            (this.selectedFiles.length === 0 && this.selectedFolders.length === 0);
 
         // Cancel button
         const cancelButton = buttonContainer.createEl('button', {
@@ -811,11 +814,15 @@ export class BrowserModal extends Modal {
         }
         
         // Update confirm button state
-        const confirmButton = this.contentEl.querySelector('.mod-cta') as HTMLButtonElement | null;
+        const confirmButton = this.modalEl.querySelector('.mod-cta') as HTMLButtonElement | null;
         if (confirmButton) {
-            // In single file mode, require exactly one file selected
-            // In multi-selection mode, always enable the button (even with nothing selected)
-            confirmButton.disabled = this.singleFileSelectionMode ? fileCount !== 1 : false;
+            if (this.singleFileSelectionMode) {
+                // In single file mode, require exactly one file selected
+                confirmButton.disabled = fileCount !== 1;
+            } else {
+                // In multi-selection mode, disable when nothing is selected
+                confirmButton.disabled = fileCount === 0 && folderCount === 0;
+            }
         }
     }
 
