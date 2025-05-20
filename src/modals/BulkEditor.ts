@@ -510,9 +510,13 @@ export class BulkEditor extends Modal {
             .setName('Bulk Property Editor')
             .setHeading();
     
-        // Add description
-        new Setting(contentEl)
+        // Add description about number of files
+        let fileCountSetting = new Setting(contentEl)
             .setDesc(`Editing properties across ${this.files.length} ${this.files.length === 1 ? 'file' : 'files'}.`);
+
+        // Remove top border by accessing the settingEl property
+        fileCountSetting.settingEl.style.borderTop = 'none';
+        fileCountSetting.settingEl.style.paddingTop = '0px';
             
         // Create the main sections
         const controlsSection = contentEl.createDiv({ 

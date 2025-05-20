@@ -472,6 +472,35 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
   color: var(--text-muted);
 }
 
+/* Recent template tag styling */
+.recent-template-tag {
+  margin-left: auto;
+  background-color: var(--background-primary);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  border-radius: var(--radius-s);
+  padding: 2px 8px;
+  font-size: var(--font-ui-smaller);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Ensure suggestion item layout supports tag */
+.template-suggestion-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--size-4-2);
+}
+
+/* Make sure content doesn't overflow */
+.template-suggestion-item .suggestion-content {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-right: var(--size-4-2);
+}
+
 /* ==============================
    7. ACCESSIBILITY & THEMING
    ============================== */
@@ -1320,152 +1349,4 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
 
 .inconsistent-file-item.is-excluded .bulk-editor-file-header:hover {
   background-color: var(--background-secondary) !important;
-}
-
-/* ==============================
-   9. Buy Me A Coffee STYLES
-   ============================== */
-
-/* New Custom Buy Me A Coffee Button Styles */
-.yaml-property-manager-bmc-link-button { /* Main button styling */
-    display: inline-flex; /* Use flex for internal alignment */
-    align-items: center; /* Vertical centering for inner content */
-    justify-content: center; /* Horizontal centering for inner content */
-    height: 60px;
-    border-radius: 12px;
-    background-color: #FFDD00; /* #FD0 is the same as #FFDD00 */
-    color: #000000;
-    border: none; /* Removed border */
-    padding: 0 24px;
-    line-height: normal; /* Removed fixed line-height, rely on flex centering */
-    text-decoration: none; /* Ensure no underline from <a> tag */
-    box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.1), 0px 1px 3px rgba(0, 0, 0, 0.08); /* Example shadow */
-    transition: transform 0.15s ease-out, box-shadow 0.15s ease-out;
-    cursor: pointer;
-}
-
-.yaml-property-manager-bmc-link-button:hover,
-.yaml-property-manager-bmc-link-button:focus {
-    transform: translateY(-2px);
-    box-shadow: 0px 6px 8px rgba(0, 0, 0, 0.15), 0px 3px 5px rgba(0, 0, 0, 0.1);
-    color: #000000; /* Ensure color persistence */
-    text-decoration: none; /* Ensure no underline */
-}
-
-.yaml-property-manager-bmc-link-button:active {
-    transform: translateY(0px);
-    box-shadow: 0px 2px 3px rgba(0, 0, 0, 0.1), 0px 1px 1px rgba(0, 0, 0, 0.08);
-}
-
-/* Flex container for icon and text within the button */
-.flex-container-bmc {
-    display: flex;
-    align-items: center; /* Vertically center icon and text */
-}
-
-/* Styling for the icon span, if needed (e.g., margin) */
-.yaml-property-manager-bmc-link-button .btn-icon {
-    margin-right: none; /* Space between icon and text */
-    font-size: 1.5em; /* Make emoji slightly larger than text, adjust as needed */
-}
-
-/* Your provided utility/font classes */
-.custom-font-stl { /* Applied to the text span */
-    font-size: small; /* Using your value */
-    font-weight: 700;
-    text-align: left;
-}
-
-.font-Comic { /* Applied to the main button anchor */
-    font-family: 'Comic Neue', cursive; /* Using your value */
-}
-
-/* Container for the support buttons in settings */
-.yaml-property-manager-support-buttons-container {
-    display: flex;
-    align-items: center; /* Vertically align buttons if they have different heights */
-}
-
-/* Styling for the QR Code Icon Button - Enforcing Square Shape */
-.yaml-property-manager-qr-button {
-    background-color: var(--interactive-secondary);
-    border: none;
-    color: var(--text-muted); /* Base color for the button text/icon context */
-    
-    /* --- Enforce Square Dimensions --- */
-    height: 32px; /* Define the height */
-    width: 32px;  /* Define the width to be IDENTICAL to the height */
-    min-width: 32px; /* Prevent expansion beyond specified width */
-
-    /* Crucial: Override default button padding from themes */
-    /* Setting padding to 0 and using flex to center the icon */
-    padding: 0 !important; 
-    
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    
-    box-sizing: border-box; /* Ensures padding/border are included in width/height */
-    
-    border-radius: var(--radius-s); /* Standard small radius */
-    box-shadow: var(--shadow-s); 
-    
-    transition: background-color 0.1s ease-out, box-shadow 0.1s ease-out, color 0.1s ease-out;
-}
-
-.yaml-property-manager-qr-button .lucide-qr-code {
-    width: 18px;  /* Adjust icon size as needed for the 32x32 button */
-    height: 18px;
-    color: var(--icon-color); /* Ensure icon uses theme's icon color */
-}
-
-/* Hover and active states (can remain as previously defined or use alternatives) */
-.yaml-property-manager-qr-button:hover,
-.yaml-property-manager-qr-button:focus {
-    background-color: var(--interactive-hover);
-    color: var(--text-normal); 
-    box-shadow: var(--shadow-m); 
-    transform: none; 
-}
-
-.yaml-property-manager-qr-button:active {
-    background-color: var(--interactive-active); 
-    box-shadow: var(--shadow-s); 
-    transform: none;
-}
-
-/* ==============================
-   10. QR Code Modal STYLES
-   ============================== */
-   
-/* Styling for the QR Code Modal Content */
-.yaml-property-manager-qr-modal-frame .modal-content {
-    /* Obsidian's .modal-content is the direct child we put our content into */
-    padding: 15px; /* Adjust padding for the modal content area */
-}
-
-.yaml-property-manager-qr-modal-frame {
-    /* Adjust overall modal size. Should be slightly larger than image's maxWidth + padding */
-    max-width: 300px; /* Example: makes the modal window itself more compact */
-}
-
-/* Styling for the QR Code Modal Content area (where the image is placed) */
-.yaml-property-manager-qr-modal-content {
-    display: flex; /* Use flex to easily center the image */
-    justify-content: center;
-    align-items: center;
-    width: 100%;
-    height: 100%; /* Ensure it fills the modal content area if needed */
-}
-
-/* Styling for the image within the QR Code Modal */
-.yaml-property-manager-qr-modal-content img {
-    display: block;
-    max-width: 250px; /* Key property: Controls the maximum width of the QR image */
-    width: 100%;      /* Image will be responsive up to its max-width */
-    height: auto;     /* Maintain aspect ratio */
-    border: 1px solid var(--background-modifier-border); /* Optional: subtle border */
-    border-radius: 4px; /* Optional: slight rounding */
-    padding: 5px;       /* Optional: padding around the image, inside its border */
-    background-color: white; /* Recommended for QR codes for better scannability */
 }

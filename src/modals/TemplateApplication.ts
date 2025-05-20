@@ -16,7 +16,7 @@ export class TemplateApplication extends Modal {
     private templateSelectionSetting: Setting | null = null;
     private overrideAllToggle: ToggleComponent | null = null;
     private selectAllToggle: ToggleComponent | null = null;
-    private allPropertiesSelected: boolean = false;
+    private allPropertiesSelected: boolean = true;
     private allValuesOverridden: boolean = false;
     private eventRefs: Array<() => void> = [];
     
@@ -41,7 +41,15 @@ export class TemplateApplication extends Modal {
         new Setting(contentEl)
             .setName('Apply Template Properties')
             .setHeading();
-    
+
+        // Add description about number of files
+        let fileCountSetting = new Setting(contentEl)
+            .setDesc(`Editing properties across ${this.targetFiles.length} ${this.targetFiles.length === 1 ? 'file' : 'files'}.`);
+
+        // Remove top border by accessing the settingEl property
+        fileCountSetting.settingEl.style.borderTop = 'none';
+        fileCountSetting.settingEl.style.paddingTop = '0px';
+
         // Load templates needed for the suggester
         await this.loadAllTemplates();
     
@@ -53,14 +61,28 @@ export class TemplateApplication extends Modal {
                 .setButtonText(this.selectedTemplate ? 'Change Template' : 'Select Template')
                 .setCta()
                 .onClick(() => {
-                    new TemplateSuggestModal(this.app, this.allTemplates, (selectedFile) => {
-                        if (selectedFile) {
-                            this.selectedTemplate = selectedFile;
-                            this.updateSelectedTemplateDisplay();
-                            this.loadTemplateProperties();
-                            button.setButtonText('Change Template');
-                        }
-                    }).open();
+                    // Get recent templates from the correct location
+                    // If the plugin doesn't expose this directly, use an empty array
+                    const recentTemplatePaths: string[] = [];
+                    
+                    // Try to access recent templates if stored in plugin settings
+                    if (this.plugin.settings && this.plugin.settings.recentTemplates) {
+                        recentTemplatePaths.push(...this.plugin.settings.recentTemplates);
+                    }
+                    
+                    new TemplateSuggestModal(
+                        this.app, 
+                        this.allTemplates, 
+                        (selectedFile) => {
+                            if (selectedFile) {
+                                this.selectedTemplate = selectedFile;
+                                this.updateSelectedTemplateDisplay();
+                                this.loadTemplateProperties();
+                                button.setButtonText('Change Template');
+                            }
+                        }, 
+                        recentTemplatePaths
+                    ).open();
                 }));
     
         // Initial Display Update / Load
@@ -246,6 +268,21 @@ export class TemplateApplication extends Modal {
             
             // Create property items
             await this.createpropertySettings(propertyKeys, properties, contentEl);
+        }
+
+        // Initialize selected properties if allPropertiesSelected is true
+        if (this.allPropertiesSelected && propertyKeys.length > 0) {
+            this.selectedProperties = [...propertyKeys];
+            
+            // Make sure the property dropdowns are updated to "include" state
+            this.propertyToggles.forEach(propToggle => {
+                propToggle.dropdown.setValue('include');
+            });
+            
+            // Enable the Override All toggle
+            if (this.overrideAllToggle) {
+                this.overrideAllToggle.setDisabled(false);
+            }
         }
     
         // Update button state
@@ -900,32 +937,70 @@ function isSpecialTriggerItem(item: SuggestModalItem): item is SpecialTriggerIte
 class TemplateSuggestModal extends FuzzySuggestModal<SuggestModalItem> {
     templates: TFile[];
     onChoose: (result: TFile | null) => void;
-    searchMode: 'templates' | 'vault'; // Mode to determine search scope
     appInstance: App; // Store app instance explicitly
+
+    searchMode: 'templates' | 'recent' | 'vault'; // Mode to determine search scope
+    recentTemplates: string[] = []; // Array of recent template paths
+    inputListener: () => void; // For listening to search input
 
     // Special item to trigger vault search
     private static readonly VAULT_SEARCH_TRIGGER: SpecialTriggerItem = {
         isVaultSearchTrigger: true,
-        name: "Search all vault files...",
+        name: "Click to see recently used templates or search within the entire vault...",
     };
 
     constructor(
         app: App,
-        templates: TFile[], // Predefined templates (used in 'templates' mode)
+        templates: TFile[], // Predefined templates
         onChoose: (result: TFile | null) => void,
-        initialMode: 'templates' | 'vault' = 'templates' // Start in 'templates' mode by default
+        recentTemplates: string[] = [], // Paths of recently used templates
+        initialMode: 'templates' | 'recent' | 'vault' = 'templates' 
     ) {
         super(app);
-        this.appInstance = app; // Store app reference
+        this.appInstance = app;
         this.templates = templates;
         this.onChoose = onChoose;
+        this.recentTemplates = recentTemplates;
         this.searchMode = initialMode;
 
-        this.setPlaceholder(
-            this.searchMode === 'templates'
-                ? "Search predefined templates or select 'Search all'..."
-                : "Search all vault files..."
-        );
+        // Set placeholder based on mode
+        this.updatePlaceholder();
+        
+        // Add input listener to detect typing in 'recent' mode
+        if (this.searchMode === 'recent') {
+            this.setupInputListener();
+        }
+    }
+
+    private updatePlaceholder(): void {
+        // Set placeholder based on current mode
+        if (this.searchMode === 'templates') {
+            this.setPlaceholder("Search predefined templates...");
+        } else if (this.searchMode === 'recent') {
+            this.setPlaceholder("Search all vault files...");
+        } else {
+            this.setPlaceholder("Search all vault files...");
+        }
+    }
+
+    private setupInputListener(): void {
+        // Remove existing listener if any
+        if (this.inputListener) {
+            // @ts-ignore - inputEl exists on modal but isn't part of the type definition
+            this.inputEl.removeEventListener('input', this.inputListener);
+        }
+        
+        // Add listener for input changes in 'recent' mode
+        this.inputListener = () => {
+            if (this.searchMode === 'recent') {
+                // Switch to vault mode on first keystroke
+                this.searchMode = 'vault';
+                // No need to update placeholder as it's the same for both modes
+            }
+        };
+        
+        // @ts-ignore - inputEl exists on modal but isn't part of the type definition
+        this.inputEl.addEventListener('input', this.inputListener);
     }
 
     getItems(): SuggestModalItem[] {
@@ -998,12 +1073,17 @@ class TemplateSuggestModal extends FuzzySuggestModal<SuggestModalItem> {
             return result;
         };
     
-        // Now use the same function for both modes
+        // Filter by mode
         if (this.searchMode === 'vault') {
-            // Use the unified sorting function for all vault files
+            // Vault mode: all files
             return getSortedFiles(this.appInstance.vault.getMarkdownFiles());
+        } else if (this.searchMode === 'recent') {
+            // Recent mode: only recent templates
+            const recentFiles = this.appInstance.vault.getMarkdownFiles()
+                .filter(file => this.recentTemplates.includes(file.path));
+            return getSortedFiles(recentFiles);
         } else {
-            // Use the same function for templates, then add the search option
+            // Templates mode: templates + trigger
             return [TemplateSuggestModal.VAULT_SEARCH_TRIGGER, ...getSortedFiles(this.templates)];
         }
     }
@@ -1077,15 +1157,28 @@ class TemplateSuggestModal extends FuzzySuggestModal<SuggestModalItem> {
                 text: displayPath // Use the constructed path without extension
             });
 
-            // No suggestion-note needed as per last request
+            // --- Add Recent Tag if applicable ---
+            if (this.recentTemplates.includes(item.path)) {
+                // Create a "Recent" tag on the right
+                el.createDiv({
+                    cls: 'recent-template-tag',
+                    text: 'Recent'
+                });
+            }
         }
     }
 
     onChooseItem(item: SuggestModalItem, evt: MouseEvent | KeyboardEvent): void {
         // Use the type predicate function
         if (isSpecialTriggerItem(item)) {
-            // Handle trigger selection
-            new TemplateSuggestModal(this.appInstance, [], this.onChoose, 'vault').open();
+            // Handle trigger selection - now goes to recent mode first
+            new TemplateSuggestModal(
+                this.appInstance, 
+                [], // No predefined templates needed in recent mode
+                this.onChoose, 
+                this.recentTemplates,
+                'recent' // Switch to recent mode
+            ).open();
         } else {
             // If it's not the trigger, TypeScript now knows 'item' is TFile
             // Handle TFile selection
@@ -1094,7 +1187,12 @@ class TemplateSuggestModal extends FuzzySuggestModal<SuggestModalItem> {
     }
 
     onClose() {
-       super.onClose();
-       // Optional: Handle closing without selection if needed
+        super.onClose();
+        
+        // Clean up input listener
+        if (this.inputListener) {
+            // @ts-ignore - inputEl exists on modal but isn't part of the type definition
+            this.inputEl.removeEventListener('input', this.inputListener);
+        }
     }
 }

@@ -3,7 +3,6 @@ import YAMLPropertyManagerPlugin from '../../main';
 import { BrowserModal } from './BrowserModal';
 import { TreeNode } from '../interfaces';
 import { findNextFocusableElement, findPrevFocusableElement } from '../commonHelpers';
-import { QRCodeModal } from './QRCodeModal';
 
 export class SettingTab extends PluginSettingTab {
     plugin: YAMLPropertyManagerPlugin;
@@ -323,82 +322,7 @@ export class SettingTab extends PluginSettingTab {
                     // Set focus to the cancel button (safer default)
                     setTimeout(() => cancelButton.buttonEl.focus(), 50);
                 })
-        );
-
-        // Support Development Section
-        containerEl.createEl('h2', { text: 'Support Development' });
-
-        const supportSetting = new Setting(containerEl)
-            .setName('Enjoying YAML Property Manager?')
-            .setDesc('If this plugin helps your workflow, please consider supporting its continued development. Every contribution is appreciated!');
-
-        // Create a general container for the buttons within the control element
-        // This container will use flex to layout buttons side-by-side
-        const buttonsContainer = supportSetting.controlEl.createDiv({
-            cls: 'yaml-property-manager-support-buttons-container'
-        });
-
-
-        // 1. Create the QR Code Button (Icon Button)
-        const qrButton = new ButtonComponent(buttonsContainer)
-            .setIcon('qr-code') // Using Lucide icon for QR code
-            .setTooltip('Show QR Code to Scan')
-            .setClass('yaml-property-manager-qr-button') // For specific styling
-            .onClick(async () => {
-            // Construct the full path to the image asset
-            // this.plugin.manifest.dir provides the path to the plugin's root folder
-            if (!this.plugin.manifest.dir) {
-                new Notice('Plugin directory not found. Cannot display QR code.');
-                console.error('YAML Property Manager: Plugin manifest.dir is undefined.');
-                return;
-            }
-            const imageRelativePath = 'bmc_qr.png'; // Path if image is copied to plugin's root build folder
-            
-            const fullImagePath = this.app.vault.adapter.getResourcePath(
-                `${this.plugin.manifest.dir}/${imageRelativePath}`
             );
-
-            if (fullImagePath) { // getResourcePath itself doesn't guarantee existence, just formats a path
-                new QRCodeModal(this.app, this.plugin, fullImagePath).open();
-            } else {
-                // This 'else' might not be hit if getResourcePath always returns a string.
-                // The check for file existence above or an error in loading the image in the modal
-                // would be more indicative of a problem.
-                new Notice('Could not generate resource path for QR code image.');
-                console.error('YAML Property Manager: QR code image path could not be resolved by getResourcePath:', `${this.plugin.manifest.dir}/${imageRelativePath}`);
-            }
-        });
-        qrButton.buttonEl.style.marginRight = '10px'; // Add some space between QR button and BMC button
-
-
-        // 2. Create the "Buy me a coffee" custom button (your existing styled anchor tag)
-        // This is the bmcButtonAnchor from your previous setup
-        const bmcButtonAnchor = buttonsContainer.createEl('a', {
-            cls: 'yaml-property-manager-bmc-link-button generate-btn-preview selected-yellow font-Comic',
-            href: (this.plugin.manifest as any).fundingUrl || 'https://www.buymeacoffee.com/r3xplo1t',
-            attr: {
-                target: '_blank',
-                rel: 'noopener noreferrer',
-                role: 'button'
-            }
-        });
-
-        // Inner div for flex layout within the BMC button
-        const innerFlexDiv = bmcButtonAnchor.createDiv({
-            cls: 'flex-container-bmc'
-        });
-
-        // Span for the icon within the BMC button
-        const iconSpan = innerFlexDiv.createSpan({
-            cls: 'btn-icon',
-            text: '☕'
-        });
-
-        // Span for the custom text within the BMC button
-        const textSpan = innerFlexDiv.createSpan({
-            cls: 'btn-custom-text custom-font-stl',
-            text: 'Buy me a\u00A0coffee'
-        });
     }
 
     // Render template paths as a hierarchy
