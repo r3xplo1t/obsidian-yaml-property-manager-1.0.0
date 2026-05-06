@@ -19,10 +19,9 @@ export class PropertyManagerMenu extends Modal {
     onOpen() {
         const { contentEl } = this;
         contentEl.empty();
-    
-        // Create header
-        this.createHeader(contentEl);
-    
+        this.modalEl.addClass('yaml-property-manager-menu');
+        this.titleEl.setText('YAML Property Manager');
+
         // Create file selection section
         this.createFileSelectionSection(contentEl);
     
@@ -35,18 +34,6 @@ export class PropertyManagerMenu extends Modal {
         
         // Initial update
         this.updateSelectedFilesCount();
-    }
-
-    /**
-     * Creates the modal header using Obsidian's Settings API
-     */
-    private createHeader(containerEl: HTMLElement) {
-        new Setting(containerEl)
-            .setName('YAML Property Manager')
-            .setHeading()
-            // Add accessibility role and link to modal title
-            .settingEl.setAttrs({ role: 'heading', 'aria-level': '1', id: 'yaml-property-manager-title' });
-        containerEl.setAttribute('aria-labelledby', 'yaml-property-manager-title');
     }
 
     /**
@@ -140,10 +127,9 @@ export class PropertyManagerMenu extends Modal {
             }
 
             this.plugin.selectedFiles = [currentFile];
-            this.log(`Selected current file: ${currentFile.path}`);
             this.updateSelectedFilesCount();
         } catch (error) {
-            this.log(`Error selecting current file: ${error}`, 'error');
+            console.error(`[YAML Property Manager] Error selecting current file: ${error}`);
             new Notice('Failed to select current file');
         }
     }
@@ -173,10 +159,9 @@ export class PropertyManagerMenu extends Modal {
                 new Notice(`Selected ${this.plugin.selectedFiles.length} files. Processing large numbers of files may be slow.`, 8000);
             }
 
-            this.log(`Selected ${this.plugin.selectedFiles.length} files from current folder: ${currentFolder.path}`);
             this.updateSelectedFilesCount();
         } catch (error) {
-            this.log(`Error selecting files in current folder: ${error}`, 'error');
+            console.error(`[YAML Property Manager] Error selecting files in current folder: ${error}`);
             new Notice('Failed to select files in current folder');
         }
     }
@@ -209,10 +194,9 @@ export class PropertyManagerMenu extends Modal {
                 new Notice(`Selected ${this.plugin.selectedFiles.length} files. Processing large numbers of files may be slow.`, 8000);
             }
 
-            this.log(`Selected ${this.plugin.selectedFiles.length} files from current folder and subfolders: ${currentFolder.path}`);
             this.updateSelectedFilesCount();
         } catch (error) {
-            this.log(`Error selecting files in folder and subfolders: ${error}`, 'error');
+            console.error(`[YAML Property Manager] Error selecting files in folder and subfolders: ${error}`);
             new Notice('Failed to select files in folder and subfolders');
         }
     }
@@ -243,8 +227,8 @@ export class PropertyManagerMenu extends Modal {
                 .setDisabled(this.plugin.selectedFiles.length === 0)
                 .onClick(() => {
                     if (this.plugin.selectedFiles.length > 0) {
-                        this.log("Navigating to template application modal");
-                        this.plugin.navigateToModal(this, 'template');
+                        this.close();
+                        new TemplateApplication(this.app, this.plugin, this.plugin.selectedFiles).open();
                     } else {
                         new Notice('Please select files first');
                     }
@@ -269,8 +253,8 @@ export class PropertyManagerMenu extends Modal {
                 .setDisabled(this.plugin.selectedFiles.length === 0)
                 .onClick(() => {
                     if (this.plugin.selectedFiles.length > 0) {
-                        this.log(`Opening bulk editor with ${this.plugin.selectedFiles.length} files selected`);
-                        this.plugin.navigateToModal(this, 'bulkEdit');
+                        this.close();
+                        new BulkEditor(this.app, this.plugin, [...this.plugin.selectedFiles]).open();
                     } else {
                         new Notice('Please select files first');
                     }
@@ -302,19 +286,14 @@ export class PropertyManagerMenu extends Modal {
         if (this.fileCountEl) {
             this.fileCountEl.empty();
             this.fileCountEl.setText(this.getSelectionCountText());
-            
+
             // Add aria-live region for screen readers
             this.fileCountEl.setAttrs({
                 'aria-live': 'polite',
                 'role': 'status'
             });
-            
-            // Show a notice for visual feedback when selection changes
-            if (this.plugin.selectedFiles.length > 0) {
-                new Notice(this.getSelectionCountText());
-            }
         }
-    
+
         // Update button states
         this.updateButtonState();
     }
@@ -350,11 +329,6 @@ export class PropertyManagerMenu extends Modal {
                         // Store files in the plugin's storage
                         this.plugin.selectedFiles = [...result.files];
 
-                        if (result.files.length > 0) {
-                            this.log(`Selected ${result.files.length} files via browser`);
-                        } else {
-                             this.log('Selection cleared via browser');
-                        }
                         // Update the count display AFTER the selection is made
                         this.updateSelectedFilesCount();
                     }
@@ -369,19 +343,8 @@ export class PropertyManagerMenu extends Modal {
             );
             browser.open();
         } catch (error) {
-            this.log(`Error opening file browser: ${error}`, 'error');
+            console.error(`[YAML Property Manager] Error opening file browser: ${error}`);
             new Notice('Failed to open file browser');
-        }
-    }
-
-    /**
-     * Helper method for consistent logging
-     */
-    private log(message: string, level: 'info' | 'error' = 'info') {
-        const prefix = '[YAML Property Manager]';
-        if (level === 'info') {
-        } else {
-            console.error(`${prefix} ${message}`);
         }
     }
 

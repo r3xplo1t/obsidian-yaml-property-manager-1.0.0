@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, Setting, Notice, ButtonComponent, Modal, setTooltip, setIcon, EventRef } from 'obsidian';
+import { App, PluginSettingTab, Setting, Notice, ButtonComponent, Modal, setTooltip, setIcon } from 'obsidian';
 import YAMLPropertyManagerPlugin from '../../main';
 import { BrowserModal } from './BrowserModal';
 import { TreeNode } from '../interfaces';
@@ -8,7 +8,7 @@ export class SettingTab extends PluginSettingTab {
     plugin: YAMLPropertyManagerPlugin;
     private expandedPaths: Set<string> = new Set();
     private rootNode: TreeNode;
-    private settingsSaveTimeout: NodeJS.Timeout | null = null;
+    private settingsSaveTimeout: ReturnType<typeof setTimeout> | null = null;
 
     constructor(app: App, plugin: YAMLPropertyManagerPlugin) {
         super(app, plugin);
@@ -20,9 +20,30 @@ export class SettingTab extends PluginSettingTab {
         }
     }
 
+    private removeNodeFromTree(path: string): void {
+        const removeFrom = (nodes: TreeNode[]): boolean => {
+            const idx = nodes.findIndex(n => n.path === path);
+            if (idx !== -1) { nodes.splice(idx, 1); return true; }
+            return nodes.some(n => removeFrom(n.children));
+        };
+        if (this.rootNode) removeFrom(this.rootNode.children);
+    }
+
+    private findNodeInTree(path: string): TreeNode | null {
+        const findIn = (nodes: TreeNode[]): TreeNode | null => {
+            for (const n of nodes) {
+                if (n.path === path) return n;
+                const found = findIn(n.children);
+                if (found) return found;
+            }
+            return null;
+        };
+        return this.rootNode ? findIn(this.rootNode.children) : null;
+    }
+
     private async removeTemplateWithScrollPreservation(templatePathIndex: number | undefined, node: TreeNode, nodeElement: HTMLElement): Promise<void> {
         // Create a notice that will stay until completion
-        const debugNotice = new Notice(`Removing template: ${node.path}...`, 0);
+        const progressNotice = new Notice(`Removing template: ${node.path}...`, 0);
         
         try {
             // Save the current scroll position of the container
@@ -53,7 +74,10 @@ export class SettingTab extends PluginSettingTab {
             
             // Replace the entire template paths array with our filtered version
             this.plugin.settings.templatePaths = pathsToKeep;
-            
+
+            // Prune the deleted node from the in-memory tree so lazy-load doesn't re-render it
+            this.removeNodeFromTree(node.path);
+
             // Also remove this path and any child paths from expanded paths
             if (node.isDirectory) {
                 const expandedPathsToKeep = Array.from(this.expandedPaths).filter(path => {
@@ -70,7 +94,25 @@ export class SettingTab extends PluginSettingTab {
             
             // Remove node from DOM
             nodeElement.remove();
-            
+
+            // Remove any ancestor folder nodes that are now empty grouping-only nodes
+            let ancestorPath: string | null = node.path.includes('/')
+                ? node.path.substring(0, node.path.lastIndexOf('/'))
+                : null;
+            while (ancestorPath) {
+                const ancestorNode = this.findNodeInTree(ancestorPath);
+                if (!ancestorNode || ancestorNode.children.length > 0) break;
+                if (this.plugin.settings.templatePaths.some(tp => tp.path === ancestorPath)) break;
+
+                const selfEl = container?.querySelector(`.tree-item-self[data-path="${ancestorPath}"]`);
+                (selfEl?.closest('.tree-item') as HTMLElement | null)?.remove();
+                this.removeNodeFromTree(ancestorPath);
+
+                ancestorPath = ancestorPath.includes('/')
+                    ? ancestorPath.substring(0, ancestorPath.lastIndexOf('/'))
+                    : null;
+            }
+
             // Refresh display ONLY if there are no template paths left
             if (this.plugin.settings.templatePaths.length === 0) {
                 const templatePathsContainer = container as HTMLElement;
@@ -84,14 +126,14 @@ export class SettingTab extends PluginSettingTab {
             }
             
             // Close the debug notice
-            debugNotice.hide();
+            progressNotice.hide();
             
             // Show success notification
             new Notice(`Template "${node.name}" removed successfully`);
         } catch (error) {
             console.error("Error removing template:", error);
-            debugNotice.hide();
-            new Notice(`Failed to remove template: ${error.message}`);
+            progressNotice.hide();
+            new Notice(`Failed to remove template: ${error instanceof Error ? error.message : String(error)}`);
             
             // Force refresh on error
             this.display();
@@ -280,9 +322,6 @@ export class SettingTab extends PluginSettingTab {
                     // Improve the confirmation modal for resetting template paths
                     const modal = new Modal(this.app);
                     modal.titleEl.setText('Confirm Reset');
-
-                    // Add the mod-confirmation class to apply Dialog styling
-                    modal.containerEl.addClass('mod-confirmation');
 
                     // Use Obsidian's setting pattern for modal content
                     new Setting(modal.contentEl)
@@ -519,7 +558,7 @@ export class SettingTab extends PluginSettingTab {
             }
             
             // Register click handler for toggling
-            this.registerDomEventWithCleanup(selfEl, 'click', (e: MouseEvent) => {
+            this.plugin.registerDomEvent(selfEl, 'click', (e: MouseEvent) => {
                 // Don't handle clicks on the delete button
                 if (e.target === deleteButton || deleteButton.contains(e.target as Node)) {
                     return;
@@ -562,7 +601,7 @@ export class SettingTab extends PluginSettingTab {
             });
             
             // Enhanced keyboard navigation
-            this.registerDomEventWithCleanup(selfEl, 'keydown', (e: KeyboardEvent) => {
+            this.plugin.registerDomEvent(selfEl, 'keydown', (e: KeyboardEvent) => {
                 const isExpanded = this.expandedPaths.has(node.path);
                 
                 if (e.key === 'Enter' || e.key === ' ') {
@@ -617,7 +656,7 @@ export class SettingTab extends PluginSettingTab {
         }
         
         // Handle delete button keyboard and click events
-        this.registerDomEventWithCleanup(deleteButton, 'click', async (e: MouseEvent) => {
+        this.plugin.registerDomEvent(deleteButton, 'click', async (e: MouseEvent) => {
             e.stopPropagation();
             deleteButton.addClass('is-disabled');
             try {
@@ -628,7 +667,7 @@ export class SettingTab extends PluginSettingTab {
             }
         });
         
-        this.registerDomEventWithCleanup(deleteButton, 'keydown', async (e: KeyboardEvent) => {
+        this.plugin.registerDomEvent(deleteButton, 'keydown', async (e: KeyboardEvent) => {
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 e.stopPropagation();
@@ -662,12 +701,12 @@ export class SettingTab extends PluginSettingTab {
         this.debouncedSaveSettings(300); // 300ms debounce for UI interactions
     }
 
-    private registerDomEventWithCleanup(element: HTMLElement, type: string, callback: (event: any) => void): void {
-        this.plugin.registerDomEvent(element, type as keyof HTMLElementEventMap, callback);
-    }
-
     hide(): void {
-        // Call the parent class hide method
+        if (this.settingsSaveTimeout !== null) {
+            clearTimeout(this.settingsSaveTimeout);
+            this.settingsSaveTimeout = null;
+            this.plugin.saveSettings();
+        }
         super.hide();
     }
 }

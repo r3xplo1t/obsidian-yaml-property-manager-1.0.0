@@ -3,7 +3,7 @@
  * Centralized location for reusable utility functions used across the plugin
  */
 
-import { App, TFile, Notice, setIcon } from 'obsidian';
+import { App, Notice, setIcon } from 'obsidian';
 
 // ==========================================
 // Formatting and Value Handling
@@ -468,33 +468,23 @@ export function handleLinkClick(app: App, linkTarget: any, event: MouseEvent): v
 
     // Check for external links first
     if (linkTarget.startsWith('https://') || linkTarget.startsWith('http://')) {
-        window.open(linkTarget, '_blank'); // Use '_blank' for safety
+        window.open(linkTarget, '_blank');
         return;
     }
 
     // Attempt to parse Obsidian-style links (wikilinks, markdown links)
     const linkInfo = parseValueLinks(linkTarget);
-    const sourcePath = ""; // Use vault root as the context for resolving links
+    const sourcePath = "";
 
     // If this is a valid link with a path, use that path
     if (linkInfo.isLink && linkInfo.path) {
         try {
-            const targetFile = app.metadataCache.getFirstLinkpathDest(linkInfo.path, sourcePath);
-
-            if (targetFile instanceof TFile) {
-                // File exists in the vault, open it in a new window leaf
-                const leaf = app.workspace.getLeaf('window');
-                leaf.openFile(targetFile).catch(err => {
-                    console.error(`Error opening link in new window: ${linkInfo.path}`, err);
-                    new Notice(`Could not open link: ${linkInfo.path}`);
-                });
-            } else {
-                // File not found in the vault
-                new Notice(`File not found: ${linkInfo.path}`);
-            }
+            app.workspace.openLinkText(linkInfo.path, sourcePath, false).catch(() => {
+                new Notice(`Could not open link: ${linkInfo.path}`);
+            });
             return;
         } catch (error) {
-            console.error(`Error processing link: ${linkTarget}`, error);
+            logError('YAML Property Manager', `Error processing link: ${linkTarget}`, error);
             new Notice(`Could not process link: ${linkTarget}`);
             return;
         }
@@ -502,20 +492,11 @@ export function handleLinkClick(app: App, linkTarget: any, event: MouseEvent): v
 
     // Fallback - try to resolve the raw link target
     try {
-        const targetFile = app.metadataCache.getFirstLinkpathDest(linkTarget, sourcePath);
-        if (targetFile instanceof TFile) {
-            // File exists in the vault, open it
-            const leaf = app.workspace.getLeaf('window');
-            leaf.openFile(targetFile).catch(err => {
-                console.error(`Error opening link in new window: ${linkTarget}`, err);
-                new Notice(`Could not open link: ${linkTarget}`);
-            });
-        } else {
-            // Not found
-            new Notice(`File not found: ${linkTarget}`);
-        }
+        app.workspace.openLinkText(linkTarget, sourcePath, false).catch(() => {
+            new Notice(`Could not open link: ${linkTarget}`);
+        });
     } catch (error) {
-        console.error(`Error processing link: ${linkTarget}`, error);
+        logError('YAML Property Manager', `Error processing link: ${linkTarget}`, error);
         new Notice(`Could not process link: ${linkTarget}`);
     }
 }
@@ -530,11 +511,11 @@ export function handleLinkClick(app: App, linkTarget: any, event: MouseEvent): v
  * @param currentEl - The current element
  * @returns The next focusable element or null if none found
  */
-export function findNextFocusableElement(currentEl: HTMLElement): HTMLElement | null {
+export function findNextFocusableElement(currentEl: HTMLElement, scope: HTMLElement = document.body): HTMLElement | null {
     const allFocusable = Array.from(
-        document.querySelectorAll('.tree-item-self[tabindex="0"], .clickable-icon[tabindex="0"]')
+        scope.querySelectorAll('.tree-item-self[tabindex="0"], .clickable-icon[tabindex="0"]')
     ) as HTMLElement[];
-    
+
     const currentIndex = allFocusable.indexOf(currentEl);
     if (currentIndex >= 0 && currentIndex < allFocusable.length - 1) {
         return allFocusable[currentIndex + 1];
@@ -542,17 +523,11 @@ export function findNextFocusableElement(currentEl: HTMLElement): HTMLElement | 
     return null;
 }
 
-/**
- * Find the previous focusable element in the DOM
- * 
- * @param currentEl - The current element
- * @returns The previous focusable element or null if none found
- */
-export function findPrevFocusableElement(currentEl: HTMLElement): HTMLElement | null {
+export function findPrevFocusableElement(currentEl: HTMLElement, scope: HTMLElement = document.body): HTMLElement | null {
     const allFocusable = Array.from(
-        document.querySelectorAll('.tree-item-self[tabindex="0"], .clickable-icon[tabindex="0"]')
+        scope.querySelectorAll('.tree-item-self[tabindex="0"], .clickable-icon[tabindex="0"]')
     ) as HTMLElement[];
-    
+
     const currentIndex = allFocusable.indexOf(currentEl);
     if (currentIndex > 0) {
         return allFocusable[currentIndex - 1];
@@ -705,58 +680,11 @@ export function getBasename(path: string): string {
     return lastDot === -1 ? filename : filename.substring(0, lastDot);
 }
 
-/**
- * Normalizes a path with consistent forward slashes
- * 
- * @param path - The path to normalize
- * @returns Normalized path
- */
-export function normalizePath(path: string): string {
-    // Remove any leading/trailing spaces
-    path = path.trim();
-    
-    // Replace backslashes with forward slashes
-    path = path.replace(/\\/g, '/');
-    
-    // Remove duplicate slashes
-    path = path.replace(/\/+/g, '/');
-    
-    // Remove trailing slash if present (unless it's the root path)
-    if (path.length > 1 && path.endsWith('/')) {
-        path = path.substring(0, path.length - 1);
-    }
-    
-    return path;
-}
-
 // ==========================================
 // General Utilities
 // ==========================================
 
-/**
- * Creates a debounced function that delays invoking the provided function
- * 
- * @param func - The function to debounce
- * @param wait - The number of milliseconds to delay
- * @returns Debounced function
- */
-export function debounce(func: Function, wait: number): Function {
-    let timeout: NodeJS.Timeout | null = null;
-    
-    return function(this: any, ...args: any[]) {
-        const context = this;
-        
-        const later = function() {
-            timeout = null;
-            func.apply(context, args);
-        };
-        
-        if (timeout !== null) {
-            clearTimeout(timeout);
-        }
-        timeout = setTimeout(later, wait);
-    };
-}
+export { debounce } from 'obsidian';
 
 /**
  * Logs an error with a consistent prefix

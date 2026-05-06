@@ -1,8 +1,9 @@
-import { App, Modal, Notice, TFile, Setting, FuzzySuggestModal, FuzzyMatch, setIcon, ToggleComponent, DropdownComponent, MarkdownRenderer } from 'obsidian';
+import { App, Modal, Notice, TFile, Setting, FuzzySuggestModal, FuzzyMatch, setIcon, ToggleComponent, DropdownComponent } from 'obsidian';
 import YAMLPropertyManagerPlugin from '../../main';
-import { formatValuePreview, parseValueLinks } from '../commonHelpers';
+import { formatValuePreview } from '../commonHelpers';
 import type { PropertyWithType } from '../PropertyTypeService';
 import { isPotentialLink, handleLinkClick } from '../commonHelpers';
+import { PropertyManagerMenu } from './PropertyManagerMenu';
 
 export class TemplateApplication extends Modal {
     plugin: YAMLPropertyManagerPlugin;
@@ -15,10 +16,12 @@ export class TemplateApplication extends Modal {
     allTemplates: TFile[] = [];
     private templateSelectionSetting: Setting | null = null;
     private overrideAllToggle: ToggleComponent | null = null;
+    private overrideAllSetting: Setting | null = null;
     private selectAllToggle: ToggleComponent | null = null;
+    private isUpdatingMasterToggles: boolean = false;
     private allPropertiesSelected: boolean = true;
     private allValuesOverridden: boolean = false;
-    private eventRefs: Array<() => void> = [];
+    private applyButton: HTMLButtonElement | null = null;
     
     // Updated to store dropdowns instead of toggles
     private propertyToggles: Array<{
@@ -35,7 +38,7 @@ export class TemplateApplication extends Modal {
     async onOpen() {
         const { contentEl } = this;
         contentEl.empty();
-        this.eventRefs = [];
+        this.modalEl.addClass('yaml-property-manager-modal');
     
         // Main header
         new Setting(contentEl)
@@ -71,8 +74,8 @@ export class TemplateApplication extends Modal {
                     }
                     
                     new TemplateSuggestModal(
-                        this.app, 
-                        this.allTemplates, 
+                        this.app,
+                        this.allTemplates,
                         (selectedFile) => {
                             if (selectedFile) {
                                 this.selectedTemplate = selectedFile;
@@ -80,8 +83,9 @@ export class TemplateApplication extends Modal {
                                 this.loadTemplateProperties();
                                 button.setButtonText('Change Template');
                             }
-                        }, 
-                        recentTemplatePaths
+                        },
+                        recentTemplatePaths,
+                        this.allTemplates.length === 0 ? 'vault' : 'templates'
                     ).open();
                 }));
     
@@ -102,9 +106,9 @@ export class TemplateApplication extends Modal {
             cls: 'mod-cta'
         });
         applyButton.disabled = true;
-        applyButton.id = 'apply-template-button';
-    
-        applyButton.addEventListener('click', async () => {
+        this.applyButton = applyButton;
+
+        this.plugin.registerDomEvent(applyButton, 'click', async () => {
             if (!this.selectedTemplate) {
                 new Notice('Please select a template file first.');
                 return;
@@ -125,13 +129,14 @@ export class TemplateApplication extends Modal {
             }
             this.close();
         });
-    
+
         // Cancel button
         const cancelButton = buttonContainer.createEl('button', {
             text: 'Cancel'
         });
-        cancelButton.addEventListener('click', () => {
-            this.plugin.navigateToModal(this, 'main');
+        this.plugin.registerDomEvent(cancelButton, 'click', () => {
+            this.close();
+            new PropertyManagerMenu(this.app, this.plugin).open();
         });
     
         this.updateApplyButtonState();
@@ -200,10 +205,9 @@ export class TemplateApplication extends Modal {
 
     // Update Apply button state
     updateApplyButtonState() {
-        const applyButton = this.modalEl.querySelector('#apply-template-button') as HTMLButtonElement;
-        if (applyButton) {
+        if (this.applyButton) {
             const canApply = this.selectedTemplate !== null && this.selectedProperties.length > 0;
-            applyButton.disabled = !canApply;
+            this.applyButton.disabled = !canApply;
         }
     }
 
@@ -224,7 +228,6 @@ export class TemplateApplication extends Modal {
         }
         
         if (!this.selectedTemplate) {
-            console.log("No template selected, exiting loadTemplateProperties.");
             this.updateApplyButtonState();
             return;
         }
@@ -244,13 +247,37 @@ export class TemplateApplication extends Modal {
         // Add the select all controls
         this.renderSelectAllControls(contentEl);
         
-        // Property Positioning Options heading and controls
-        new Setting(contentEl)
-            .setName('Property Positioning Options')
-            .setHeading();
-        
-        // Create the positioning radio options
-        this.createPositioningRadioOptions(contentEl);
+        // Property Positioning dropdown
+        const positionDescs: Record<string, string> = {
+            below: 'New properties will be added after existing YAML properties.',
+            above: 'New properties will be added before existing YAML properties.',
+            remove: 'Replace all YAML properties with only the selected template properties.'
+        };
+        const applyPositionDesc = (setting: Setting, value: string) => {
+            setting.setDesc(positionDescs[value] ?? '');
+            if (value === 'remove' && setting.descEl) {
+                setting.descEl.createEl('br');
+                setting.descEl.createSpan({
+                    text: 'Warning: Existing properties not in the template will be deleted.',
+                    cls: 'setting-warning-text'
+                });
+            }
+        };
+        const positioningSetting = new Setting(contentEl)
+            .setName('Property Positioning')
+            .addDropdown(dropdown => {
+                dropdown
+                    .addOption('below', 'Position below existing')
+                    .addOption('above', 'Position above existing')
+                    .addOption('remove', 'Remove unlisted properties')
+                    .setValue(this.propertyPositioning)
+                    .onChange(value => {
+                        this.propertyPositioning = value as 'below' | 'above' | 'remove';
+                        applyPositionDesc(positioningSetting, value);
+                    });
+                return dropdown;
+            });
+        applyPositionDesc(positioningSetting, this.propertyPositioning);
         
         // Load properties
         const properties = await this.plugin.parseFileProperties(this.selectedTemplate);
@@ -289,124 +316,6 @@ export class TemplateApplication extends Modal {
         this.updateApplyButtonState();
     }
     
-    private createOptionsUI(container: HTMLElement) {
-        // Create sections with proper Obsidian structure
-        const selectionSection = container.createDiv();
-        const positioningSection = container.createDiv();
-        
-        // Property Selection & Options header
-        new Setting(selectionSection)
-            .setName('Property Selection & Options')
-            .setHeading();
-    
-        // Add the select all controls using Obsidian components
-        this.renderSelectAllControls(selectionSection);
-        
-        // Create positioning options header using Obsidian's Setting
-        const positioningHeaderSetting = new Setting(positioningSection)
-            .setName('Property Positioning Options')
-            .setHeading()
-            .setClass('positioning-header-setting');
-        
-        // Hide positioning section initially (will be shown when properties are loaded)
-        positioningSection.style.display = 'none';
-        positioningSection.id = 'positioning-section';
-        positioningHeaderSetting.settingEl.id = 'positioning-header-setting';
-        
-        // Create Positioning options container
-        const positioningContainer = positioningSection.createDiv({
-            cls: 'setting-item-group',
-            attr: { id: 'positioning-options-container' }
-        });
-        
-        // Create the positioning radio options
-        this.createPositioningRadioOptions(positioningContainer);
-        
-        // Add both sections to the main container
-        container.appendChild(selectionSection);
-        container.appendChild(positioningSection);
-    }
-
-    private createPositioningRadioOptions(container: HTMLElement): void {
-        // Create references to store the toggle components
-        let belowToggle: ToggleComponent;
-        let aboveToggle: ToggleComponent;
-        let removeToggle: ToggleComponent;
-        
-        // "Position Below" option
-        new Setting(container)
-            .setName('Position new properties below existing ones')
-            .setDesc('New properties will be added after existing YAML properties')
-            .addToggle(toggle => {
-                belowToggle = toggle
-                    .setValue(this.propertyPositioning === 'below')
-                    .onChange(value => {
-                        if (value) {
-                            this.propertyPositioning = 'below';
-                            // When this is selected, unselect others
-                            if (aboveToggle) aboveToggle.setValue(false);
-                            if (removeToggle) removeToggle.setValue(false);
-                        }
-                    });
-                return belowToggle;
-            });
-        
-        // "Position Above" option
-        new Setting(container)
-            .setName('Position new properties above existing ones')
-            .setDesc('New properties will be added before existing YAML properties')
-            .addToggle(toggle => {
-                aboveToggle = toggle
-                    .setValue(this.propertyPositioning === 'above')
-                    .onChange(value => {
-                        if (value) {
-                            this.propertyPositioning = 'above';
-                            // When this is selected, unselect others
-                            if (belowToggle) belowToggle.setValue(false);
-                            if (removeToggle) removeToggle.setValue(false);
-                        }
-                    });
-                return aboveToggle;
-            });
-        
-        // "Remove Properties" option
-        const removeSetting = new Setting(container)
-            .setName('Remove properties not in template')
-            .setDesc('Replace all YAML properties with only the selected template properties')
-            .addToggle(toggle => {
-                removeToggle = toggle
-                    .setValue(this.propertyPositioning === 'remove')
-                    .onChange(value => {
-                        if (value) {
-                            this.propertyPositioning = 'remove';
-                            // When this is selected, unselect others
-                            if (belowToggle) belowToggle.setValue(false);
-                            if (aboveToggle) aboveToggle.setValue(false);
-                        }
-                    });
-                return removeToggle;
-            });
-
-            if (removeSetting.descEl) { // Check if descEl exists
-                removeSetting.descEl.createEl('br'); // Add a line break element
-                removeSetting.descEl.createSpan({   // Add the warning text span
-                    text: 'Warning: This replaces the entire frontmatter. Existing properties not in the template will be deleted.',
-                    cls: 'setting-warning-text'       // Assign class for styling
-                });
-            }
-    }
-
-    // Handle case when no properties are found
-    private handleNoProperties(contentEl: HTMLElement) {
-        const emptyContainer = contentEl.createDiv({ cls: 'setting-item-description' });
-        emptyContainer.createSpan({
-            text: 'The selected template file does not have any YAML properties.',
-        });
-        
-        // Update button state
-        this.updateApplyButtonState();
-    }
-
     // Create property items for each property
     private createpropertySettings(propertyKeys: string[], properties: any, container: HTMLElement) {
         // Clear existing property toggles
@@ -770,7 +679,7 @@ export class TemplateApplication extends Modal {
 
         } catch (error) {
             console.error('Error applying template:', error);
-            new Notice(`Error applying template: ${error.message}`);
+            new Notice(`Error applying template: ${error instanceof Error ? error.message : String(error)}`);
             return 0;
         }
     }
@@ -788,8 +697,9 @@ export class TemplateApplication extends Modal {
                 this.selectAllToggle = toggle
                     .setValue(this.allPropertiesSelected)
                     .onChange(value => {
+                        if (this.isUpdatingMasterToggles) return;
                         this.allPropertiesSelected = value;
-                        
+
                         // Update all property dropdowns
                         this.propertyToggles.forEach(propToggle => {
                             if (value) {
@@ -810,7 +720,8 @@ export class TemplateApplication extends Modal {
                             }
                         });
                         
-                        // Enable/disable the "Override All Values" toggle based on selection
+                        // Enable/disable the "Override All Values" row and toggle
+                        this.overrideAllSetting?.setDisabled(!value);
                         if (this.overrideAllToggle) {
                             this.overrideAllToggle.setDisabled(!value);
                             if (!value) {
@@ -825,7 +736,7 @@ export class TemplateApplication extends Modal {
             });
         
         // Create the "Override All Values" toggle
-        const overrideSetting = new Setting(containerEl)
+        this.overrideAllSetting = new Setting(containerEl)
             .setName('Override All Values')
             .setDesc('Override existing values with template values')
             .addToggle(toggle => {
@@ -833,6 +744,7 @@ export class TemplateApplication extends Modal {
                     .setValue(this.allValuesOverridden)
                     .setDisabled(!this.allPropertiesSelected)
                     .onChange(value => {
+                        if (this.isUpdatingMasterToggles) return;
                         this.allValuesOverridden = value;
                         this.overrideAllValues = value;
                         
@@ -862,14 +774,16 @@ export class TemplateApplication extends Modal {
                 return toggle;
             });
 
-            // Manipulate the description element AFTER the setting is created
-            if (overrideSetting.descEl) { // Check if descEl exists (it should)
-                overrideSetting.descEl.createEl('br'); // Add a line break element
-                overrideSetting.descEl.createSpan({   // Add the warning text span
-                    text: 'Caution: This can overwrite data in target files.',
-                    cls: 'setting-warning-text'       // Assign class for styling
+            if (this.overrideAllSetting?.descEl) {
+                this.overrideAllSetting.descEl.createEl('br');
+                this.overrideAllSetting.descEl.createSpan({
+                    text: 'Caution: This overwrites data within selected file(s).',
+                    cls: 'setting-warning-text'
                 });
             }
+
+        // Sync the row's disabled appearance with the toggle's initial state
+        this.overrideAllSetting?.setDisabled(!this.allPropertiesSelected);
     }
     
     // Updated to work with dropdowns
@@ -900,22 +814,29 @@ export class TemplateApplication extends Modal {
         this.allValuesOverridden = overriddenCount === includedCount && includedCount > 0;
         
         // Update toggle states if they exist
+        this.isUpdatingMasterToggles = true;
+
         if (this.selectAllToggle) {
             this.selectAllToggle.setValue(this.allPropertiesSelected);
         }
-        
+
+        const overrideDisabled = !this.allPropertiesSelected;
         if (this.overrideAllToggle) {
-            this.overrideAllToggle.setValue(this.allValuesOverridden);
-            this.overrideAllToggle.setDisabled(includedCount === 0);
+            if (overrideDisabled) {
+                this.allValuesOverridden = false;
+                this.overrideAllToggle.setValue(false);
+            } else {
+                this.overrideAllToggle.setValue(this.allValuesOverridden);
+            }
+            this.overrideAllToggle.setDisabled(overrideDisabled);
         }
+
+        this.overrideAllSetting?.setDisabled(overrideDisabled);
+
+        this.isUpdatingMasterToggles = false;
     }
 
     onClose() {
-        // Remove all registered event listeners
-        this.eventRefs.forEach(removeListener => removeListener());
-        this.eventRefs = [];
-        
-        // Existing cleanup code
         const { contentEl } = this;
         contentEl.empty();
     }
@@ -986,10 +907,9 @@ class TemplateSuggestModal extends FuzzySuggestModal<SuggestModalItem> {
     private setupInputListener(): void {
         // Remove existing listener if any
         if (this.inputListener) {
-            // @ts-ignore - inputEl exists on modal but isn't part of the type definition
             this.inputEl.removeEventListener('input', this.inputListener);
         }
-        
+
         // Add listener for input changes in 'recent' mode
         this.inputListener = () => {
             if (this.searchMode === 'recent') {
@@ -999,7 +919,6 @@ class TemplateSuggestModal extends FuzzySuggestModal<SuggestModalItem> {
             }
         };
         
-        // @ts-ignore - inputEl exists on modal but isn't part of the type definition
         this.inputEl.addEventListener('input', this.inputListener);
     }
 
@@ -1191,7 +1110,6 @@ class TemplateSuggestModal extends FuzzySuggestModal<SuggestModalItem> {
         
         // Clean up input listener
         if (this.inputListener) {
-            // @ts-ignore - inputEl exists on modal but isn't part of the type definition
             this.inputEl.removeEventListener('input', this.inputListener);
         }
     }

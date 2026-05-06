@@ -43,32 +43,7 @@ export class PropertyTypeService {
      * @returns The detected property type
      */
     getValuePropertyType(propertyName: string, propertyValue: any): ObsidianPropertyType {
-        try {
-            // First check if the property has a defined type in Obsidian's type registry
-            const propKey = propertyName.toLowerCase(); // Keys in metadataTypeManager are lowercase
-            
-            // Access Obsidian's internal type registry with proper type assertion
-            const metadataManager = (this.app as any).metadataTypeManager;
-            if (metadataManager) {
-                // Check property-specific type first
-                const propType = metadataManager.properties?.[propKey]?.type;
-                if (propType) {
-                    return propType as ObsidianPropertyType;
-                }
-                
-                // Check global type definitions as fallback
-                const globalType = metadataManager.types?.[propKey]?.type;
-                if (globalType) {
-                    return globalType as ObsidianPropertyType;
-                }
-            }
-            
-            // Fall back to detection if no type is defined in Obsidian
-            return this.detectPropertyType(propertyValue);
-        } catch (error) {
-            console.error("Error detecting property type:", error);
-            return 'text'; // Safe default
-        }
+        return this.detectPropertyType(propertyValue);
     }
 
     /**
@@ -81,41 +56,15 @@ export class PropertyTypeService {
      */
     getFilePropertyType(file: TFile, propertyName: string): ObsidianPropertyType | null {
         try {
-            // First check if the property has a defined type in Obsidian's type registry
-            const propKey = propertyName.toLowerCase();
-            
-            // Access Obsidian's internal type registry with proper type assertion
-            const metadataManager = (this.app as any).metadataTypeManager;
-            if (metadataManager) {
-                // Check property-specific type first
-                const propType = metadataManager.properties?.[propKey]?.type;
-                if (propType) {
-                    return propType as ObsidianPropertyType;
-                }
-                
-                // Check global type definitions as fallback
-                const globalType = metadataManager.types?.[propKey]?.type;
-                if (globalType) {
-                    return globalType as ObsidianPropertyType;
-                }
-            }
-            
-            // Fall back to the existing detection method
             const fileCache = this.app.metadataCache.getFileCache(file);
-            if (!fileCache || !fileCache.frontmatter) {
+            if (!fileCache?.frontmatter) {
                 return null;
             }
-            
-            // If the property doesn't exist in this file
             if (!(propertyName in fileCache.frontmatter)) {
                 return null;
             }
-            
-            // Get the value and detect its type
-            const value = fileCache.frontmatter[propertyName];
-            return this.detectPropertyType(value);
-        } catch (error) {
-            console.error("Error getting file property type:", error);
+            return this.detectPropertyType(fileCache.frontmatter[propertyName]);
+        } catch {
             return null;
         }
     }
@@ -257,6 +206,25 @@ export class PropertyTypeService {
         return result;
     }
     
+    /**
+     * Convert from Obsidian property type to the plugin's internal type string
+     *
+     * @param type - An ObsidianPropertyType value
+     * @returns Internal type string used throughout the plugin
+     */
+    convertFromObsidianType(type: ObsidianPropertyType): string {
+        switch (type) {
+            case "text":      return "text";
+            case "number":    return "number";
+            case "checkbox":  return "checkbox";
+            case "date":      return "date";
+            case "datetime":  return "datetime";
+            case "list":      return "list";
+            case "multitext": return "list";
+            default:          return "text";
+        }
+    }
+
     /**
      * Restores the original property values with preserved types
      * 

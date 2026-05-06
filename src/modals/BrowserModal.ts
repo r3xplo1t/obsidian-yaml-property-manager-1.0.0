@@ -1,5 +1,5 @@
 // BrowserModal.ts
-import { App, Modal, TFile, TFolder, Setting, setIcon, Plugin } from 'obsidian';
+import { App, Modal, TFile, TFolder, Setting, setIcon, Plugin, normalizePath } from 'obsidian';
 import { TreeNode } from '../interfaces';
 import { findNextFocusableElement, findPrevFocusableElement } from '../commonHelpers';
 
@@ -26,7 +26,7 @@ export class BrowserModal extends Modal {
     expandedFolders: Set<string> = new Set();
     
     // New property for tree structure
-    private rootNode: TreeNode;
+    private rootNode!: TreeNode;
 
     constructor(
         app: App,
@@ -81,7 +81,8 @@ export class BrowserModal extends Modal {
     onOpen() {
         const { contentEl } = this;
         contentEl.empty();
-        
+        this.modalEl.addClass('yaml-property-manager-modal');
+
         // Set title and instructions using Setting component
         new Setting(contentEl)
             .setName(this.title)
@@ -96,26 +97,37 @@ export class BrowserModal extends Modal {
                 
         // Load files and folders from initial paths
         for (const filePath of this.initialSelectedFilePaths) {
-            const file = this.app.vault.getFileByPath(filePath);
+            const file = this.app.vault.getFileByPath(normalizePath(filePath));
             if (file && file instanceof TFile) {
                 this.selectedFiles.push(file);
             }
         }
-        
+
         for (const folderPath of this.initialSelectedFolderPaths) {
-            const folder = this.app.vault.getFolderByPath(folderPath);
+            const normalizedFolderPath = normalizePath(folderPath);
+            const folder = this.app.vault.getFolderByPath(normalizedFolderPath);
             if (folder && folder instanceof TFolder) {
                 this.selectedFolders.push(folder);
-                this.folderSettings.set(folderPath, true);
+                this.folderSettings.set(normalizedFolderPath, true);
             }
         }
-        
+
+        // Reconcile: if a saved folder's children are no longer fully selected
+        // (e.g. a file was removed from settings after the folder was saved),
+        // demote it from selectedFolders so the checkbox shows "−" instead of "✓".
+        this.selectedFolders = this.selectedFolders.filter(folder => {
+            if (this.areAllChildrenSelected(folder)) return true;
+            this.folderSettings.delete(folder.path);
+            return false;
+        });
+
         // Ensure all folder selections are properly set based on child selections
         this.ensureAllFolderSelections();
         
         // Selection counter
         const selectionCountEl = contentEl.createDiv({ cls: 'selection-counter' });
         const countTextSpan = selectionCountEl.createSpan({ cls: 'selection-text' });
+        selectionCountEl.createSpan({ cls: 'selection-warning', text: 'No .md files in the current selection.' });
         this.updateSelectionCount(countTextSpan);
         
         // File tree container - change class name
@@ -136,9 +148,9 @@ export class BrowserModal extends Modal {
         });
 
         // Initial state
-        confirmButton.disabled = this.singleFileSelectionMode ? 
-            this.selectedFiles.length !== 1 : 
-            (this.selectedFiles.length === 0 && this.selectedFolders.length === 0);
+        confirmButton.disabled = this.singleFileSelectionMode ?
+            this.selectedFiles.length !== 1 :
+            !this.hasResolvableMdFiles();
 
         // Cancel button
         const cancelButton = buttonContainer.createEl('button', {
@@ -552,16 +564,16 @@ export class BrowserModal extends Modal {
         if (this.singleFileSelectionMode && isSelected) {
             // In single file mode, clear all other selections
             this.selectedFiles = [];
-            
-            // Clear all file selections visually
-            document.querySelectorAll('.nav-file').forEach((el: Element) => {
+
+            // Clear all file selections visually (scoped to this modal)
+            this.contentEl.querySelectorAll('.nav-file').forEach((el: Element) => {
                 if (el instanceof HTMLElement) {
                     el.removeClass('is-selected');
                 }
             });
-            
-            // Reset all checkboxes in single selection mode
-            document.querySelectorAll('.tree-item-checkbox').forEach((cb: Element) => {
+
+            // Reset all checkboxes in single selection mode (scoped to this modal)
+            this.contentEl.querySelectorAll('.tree-item-checkbox').forEach((cb: Element) => {
                 if (cb instanceof HTMLInputElement && cb.closest('.nav-file') && cb.checked) {
                     cb.checked = false;
                 }
@@ -592,8 +604,8 @@ export class BrowserModal extends Modal {
         // Ensure all folder selections are consistent
         this.ensureAllFolderSelections();
         
-        // Update folder checkboxes
-        document.querySelectorAll('.nav-folder').forEach((folderEl: Element) => {
+        // Update folder checkboxes (scoped to this modal)
+        this.contentEl.querySelectorAll('.nav-folder').forEach((folderEl: Element) => {
             if (!(folderEl instanceof HTMLElement)) return;
             
             const pathEl = folderEl.querySelector('.tree-item-self')?.getAttribute('data-path');
@@ -616,7 +628,8 @@ export class BrowserModal extends Modal {
             // Update checkbox state
             checkboxEl.checked = isSelected;
             checkboxEl.indeterminate = isIndeterminate;
-            
+            checkboxEl.setAttribute('data-indeterminate', isIndeterminate ? 'true' : 'false');
+
             // Update folder classes
             if (isSelected) {
                 folderEl.addClass('is-selected');
@@ -630,8 +643,8 @@ export class BrowserModal extends Modal {
             }
         });
         
-        // Update file checkboxes
-        document.querySelectorAll('.nav-file').forEach((fileEl: Element) => {
+        // Update file checkboxes (scoped to this modal)
+        this.contentEl.querySelectorAll('.nav-file').forEach((fileEl: Element) => {
             if (!(fileEl instanceof HTMLElement)) return;
             
             const pathEl = fileEl.querySelector('.tree-item-self')?.getAttribute('data-path');
@@ -734,13 +747,12 @@ export class BrowserModal extends Modal {
             e.preventDefault();
             
             // Find the next item to focus
-            const nextFocusable = findNextFocusableElement(selfEl);
+            const nextFocusable = findNextFocusableElement(selfEl, this.contentEl);
             if (nextFocusable) nextFocusable.focus();
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
-            
-            // Find the previous item to focus
-            const prevFocusable = findPrevFocusableElement(selfEl);
+
+            const prevFocusable = findPrevFocusableElement(selfEl, this.contentEl);
             if (prevFocusable) prevFocusable.focus();
         }
     }
@@ -813,15 +825,22 @@ export class BrowserModal extends Modal {
             countEl.textContent = text;
         }
         
+        // Show warning when folders are selected but none contain .md files
+        const warningEl = selCountEl?.querySelector('.selection-warning') as HTMLElement | null;
+        if (warningEl) {
+            const showWarning = !this.singleFileSelectionMode &&
+                                folderCount > 0 &&
+                                !this.hasResolvableMdFiles();
+            warningEl.style.display = showWarning ? 'inline' : 'none';
+        }
+
         // Update confirm button state
         const confirmButton = this.modalEl.querySelector('.mod-cta') as HTMLButtonElement | null;
         if (confirmButton) {
             if (this.singleFileSelectionMode) {
-                // In single file mode, require exactly one file selected
                 confirmButton.disabled = fileCount !== 1;
             } else {
-                // In multi-selection mode, disable when nothing is selected
-                confirmButton.disabled = fileCount === 0 && folderCount === 0;
+                confirmButton.disabled = !this.hasResolvableMdFiles();
             }
         }
     }
@@ -929,6 +948,11 @@ export class BrowserModal extends Modal {
         }
         
         return true; // No markdown files or non-empty subfolders found
+    }
+
+    private hasResolvableMdFiles(): boolean {
+        if (this.selectedFiles.length > 0) return true;
+        return this.selectedFolders.some(folder => !this.isFolderEmpty(folder));
     }
 
     ensureAllFolderSelections() {

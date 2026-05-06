@@ -1,11 +1,8 @@
-import { App, Editor, MarkdownView, Modal, Notice, Plugin, TFile, TFolder, TAbstractFile, normalizePath } from 'obsidian';
-import { 
+import { App, MarkdownView, Notice, Plugin, TFile, TFolder, TAbstractFile, normalizePath } from 'obsidian';
+import {
     // Models
     DEFAULT_SETTINGS,
-    
-    // Utils
-    formatYamlValue,
-    
+
     // Services
     PropertyTypeService,
     
@@ -13,21 +10,18 @@ import {
     PropertyManagerMenu,
     TemplateApplication,
     BrowserModal,
-    BulkEditor,
     SettingTab
 } from './src';
 
 // Import types with explicit type imports
 import type {
     YAMLPropertyManagerSettings,
-    PropertyWithType, 
-    ObsidianPropertyType
+    PropertyWithType
 } from './src';
 
 import { logError } from './src/commonHelpers';
 
 // Type definitions
-type ModalType = 'main' | 'bulkEdit' | 'template' | 'batchSelect';
 type FileSelectionResult = { files: TFile[], folders: TFolder[] };
 type TemplatePathType = 'file' | 'directory';
 
@@ -54,23 +48,21 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             this.registerVaultEvents();
         });
 
+        this.addRibbonIcon('list-plus', 'Open Property Manager', () => {
+            new PropertyManagerMenu(this.app, this).open();
+        });
+
         this.registerCommands();
         this.addSettingTab(new SettingTab(this.app, this));
     }
 
     onunload(): void {
-        try {
-            // Clear data structures to prevent memory leaks
-            this.propertyCache.clear();
-            this.selectedFiles = [];
-            
-            // Attempt to save any pending settings
-            this.saveSettings().catch(error => {
-                logError('YAML Property Manager', 'Error saving settings during unload:', error);
-            });
-        } catch (error) {
-            console.error("Error during plugin cleanup:", error);
-        }
+        this.propertyCache.clear();
+        this.selectedFiles = [];
+    }
+
+    async onExternalSettingsChange(): Promise<void> {
+        await this.loadSettings();
     }
 
     //#endregion
@@ -197,12 +189,6 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             }
         });
 
-        // Add command to reload the plugin
-        this.addCommand({
-            id: 'reload-yaml-property-manager',
-            name: 'Reload YAML Property Manager',
-            callback: () => this.reloadPlugin()
-        });
     }
 
     /**
@@ -286,7 +272,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                 }
             }
         } catch (error) {
-            logError('YAML Property Manager', 'Error processing folder ${folder.path}:', error);
+            logError('YAML Property Manager', `Error processing folder ${folder.path}:`, error);
             // Don't rethrow, just return what we have so far
         }
         
@@ -305,7 +291,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
      */
     public getInternalPropertyType(propertyName: string, propertyValue: any): string {
         const obsidianType = this.propertyTypeService.getValuePropertyType(propertyName, propertyValue);
-        return this.convertFromObsidianType(obsidianType);
+        return this.propertyTypeService.convertFromObsidianType(obsidianType);
     }
 
     // Parse YAML frontmatter from a file
@@ -326,7 +312,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                 }
                 
                 // Convert to our internal type format
-                const type = this.convertFromObsidianType(obsidianType);
+                const type = this.propertyTypeService.convertFromObsidianType(obsidianType);
                     
                 propertiesWithTypes[key] = {
                     value, 
@@ -341,7 +327,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             
             return properties;
         } catch (error) {
-            logError('YAML Property Manager', 'Error parsing properties for ${file.path}:', error);
+            logError('YAML Property Manager', `Error parsing properties for ${file.path}:`, error);
             return {};
         }
     }
@@ -373,7 +359,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             return true;
         } catch (error) {
             logError('YAML Property Manager', 'Error applying properties:', error);
-            new Notice(`Error applying properties to ${file.name}: ${error.message}`);
+            new Notice(`Error applying properties to ${file.name}: ${error instanceof Error ? error.message : String(error)}`);
             return false;
         }
     }
@@ -393,7 +379,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             
             return true;
         } catch (error) {
-            logError('YAML Property Manager', 'Error setting property for ${filePath}:', error);
+            logError('YAML Property Manager', `Error setting property for ${filePath}:`, error);
             return false;
         }
     }
@@ -423,7 +409,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                     }
                 }
             } catch (error) {
-                logError('YAML Property Manager', 'Error checking properties in ${file.path}:', error);
+                logError('YAML Property Manager', `Error checking properties in ${file.path}:`, error);
                 // Continue with the next file
             }
         }
@@ -502,7 +488,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                     this.propertyCache.delete(file.path);
                     
                 } catch (error) {
-                    logError('YAML Property Manager', 'Error applying template to ${file.path}:', error);
+                    logError('YAML Property Manager', `Error applying template to ${file.path}:`, error);
                     // Continue with other files
                 }
             }
@@ -511,139 +497,13 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             return successCount;
         } catch (error) {
             logError('YAML Property Manager', 'Error applying template:', error);
-            new Notice(`Error applying template: ${error.message}`);
+            new Notice(`Error applying template: ${error instanceof Error ? error.message : String(error)}`);
             return 0;
         }
     }
     
     //#endregion
 
-    //#region Navigation and UI
-
-    // Navigation method to move between modals
-    navigateToModal(currentModal: Modal, targetModalType: ModalType, ...args: any[]): void {
-        // Close current modal
-        currentModal.close();
-        
-        // Handle navigation based on target type
-        switch (targetModalType) {
-            case 'main':
-                this.openMainModal();
-                break;
-            case 'bulkEdit':
-                this.openBulkEditModal(args);
-                break;
-            case 'template':
-                this.openTemplateModal(args);
-                break;
-            case 'batchSelect':
-                this.openBatchSelectModal(args);
-                break;
-        }
-    }
-
-    // Helper methods for modal navigation
-    private openMainModal(): void {
-        new PropertyManagerMenu(this.app, this).open();
-    }
-
-    private openBulkEditModal(args: any[]): void {        
-        // If files are explicitly provided, use them
-        if (Array.isArray(args[0]) && args[0].length > 0) {
-            this.selectedFiles = args[0];
-        }
-        
-        // Check if we have files selected
-        if (this.selectedFiles.length === 0) {
-            new Notice('Please select files first');
-            this.openMainModal();
-            return;
-        }
-        
-        new BulkEditor(this.app, this, [...this.selectedFiles]).open();
-    }
-
-    private openTemplateModal(args: any[]): void {        
-        // If files are provided as an argument, use them
-        if (this.selectedFiles.length === 0 && Array.isArray(args[0]) && args[0].length > 0) {
-            this.selectedFiles = args[0];
-        }
-        
-        if (this.selectedFiles.length > 0) {
-            new TemplateApplication(this.app, this, [...this.selectedFiles]).open();
-        } else {
-            new Notice('Please select files first');
-            this.openMainModal();
-        }
-    }
-
-    private openBatchSelectModal(args: any[]): void {
-        if (typeof args[0] === 'function') {
-            const callback = args[0];
-            
-            // Create browser modal with proper icon buttons
-            const browser = new BrowserModal(
-                this.app,
-                this,
-                (result: FileSelectionResult) => {
-                    if (result.files && result.files.length > 0) {
-                        this.selectedFiles = [...result.files];
-                        callback(result.files);
-                    }
-                },
-                {
-                    title: "Select Files",
-                    description: "Choose files to process.",
-                    confirmButtonText: "Select Files"
-                }
-            );
-            browser.open();
-        }
-    }
-
     //#endregion
 
-    //#region Utility Methods
-
-    // Helper to convert Obsidian types to your internal types
-    public convertFromObsidianType(type: ObsidianPropertyType): string {
-        switch (type) {
-            case "text": return "text";
-            case "number": return "number";
-            case "checkbox": return "checkbox";
-            case "date": return "date";
-            case "datetime": return "datetime";
-            case "list": return "list";
-            case "multitext": return "list"; // Convert multitext to list
-            default: return "text";
-        }
-    }
-
-    async reloadPlugin(): Promise<void> {
-        try {
-            // Create a notice to indicate reload is happening
-            new Notice('Reloading YAML Property Manager...');
-            
-            // Get plugin ID
-            const pluginId = this.manifest.id;
-            
-            // Access the internal plugins API (not exposed in public types)
-            // This is necessary to programmatically disable/enable the plugin
-            const pluginManager = (this.app as any).plugins;
-            
-            // First disable the plugin
-            await pluginManager.disablePlugin(pluginId);
-            
-            // Then enable it again after a short delay
-            setTimeout(async () => {
-                await pluginManager.enablePlugin(pluginId);
-                new Notice('YAML Property Manager has been reloaded');
-            }, 300);
-        } catch (error) {
-            logError('YAML Property Manager', 'Error reloading plugin:', error);
-            new Notice('Failed to reload plugin: ' + error.message);
-        }
-    }
-
-    //#endregion
 }

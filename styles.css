@@ -28,13 +28,13 @@
 
 /* --- 1.2 Global Utility Classes --- */
 
-/* Utility to hide elements */
-.is-hidden {
+/* Utility to hide elements — scoped to plugin modals only */
+.yaml-property-manager-modal .is-hidden {
   display: none !important;
 }
 
-/* Animation for removing nodes */
-.is-removing {
+/* Animation for removing nodes — scoped to plugin settings container */
+#template-paths-container .is-removing {
   opacity: 0;
   transform: translateY(-4px);
   pointer-events: none;
@@ -45,8 +45,8 @@
    2. MODAL STYLES
    ===================== */
 
-/* Standard button container for modal footers */
-.modal > .modal-button-container {
+/* Standard button container for plugin modal footers */
+.yaml-property-manager-modal > .modal-button-container {
   display: flex;
   justify-content: flex-end;
   align-items: center;
@@ -77,14 +77,14 @@
 /* --- 3.2 Tree Items --- */
 
 /* Individual tree item wrapper */
-.tree-item {
+:is(.file-tree-container, .nav-folder-container) .tree-item {
   position: relative;
   display: flex;
   flex-direction: column;
 }
 
 /* The visible, interactive part of a tree item */
-.tree-item-self {
+:is(.file-tree-container, .nav-folder-container) .tree-item-self {
   display: flex;
   align-items: center;
   height: var(--nav-item-height);
@@ -97,7 +97,7 @@
 }
 
 /* Hover state for tree items */
-.tree-item-self:hover {
+:is(.file-tree-container, .nav-folder-container) .tree-item-self:hover {
   background-color: var(--nav-item-background-hover);
   color: var(--nav-item-color-hover);
 }
@@ -105,7 +105,7 @@
 /* --- 3.3 Tree Item Components --- */
 
 /* Text content container */
-.tree-item-inner {
+:is(.file-tree-container, .nav-folder-container) .tree-item-inner {
   flex: 1;
   min-width: 0;
   white-space: nowrap;
@@ -114,21 +114,21 @@
 }
 
 /* Container for icons/buttons on the right */
-.tree-item-flair-outer {
+:is(.file-tree-container, .nav-folder-container) .tree-item-flair-outer {
   display: flex;
   align-items: center;
   margin-inline-start: var(--size-4-2);
 }
 
 /* Container for collapse icon */
-.tree-item-icon.collapse-icon {
+:is(.file-tree-container, .nav-folder-container) .tree-item-icon.collapse-icon {
   display: flex;
   align-items: center;
   justify-content: center;
 }
 
 /* Triangle collapse icon */
-.tree-item-icon.collapse-icon svg.svg-icon {
+:is(.file-tree-container, .nav-folder-container) .tree-item-icon.collapse-icon svg.svg-icon {
   color: var(--nav-collapse-icon-color);
   stroke-width: var(--icon-s-stroke-width);
   width: var(--size-4-3);
@@ -137,33 +137,33 @@
 }
 
 /* Rotation for collapsed state */
-.tree-item-icon.collapse-icon.is-collapsed svg.svg-icon {
+:is(.file-tree-container, .nav-folder-container) .tree-item-icon.collapse-icon.is-collapsed svg.svg-icon {
   transform: rotate(calc(var(--direction, 1) * -1 * 90deg));
 }
 
 /* --- 3.4 Tree Children --- */
 
 /* Container for child items */
-.tree-item-children {
+:is(.file-tree-container, .nav-folder-container) .tree-item-children {
   padding-inline-start: var(--size-4-3);
   border-inline-start: 1px solid var(--nav-indentation-guide-color);
 }
 
 /* Nested folder items indentation */
-.tree-item-children .nav-folder > .tree-item-self.mod-collapsible {
+:is(.file-tree-container, .nav-folder-container) .tree-item-children .nav-folder > .tree-item-self.mod-collapsible {
   padding-inline-start: var(--size-4-6);
 }
 
 /* --- 3.5 Empty States --- */
 
 /* Message for empty tree containers */
-.nav-empty-state {
+:is(.file-tree-container, .nav-folder-container) .nav-empty-state {
   padding: var(--size-4-4);
   text-align: center;
   color: var(--text-muted);
 }
 
-.nav-empty-state-text {
+:is(.file-tree-container, .nav-folder-container) .nav-empty-state-text {
   font-size: var(--font-ui-small);
 }
 
@@ -217,26 +217,34 @@
   font-size: var(--font-ui-smaller);
 }
 
+/* Warning shown when selected folders contain no .md files */
+.selection-warning {
+  display: none;
+  font-size: var(--font-ui-small);
+  color: var(--text-error);
+  margin-inline-start: var(--size-4-2);
+}
+
 /* --- 4.2 Item Selection Indicators --- */
 
 /* Visual indication for selected items */
-.is-selected > .tree-item-self {
+.file-tree-container .is-selected > .tree-item-self {
   background-color: rgba(var(--interactive-accent-rgb), 0.1);
   transition: background-color 0.2s ease;
 }
 
 /* Hover on selected items */
-.is-selected > .tree-item-self:hover {
+.file-tree-container .is-selected > .tree-item-self:hover {
   background-color: rgba(var(--interactive-accent-rgb), 0.15);
 }
 
 /* Items that were selected when modal opened */
-.initially-selected > .tree-item-self {
+.file-tree-container .initially-selected > .tree-item-self {
   color: var(--text-accent);
 }
 
 /* Folders with some, but not all, children selected */
-.is-partially-selected > .tree-item-self {
+.file-tree-container .is-partially-selected > .tree-item-self {
   color: var(--text-accent);
 }
 
@@ -254,6 +262,9 @@
 
 /* Checkbox element */
 .tree-item-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  position: relative;
   margin: 0;
   transition: background-color 0.15s ease, border-color 0.15s ease;
 }
@@ -269,12 +280,33 @@
   box-shadow: 0 0 0 2px rgba(var(--interactive-accent-rgb), 0.3);
 }
 
+/* Checked state */
+.tree-item-checkbox:checked {
+  background-color: var(--checkbox-color) !important;
+  border-color: var(--checkbox-color) !important;
+}
+
+/* Checkmark — mirrors Obsidian's mask-image approach so color adapts to theme */
+.tree-item-checkbox:checked::after {
+  content: "" !important;
+  position: absolute !important;
+  top: -1px !important;
+  inset-inline-start: -1px !important;
+  width: var(--checkbox-size) !important;
+  height: var(--checkbox-size) !important;
+  display: block !important;
+  background-color: var(--checkbox-marker-color) !important;
+  -webkit-mask-position: 52% 52% !important;
+  -webkit-mask-size: 65% !important;
+  -webkit-mask-repeat: no-repeat !important;
+  -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'><g transform='translate(-4 -6)'><path fill='%23000' d='M8.1043257,14.0367999 L4.52468714,10.5420499 C4.32525014,10.3497722 4.32525014,10.0368095 4.52468714,9.8424863 L5.24777413,9.1439454 C5.44721114,8.95166768 5.77142411,8.95166768 5.97086112,9.1439454 L8.46638057,11.5903727 L14.0291389,6.1442083 C14.2285759,5.95193057 14.5527889,5.95193057 14.7522259,6.1442083 L15.4753129,6.84377194 C15.6747499,7.03604967 15.6747499,7.35003511 15.4753129,7.54129009 L8.82741268,14.0367999 C8.62797568,14.2290777 8.3037627,14.2290777 8.1043257,14.0367999'/></g></svg>") !important;
+}
+
 /* Indeterminate checkbox state */
 .tree-item-checkbox:indeterminate,
 input[type="checkbox"][data-indeterminate="true"].tree-item-checkbox {
   background-color: var(--checkbox-color) !important;
   border-color: var(--checkbox-color) !important;
-  position: relative;
 }
 
 /* Indeterminate checkbox dash */
@@ -420,33 +452,16 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
   white-space: normal;
 }
 
-.array-property-toggle-link {
-  margin-left: 5px;
-  color: #4a88e0;
-  cursor: pointer;
-  font-size: 0.9em;
-  white-space: nowrap;
-}
-
-.array-property-toggle-link .underline-target {
-  text-decoration: underline;
-}
-
-.array-property-toggle-link:hover {
-  color: #3a6eb0;
-}
-
 /* Multiline text display */
 .multiline-value {
   white-space: pre-wrap;
   display: block;
-  margin-top: 4px;
-  margin-left: 0;
-  font-family: monospace;
-  background-color: #f9f9f9;
-  padding: 5px;
-  border: 1px solid #eee;
-  border-radius: 3px;
+  margin-top: var(--size-4-1);
+  font-family: var(--font-monospace);
+  background-color: var(--background-secondary);
+  padding: var(--size-4-1) var(--size-4-2);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
 }
 
 /* ==============================
@@ -508,7 +523,7 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
 /* --- 7.1 Focus Indicators --- */
 
 /* Consistent keyboard focus indicators */
-.tree-item-self:focus-visible,
+:is(.file-tree-container, .nav-folder-container) .tree-item-self:focus-visible,
 .clickable-icon:focus-visible,
 .property-value-link:focus-visible,
 .clickable-link-item:focus-visible,
@@ -519,13 +534,13 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
 }
 
 /* Enhanced visual feedback for focus */
-.tree-item-self:focus-visible,
+:is(.file-tree-container, .nav-folder-container) .tree-item-self:focus-visible,
 .clickable-icon:focus-visible {
   background-color: var(--background-modifier-hover);
 }
 
 /* Hide default outline for non-keyboard focus */
-.tree-item-self:focus:not(:focus-visible),
+:is(.file-tree-container, .nav-folder-container) .tree-item-self:focus:not(:focus-visible),
 .clickable-icon:focus:not(:focus-visible),
 .property-value-link:focus:not(:focus-visible),
 .clickable-link-item:focus:not(:focus-visible),
@@ -538,7 +553,7 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
 
 @media (prefers-contrast: more) {
   /* Thicker focus outlines */
-  .tree-item-self:focus-visible,
+  :is(.file-tree-container, .nav-folder-container) .tree-item-self:focus-visible,
   .clickable-icon:focus-visible,
   .property-value-link:focus-visible,
   .clickable-link-item:focus-visible,
@@ -548,12 +563,12 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
   }
 
   /* Bolder tree icons */
-  .tree-item-icon.collapse-icon svg.svg-icon {
+  :is(.file-tree-container, .nav-folder-container) .tree-item-icon.collapse-icon svg.svg-icon {
     stroke-width: 3px;
   }
 
   /* Thicker tree guide lines */
-  .tree-item-children {
+  :is(.file-tree-container, .nav-folder-container) .tree-item-children {
     border-inline-start-width: 2px;
   }
 }
@@ -562,16 +577,16 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
 
 @media (prefers-reduced-motion: reduce) {
   /* Disable transitions and animations */
-  .tree-item-self,
-  .is-selected > .tree-item-self,
-  .tree-item-icon.collapse-icon svg.svg-icon,
-  .is-removing,
+  :is(.file-tree-container, .nav-folder-container) .tree-item-self,
+  .file-tree-container .is-selected > .tree-item-self,
+  :is(.file-tree-container, .nav-folder-container) .tree-item-icon.collapse-icon svg.svg-icon,
+  #template-paths-container .is-removing,
   .array-property-expanded-container,
   .selection-counter,
   .selection-text,
   .clickable-link-item,
   .property-value-link,
-  .collapse-icon {
+  :is(.file-tree-container, .nav-folder-container) .collapse-icon {
     transition: none !important;
     animation: none !important;
   }
@@ -582,6 +597,20 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
    ============================== */
 
 /* --- 8.1 Common Patterns --- */
+
+/* File count description row — remove default top border/padding to sit flush under the title */
+.bulk-editor-file-count.setting-item {
+  border-top: none;
+  padding-top: 0;
+}
+
+/* Empty-state notice shown when no properties are found */
+.property-empty-state {
+  padding: var(--size-4-3) var(--size-4-4);
+  color: var(--text-muted);
+  font-size: var(--font-ui-small);
+}
+
 
 /* Shared padding pattern for setting items */
 .bulk-editor-padding {
@@ -654,22 +683,23 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
 
 /* Header setting item styling */
 .bulk-property-item-header-setting {
-  padding-inline-start: var(--size-4-4);
-  padding-inline-end: var(--size-4-4);
   padding-top: var(--size-4-2) !important;
   padding-bottom: var(--size-4-2) !important;
 }
 
 /* Sticky header */
-.properties-list-container .bulk-property-item-header-setting.setting-item {
+.properties-list-container .bulk-property-item > .bulk-property-item-header-setting.setting-item {
   position: sticky;
   top: calc(-1 * var(--size-4-2));
   z-index: 10;
   background-color: var(--background-primary);
   border-bottom: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-m);
+  padding-inline-start: var(--size-4-4);
+  padding-inline-end: var(--size-4-4);
   padding-top: var(--size-4-1);
   padding-bottom: var(--size-4-1);
+  isolation: isolate;
 }
 
 /* Remove bottom radius when expanded */
@@ -753,6 +783,22 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
   overflow: hidden;
 }
 
+/* Property disabled state — hide irrelevant settings, lock type/value to read-only */
+.property-content.is-property-disabled [data-setting-type="apply-order-toggle"],
+.property-content.is-property-disabled .inconsistent-files-controls,
+.property-content.is-property-disabled .file-item-content,
+.property-content.is-property-disabled .bulk-editor-file-header .setting-item-control .checkbox-container,
+.property-content.is-property-disabled .file-header-exclude-desc {
+  display: none;
+}
+
+.property-content.is-property-disabled [data-setting-type="property-type"] .setting-item-control,
+.property-content.is-property-disabled .property-value-display-setting .setting-item-control,
+.property-content.is-property-disabled .dynamic-value-input-container {
+  pointer-events: none;
+  opacity: 0.5;
+}
+
 /* --- 8.7 Toggle Switch Styles --- */
 
 .setting-toggle, .edit-enable-toggle {
@@ -774,7 +820,7 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background-color: white;
+  background-color: var(--toggle-thumb-color);
   top: 2px;
   left: 2px;
   transition: transform 0.2s ease-in-out;
@@ -787,6 +833,17 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
 .setting-item-control.is-disabled input[type="checkbox"] {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+/* Obsidian's Setting.setDisabled() adds is-disabled — ensure it's visually obvious in modals */
+.modal .setting-item.is-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.modal .setting-item.is-disabled .setting-item-name,
+.modal .setting-item.is-disabled .setting-item-description {
+  color: var(--text-faint);
 }
 
 /* Prevent all interactions with disabled settings */
@@ -954,10 +1011,13 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
 
 /* File item header */
 .bulk-editor-file-header.setting-item {
-  padding-inline-start: var(--size-4-4);
-  padding-inline-end: var(--size-4-4);
   padding-top: var(--size-4-2);
   padding-bottom: var(--size-4-2);
+}
+
+.inconsistent-files-list > .inconsistent-file-item > .bulk-editor-file-header.setting-item {
+  padding-inline-start: var(--size-4-4);
+  padding-inline-end: var(--size-4-4);
 }
 
 /* File item content */
@@ -1346,6 +1406,20 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
   opacity: 0.6 !important;
   border-bottom-color: var(--background-modifier-border) !important;
 }
+
+.inconsistent-files-container.is-exclude-all-active .bulk-editor-file-header .checkbox-container {
+  pointer-events: none;
+}
+
+/* ======================
+   Property Manager Menu
+   ====================== */
+
+/* Align section headings flush with the modal title */
+:is(.yaml-property-manager-menu, .yaml-property-manager-modal) .setting-item.setting-item-heading {
+  padding-inline-start: 0;
+}
+
 
 .inconsistent-file-item.is-excluded .bulk-editor-file-header:hover {
   background-color: var(--background-secondary) !important;
