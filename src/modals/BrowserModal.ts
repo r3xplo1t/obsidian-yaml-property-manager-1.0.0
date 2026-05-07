@@ -450,7 +450,7 @@ export class BrowserModal extends Modal {
             
             // Hide if not expanded
             if (!this.expandedFolders.has(node.path)) {
-                childrenEl.style.display = 'none';
+                childrenEl.hide();
             }
             
             // Add click handler for expansion toggling
@@ -466,7 +466,7 @@ export class BrowserModal extends Modal {
                     if (isExpanded) {
                             // Collapse folder
                             this.expandedFolders.delete(node.path);
-                            childrenEl.style.display = 'none';
+                            childrenEl.hide();
                             selfEl.setAttribute('aria-expanded', 'false');
                             const collapseIcon = selfEl.querySelector('.collapse-icon');
                             if (collapseIcon) {
@@ -475,7 +475,7 @@ export class BrowserModal extends Modal {
                         } else {
                             // Expand folder
                             this.expandedFolders.add(node.path);
-                            childrenEl.style.display = '';
+                            childrenEl.show();
                             selfEl.setAttribute('aria-expanded', 'true');
                             const collapseIcon = selfEl.querySelector('.collapse-icon');
                             if (collapseIcon) {
@@ -686,7 +686,7 @@ export class BrowserModal extends Modal {
                 
                 if (isExpanded) {
                     this.expandedFolders.delete(node.path);
-                    childrenEl.style.display = 'none';
+                    childrenEl.hide();
                     selfEl.setAttribute('aria-expanded', 'false');
                     const collapseIcon = selfEl.querySelector('.collapse-icon');
                     if (collapseIcon) {
@@ -694,7 +694,7 @@ export class BrowserModal extends Modal {
                     }
                 } else {
                     this.expandedFolders.add(node.path);
-                    childrenEl.style.display = '';
+                    childrenEl.show();
                     selfEl.setAttribute('aria-expanded', 'true');
                     const collapseIcon = selfEl.querySelector('.collapse-icon');
                     if (collapseIcon) {
@@ -831,7 +831,7 @@ export class BrowserModal extends Modal {
             const showWarning = !this.singleFileSelectionMode &&
                                 folderCount > 0 &&
                                 !this.hasResolvableMdFiles();
-            warningEl.style.display = showWarning ? 'inline' : 'none';
+            warningEl.toggleClass('is-shown', showWarning);
         }
 
         // Update confirm button state
@@ -958,8 +958,7 @@ export class BrowserModal extends Modal {
     ensureAllFolderSelections() {
         let selectionChanged = false;
         
-        // Work with a temporary copy to avoid modifying while iterating
-        const currentSelections = [...this.selectedFolders];
+        // Work with a snapshot to avoid modifying while iterating
         
         // Process all folders in the vault
         const allFolders = this.app.vault.getAllLoadedFiles()

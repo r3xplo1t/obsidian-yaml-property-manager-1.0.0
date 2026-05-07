@@ -2,6 +2,7 @@ import { App, Modal, Notice, TFile, Setting, FuzzySuggestModal, FuzzyMatch, setI
 import YAMLPropertyManagerPlugin from '../../main';
 import { formatValuePreview } from '../commonHelpers';
 import type { PropertyWithType } from '../PropertyTypeService';
+import type { YamlPropertyValue } from '../interfaces';
 import { isPotentialLink, handleLinkClick } from '../commonHelpers';
 import { PropertyManagerMenu } from './PropertyManagerMenu';
 
@@ -10,9 +11,9 @@ export class TemplateApplication extends Modal {
     targetFiles: TFile[];
     selectedTemplate: TFile | null = null;
     selectedProperties: string[] = [];
-    overrideValueProperties: string[] = []; 
-    overrideAllValues: boolean = false; 
-    propertyPositioning: 'below' | 'above' | 'remove' = 'below'; 
+    overrideValueProperties: string[] = [];
+    overrideAllValues: boolean = false;
+    propertyPositioning: 'below' | 'above' | 'remove' = 'below';
     allTemplates: TFile[] = [];
     private templateSelectionSetting: Setting | null = null;
     private overrideAllToggle: ToggleComponent | null = null;
@@ -22,7 +23,7 @@ export class TemplateApplication extends Modal {
     private allPropertiesSelected: boolean = true;
     private allValuesOverridden: boolean = false;
     private applyButton: HTMLButtonElement | null = null;
-    
+
     // Updated to store dropdowns instead of toggles
     private propertyToggles: Array<{
         key: string,
@@ -35,44 +36,42 @@ export class TemplateApplication extends Modal {
         this.targetFiles = targetFiles;
     }
 
-    async onOpen() {
+    onOpen(): void {
+        void this.initialize();
+    }
+
+    private async initialize(): Promise<void> {
         const { contentEl } = this;
         contentEl.empty();
         this.modalEl.addClass('yaml-property-manager-modal');
-    
+
         // Main header
         new Setting(contentEl)
-            .setName('Apply Template Properties')
+            .setName('Apply template properties')
             .setHeading();
 
         // Add description about number of files
-        let fileCountSetting = new Setting(contentEl)
-            .setDesc(`Editing properties across ${this.targetFiles.length} ${this.targetFiles.length === 1 ? 'file' : 'files'}.`);
-
-        // Remove top border by accessing the settingEl property
-        fileCountSetting.settingEl.style.borderTop = 'none';
-        fileCountSetting.settingEl.style.paddingTop = '0px';
+        new Setting(contentEl)
+            .setDesc(`Editing properties across ${this.targetFiles.length} ${this.targetFiles.length === 1 ? 'file' : 'files'}.`)
+            .settingEl.addClass('no-top-border');
 
         // Load templates needed for the suggester
         await this.loadAllTemplates();
-    
+
         // Template Selection Section
         this.templateSelectionSetting = new Setting(contentEl)
-            .setName('Template File')
+            .setName('Template file')
             .setDesc('Select the template file containing the properties you want to apply.')
             .addButton(button => button
-                .setButtonText(this.selectedTemplate ? 'Change Template' : 'Select Template')
+                .setButtonText(this.selectedTemplate ? 'Change template' : 'Select template')
                 .setCta()
                 .onClick(() => {
-                    // Get recent templates from the correct location
-                    // If the plugin doesn't expose this directly, use an empty array
                     const recentTemplatePaths: string[] = [];
-                    
-                    // Try to access recent templates if stored in plugin settings
+
                     if (this.plugin.settings && this.plugin.settings.recentTemplates) {
                         recentTemplatePaths.push(...this.plugin.settings.recentTemplates);
                     }
-                    
+
                     new TemplateSuggestModal(
                         this.app,
                         this.allTemplates,
@@ -80,29 +79,29 @@ export class TemplateApplication extends Modal {
                             if (selectedFile) {
                                 this.selectedTemplate = selectedFile;
                                 this.updateSelectedTemplateDisplay();
-                                this.loadTemplateProperties();
-                                button.setButtonText('Change Template');
+                                void this.loadTemplateProperties();
+                                button.setButtonText('Change template');
                             }
                         },
                         recentTemplatePaths,
                         this.allTemplates.length === 0 ? 'vault' : 'templates'
                     ).open();
                 }));
-    
+
         // Initial Display Update / Load
         this.updateSelectedTemplateDisplay();
         if (this.selectedTemplate) {
-            this.loadTemplateProperties();
+            void this.loadTemplateProperties();
         } else {
             this.updateApplyButtonState();
         }
-    
+
         // Buttons Section (Apply/Cancel)
         const buttonContainer = this.modalEl.createDiv({ cls: 'modal-button-container' });
-    
+
         // Apply button
         const applyButton = buttonContainer.createEl('button', {
-            text: 'Apply Template',
+            text: 'Apply template',
             cls: 'mod-cta'
         });
         applyButton.disabled = true;
@@ -138,17 +137,17 @@ export class TemplateApplication extends Modal {
             this.close();
             new PropertyManagerMenu(this.app, this.plugin).open();
         });
-    
+
         this.updateApplyButtonState();
     }
 
     // Load all template files - unchanged
     async loadAllTemplates() {
         const templates = await this.plugin.getAllTemplateFiles();
-        
+
         const filesByFolder: Record<string, TFile[]> = {};
         const rootFiles: TFile[] = [];
-        
+
         templates.forEach(file => {
             if (file.parent && file.parent.path !== '/') {
                 const parentPath = file.parent.path;
@@ -160,27 +159,27 @@ export class TemplateApplication extends Modal {
                 rootFiles.push(file);
             }
         });
-        
-        const folderPaths = Object.keys(filesByFolder).sort((a, b) => 
+
+        const folderPaths = Object.keys(filesByFolder).sort((a, b) =>
             a.toLowerCase().localeCompare(b.toLowerCase())
         );
-        
+
         folderPaths.forEach(path => {
-            filesByFolder[path].sort((a, b) => 
+            filesByFolder[path].sort((a, b) =>
                 a.basename.toLowerCase().localeCompare(b.basename.toLowerCase())
             );
         });
-        
-        rootFiles.sort((a, b) => 
+
+        rootFiles.sort((a, b) =>
             a.basename.toLowerCase().localeCompare(b.basename.toLowerCase())
         );
-        
+
         this.allTemplates = [];
-        
+
         folderPaths.forEach(folderPath => {
             this.allTemplates.push(...filesByFolder[folderPath]);
         });
-        
+
         this.allTemplates.push(...rootFiles);
     }
 
@@ -214,7 +213,7 @@ export class TemplateApplication extends Modal {
     // Load and display properties from the selected template
     async loadTemplateProperties() {
         const { contentEl } = this;
-        
+
         // Clear existing content after the template selection
         const templateSelectionEl = this.templateSelectionSetting?.settingEl;
         if (templateSelectionEl) {
@@ -226,27 +225,27 @@ export class TemplateApplication extends Modal {
                 current.remove();
             }
         }
-        
+
         if (!this.selectedTemplate) {
             this.updateApplyButtonState();
             return;
         }
-        
+
         // Reset selections
         this.selectedProperties = [];
         this.overrideValueProperties = [];
         this.overrideAllValues = false;
         this.propertyPositioning = 'below';
         this.propertyToggles = [];
-    
+
         // Property Selection & Options heading and controls
         new Setting(contentEl)
-            .setName('Property Selection & Options')
+            .setName('Property selection & options')
             .setHeading();
-        
+
         // Add the select all controls
         this.renderSelectAllControls(contentEl);
-        
+
         // Property Positioning dropdown
         const positionDescs: Record<string, string> = {
             below: 'New properties will be added after existing YAML properties.',
@@ -264,7 +263,7 @@ export class TemplateApplication extends Modal {
             }
         };
         const positioningSetting = new Setting(contentEl)
-            .setName('Property Positioning')
+            .setName('Property positioning')
             .addDropdown(dropdown => {
                 dropdown
                     .addOption('below', 'Position below existing')
@@ -278,11 +277,11 @@ export class TemplateApplication extends Modal {
                 return dropdown;
             });
         applyPositionDesc(positioningSetting, this.propertyPositioning);
-        
-        // Load properties
-        const properties = await this.plugin.parseFileProperties(this.selectedTemplate);
+
+        // Load properties (synchronous now)
+        const properties = this.plugin.parseFileProperties(this.selectedTemplate);
         const propertyKeys = Object.keys(properties);
-    
+
         if (propertyKeys.length === 0) {
             // Show empty state message
             new Setting(contentEl)
@@ -290,34 +289,34 @@ export class TemplateApplication extends Modal {
         } else {
             // Properties List heading
             new Setting(contentEl)
-                .setName('Properties List')
+                .setName('Properties list')
                 .setHeading();
-            
+
             // Create property items
-            await this.createpropertySettings(propertyKeys, properties, contentEl);
+            this.createpropertySettings(propertyKeys, properties, contentEl);
         }
 
         // Initialize selected properties if allPropertiesSelected is true
         if (this.allPropertiesSelected && propertyKeys.length > 0) {
             this.selectedProperties = [...propertyKeys];
-            
+
             // Make sure the property dropdowns are updated to "include" state
             this.propertyToggles.forEach(propToggle => {
                 propToggle.dropdown.setValue('include');
             });
-            
+
             // Enable the Override All toggle
             if (this.overrideAllToggle) {
                 this.overrideAllToggle.setDisabled(false);
             }
         }
-    
+
         // Update button state
         this.updateApplyButtonState();
     }
-    
+
     // Create property items for each property
-    private createpropertySettings(propertyKeys: string[], properties: any, container: HTMLElement) {
+    private createpropertySettings(propertyKeys: string[], properties: Record<string, YamlPropertyValue>, container: HTMLElement) {
         // Clear existing property toggles
         this.propertyToggles = [];
 
@@ -343,7 +342,7 @@ export class TemplateApplication extends Modal {
             const valueLine = descEl.createDiv({ cls: 'property-value-line' });
             valueLine.createSpan({ text: 'Value: ' }); // "Value: " prefix
 
-            const isMultilineText = (val: any): boolean => {
+            const isMultilineText = (val: YamlPropertyValue): boolean => {
                 if (typeof val !== 'string') return false;
                 return val.includes('\n') || internalType === 'multitext';
             };
@@ -378,11 +377,11 @@ export class TemplateApplication extends Modal {
             // Check if the first item is an actual link
             if (isPotentialLink(firstItemOriginal)) {
                 // Create a clickable element for actual links
-                const firstItemLinkEl = collapsedArrayView.createSpan({ 
-                    text: firstItemDisplay, 
-                    cls: 'clickable-link-item' 
+                const firstItemLinkEl = collapsedArrayView.createSpan({
+                    text: firstItemDisplay,
+                    cls: 'clickable-link-item'
                 });
-                
+
                 // Attach click listener only to actual links
                 this.plugin.registerDomEvent(firstItemLinkEl, 'click', (e) => {
                     e.stopPropagation();
@@ -392,45 +391,22 @@ export class TemplateApplication extends Modal {
                 // Create a plain text element for regular items
                 collapsedArrayView.createSpan({ text: firstItemDisplay });
             }
-            // (Rest of collapsed view creation remains the same)
             // Get remaining count
             const remainingCount = originalValue.length - 1;
 
             // Create expand link with item count included
             const itemText = remainingCount === 1 ? 'item' : 'items';
-            if (remainingCount > 0) {
+            {
                 // Create expand link with count information
-                const expandLinkContainer = collapsedArrayView.createSpan({ cls: 'array-property-toggle-link' }); // Main container span
+                const expandLinkContainer = collapsedArrayView.createSpan({ cls: 'array-property-toggle-link' });
 
                 // Add the opening parenthesis OUTSIDE the underline target
                 expandLinkContainer.appendText('(');
 
                 // Create the inner span containing ALL text to be underlined
-                const underlineTargetSpan = expandLinkContainer.createSpan({
-                    text: `Expand, ${remainingCount} more ${itemText}`, // Combine text here
-                    cls: 'underline-target' // New class for specific targeting
-                });
-
-                // Add the closing parenthesis OUTSIDE the underline target
-                expandLinkContainer.appendText(')');
-
-                // Attach expand click event TO THE CONTAINER
-                this.plugin.registerDomEvent(expandLinkContainer, 'click', () => {
-                    collapsedArrayView.addClass('is-hidden');
-                    expandedViewContainer.removeClass('is-hidden');
-                    valueLine.removeClass('is-hidden');
-                });
-            } else {
-                // Create expand link with count information
-                const expandLinkContainer = collapsedArrayView.createSpan({ cls: 'array-property-toggle-link' }); // Main container span
-
-                // Add the opening parenthesis OUTSIDE the underline target
-                expandLinkContainer.appendText('(');
-
-                // Create the inner span containing ALL text to be underlined
-                const underlineTargetSpan = expandLinkContainer.createSpan({
-                    text: `Expand, ${remainingCount} more ${itemText}`, // Combine text here
-                    cls: 'underline-target' // New class for specific targeting
+                expandLinkContainer.createSpan({
+                    text: `Expand, ${remainingCount} more ${itemText}`,
+                    cls: 'underline-target'
                 });
 
                 // Add the closing parenthesis OUTSIDE the underline target
@@ -449,15 +425,15 @@ export class TemplateApplication extends Modal {
             // Render individual items in expanded view
             originalValue.forEach((item, index) => {
                 const displayText = formatValuePreview(item, internalType);
-                
+
                 // Only treat actual links as clickable
                 if (isPotentialLink(item)) {
                     // This is an actual link - create clickable element
-                    const linkEl = expandedViewContainer.createSpan({ 
-                        text: displayText, 
+                    const linkEl = expandedViewContainer.createSpan({
+                        text: displayText,
                         cls: 'clickable-link-item'
                     });
-                    
+
                     // Attach click listener only to actual links
                     this.plugin.registerDomEvent(linkEl, 'click', (e) => {
                         handleLinkClick(this.app, item, e);
@@ -466,23 +442,23 @@ export class TemplateApplication extends Modal {
                     // Regular item - create plain text (not clickable)
                     expandedViewContainer.createSpan({ text: displayText });
                 }
-                
+
                 // Add comma separator between items
                 if (index < originalValue.length - 1) {
                     expandedViewContainer.appendText(', ');
                 }
             });
             // Create collapse link with parentheses outside the underline target
-            const collapseLinkContainer = expandedViewContainer.createSpan({ cls: 'array-property-toggle-link' }); // Main container
+            const collapseLinkContainer = expandedViewContainer.createSpan({ cls: 'array-property-toggle-link' });
 
-            collapseLinkContainer.appendText('('); // Add leading space and parenthesis
+            collapseLinkContainer.appendText('(');
 
-            const collapseTextSpan = collapseLinkContainer.createSpan({ // Inner span for "Collapse"
+            collapseLinkContainer.createSpan({
                 text: 'Collapse',
-                cls: 'underline-target' // Reuse the same class as "Expand"
+                cls: 'underline-target'
             });
 
-            collapseLinkContainer.appendText(')'); // Add closing parenthesis
+            collapseLinkContainer.appendText(')');
 
             // Attach collapse click event TO THE CONTAINER
             this.plugin.registerDomEvent(collapseLinkContainer, 'click', () => {
@@ -496,7 +472,7 @@ export class TemplateApplication extends Modal {
                 if (Array.isArray(originalValue) && originalValue.length === 1) {
                     const singleItem = originalValue[0];
                     const valuePreview = formatValuePreview(singleItem, internalType);
-                    
+
                     if (!isEmptyValue && isPotentialLink(singleItem)) {
                         // Single item is a link - make it clickable
                         const linkEl = valueLine.createSpan({ text: valuePreview, cls: 'clickable-link-item' });
@@ -510,7 +486,7 @@ export class TemplateApplication extends Modal {
                 } else {
                     // Regular single value (not an array)
                     const valuePreview = formatValuePreview(originalValue, internalType);
-                    
+
                     if (!isEmptyValue && isPotentialLink(originalValue)) {
                         // Value is a link - make it clickable
                         const linkEl = valueLine.createSpan({ text: valuePreview, cls: 'clickable-link-item' });
@@ -562,8 +538,8 @@ export class TemplateApplication extends Modal {
         overrideAllValues: boolean
     ) {
         try {
-            // Get template properties with type info
-            const templateProperties = await this.plugin.parseFileProperties(templateFile);
+            // Get template properties with type info (synchronous)
+            const templateProperties = this.plugin.parseFileProperties(templateFile);
             const templatePropertiesWithType = this.plugin.propertyCache.get(templateFile.path) || this.plugin.propertyTypeService.preservePropertyTypes(templateProperties);
 
             // Filter to only include specified properties to apply
@@ -582,7 +558,7 @@ export class TemplateApplication extends Modal {
                     // Use processFrontMatter for atomic updates
                     await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
                         // Get existing properties with type info
-                        const existingProperties = frontmatter || {};
+                        const existingProperties = (frontmatter ?? {}) as Record<string, YamlPropertyValue>;
                         const existingPropertiesWithType = this.plugin.propertyTypeService.preservePropertyTypes(existingProperties);
 
                         let finalPropertiesToApply: Record<string, PropertyWithType> = {};
@@ -616,50 +592,37 @@ export class TemplateApplication extends Modal {
 
                         for (const key of finalKeys) {
                             const isPropertyToApply = propertiesToApply.includes(key);
-                            
+
                             if (!isPropertyToApply) {
-                                // If this key wasn't selected for application (meaning it's an existing property
-                                // preserved due to 'above' or 'below' positioning), keep its existing value.
-                                // Ensure it's actually in existingPropertiesWithType to avoid errors.
                                 if (existingPropertiesWithType[key]) {
                                     finalPropertiesToApply[key] = existingPropertiesWithType[key];
                                 } else {
-                                    // Should not happen with current positioning logic, but as a safeguard:
                                     delete finalPropertiesToApply[key];
                                 }
-                                continue; 
+                                continue;
                             }
 
                             // Now handle properties that *were* selected for application
                             const isOverride = overrideAllValues || overrideValueProperties.includes(key);
 
                             if (isOverride) {
-                                // 'Include with value' selected: Use the template value.
-                                // Ensure the template property exists before assigning.
                                 if (templatePropertiesWithType[key]) {
                                     finalPropertiesToApply[key] = templatePropertiesWithType[key];
                                 } else {
-                                    // Template doesn't have this key? Should not happen if key is in propertiesToApply.
-                                    // Maybe delete or set to null? Setting null is safer.
-                                    finalPropertiesToApply[key] = { value: null, type: 'null' }; 
+                                    finalPropertiesToApply[key] = { value: null, type: 'null' };
                                 }
                             } else {
-                                // 'Include property' selected: Preserve existing or add as null.
                                 if (existingPropertiesWithType[key]) {
-                                    // Property exists in target file: Preserve its value.
                                     finalPropertiesToApply[key] = existingPropertiesWithType[key];
                                 } else {
-                                    // Property does NOT exist in target file: Add key with null value.
                                     finalPropertiesToApply[key] = { value: null, type: 'null' };
                                 }
                             }
                         }
 
                         // --- Update Frontmatter ---
-                        // Clear existing frontmatter to potentially influence order
                         Object.keys(frontmatter).forEach(fKey => delete frontmatter[fKey]);
 
-                        // Restore values and apply to frontmatter object using Object.assign
                         const restoredProperties = this.plugin.propertyTypeService.restorePropertyValues(finalPropertiesToApply);
                         Object.assign(frontmatter, restoredProperties);
                     });
@@ -683,15 +646,15 @@ export class TemplateApplication extends Modal {
             return 0;
         }
     }
-    
+
     //#endregion
 
     //#region Navigation and UI
 
     private renderSelectAllControls(containerEl: HTMLElement): void {
-        // Create the "Select All Properties" toggle
+        // Create the "Select all properties" toggle
         new Setting(containerEl)
-            .setName('Select All Properties')
+            .setName('Select all properties')
             .setDesc('Include all properties from this template')
             .addToggle(toggle => {
                 this.selectAllToggle = toggle
@@ -703,24 +666,19 @@ export class TemplateApplication extends Modal {
                         // Update all property dropdowns
                         this.propertyToggles.forEach(propToggle => {
                             if (value) {
-                                // Select "Include property" for all
                                 propToggle.dropdown.setValue('include');
-                                
-                                // Add to selectedProperties if not already there
+
                                 if (!this.selectedProperties.includes(propToggle.key)) {
                                     this.selectedProperties.push(propToggle.key);
                                 }
                             } else {
-                                // Deselect all (set to "Exclude")
                                 propToggle.dropdown.setValue('exclude');
-                                
-                                // Remove from selected properties
+
                                 this.selectedProperties = this.selectedProperties.filter(p => p !== propToggle.key);
                                 this.overrideValueProperties = this.overrideValueProperties.filter(p => p !== propToggle.key);
                             }
                         });
-                        
-                        // Enable/disable the "Override All Values" row and toggle
+
                         this.overrideAllSetting?.setDisabled(!value);
                         if (this.overrideAllToggle) {
                             this.overrideAllToggle.setDisabled(!value);
@@ -728,16 +686,15 @@ export class TemplateApplication extends Modal {
                                 this.overrideAllToggle.setValue(false);
                             }
                         }
-                        
-                        // Update the Apply button state
+
                         this.updateApplyButtonState();
                     });
                 return toggle;
             });
-        
-        // Create the "Override All Values" toggle
+
+        // Create the "Override all values" toggle
         this.overrideAllSetting = new Setting(containerEl)
-            .setName('Override All Values')
+            .setName('Override all values')
             .setDesc('Override existing values with template values')
             .addToggle(toggle => {
                 this.overrideAllToggle = toggle
@@ -747,30 +704,26 @@ export class TemplateApplication extends Modal {
                         if (this.isUpdatingMasterToggles) return;
                         this.allValuesOverridden = value;
                         this.overrideAllValues = value;
-                        
+
                         // Update all property dropdowns
                         this.propertyToggles.forEach(propToggle => {
                             const currentValue = propToggle.dropdown.getValue();
-                            
+
                             if (value && currentValue === 'include') {
-                                // Change to include-override
                                 propToggle.dropdown.setValue('include-override');
-                                
-                                // Add to overrideValueProperties
+
                                 if (!this.overrideValueProperties.includes(propToggle.key)) {
                                     this.overrideValueProperties.push(propToggle.key);
                                 }
                             } else if (!value && currentValue === 'include-override') {
-                                // Change to include
                                 propToggle.dropdown.setValue('include');
-                                
-                                // Remove from overrideValueProperties
+
                                 this.overrideValueProperties = this.overrideValueProperties.filter(
                                     p => p !== propToggle.key
                                 );
                             }
                         });
-                    });                
+                    });
                 return toggle;
             });
 
@@ -785,16 +738,16 @@ export class TemplateApplication extends Modal {
         // Sync the row's disabled appearance with the toggle's initial state
         this.overrideAllSetting?.setDisabled(!this.allPropertiesSelected);
     }
-    
+
     // Updated to work with dropdowns
     private updateMasterTogglesState(): void {
         // Don't update while loading
         if (!this.propertyToggles.length) return;
-        
+
         // Count properties in different states
         let includedCount = 0;
         let overriddenCount = 0;
-        
+
         this.propertyToggles.forEach(propToggle => {
             const value = propToggle.dropdown.getValue();
             if (value === 'include' || value === 'include-override') {
@@ -804,15 +757,15 @@ export class TemplateApplication extends Modal {
                 overriddenCount++;
             }
         });
-        
+
         const totalProps = this.propertyToggles.length;
-        
+
         // Update all properties selected state
         this.allPropertiesSelected = includedCount === totalProps && totalProps > 0;
-        
+
         // Update all values overridden state
         this.allValuesOverridden = overriddenCount === includedCount && includedCount > 0;
-        
+
         // Update toggle states if they exist
         this.isUpdatingMasterToggles = true;
 
@@ -850,7 +803,6 @@ type SuggestModalItem = TFile | SpecialTriggerItem;
 // --- Type Predicate Function ---
 // This function explicitly tells TypeScript if an item is the SpecialTriggerItem
 function isSpecialTriggerItem(item: SuggestModalItem): item is SpecialTriggerItem {
-    // Check if it's an object, not null, and has the specific property set to true
     return typeof item === 'object' && item !== null && 'isVaultSearchTrigger' in item && item.isVaultSearchTrigger === true;
 }
 // --- End Type Predicate Function ---
@@ -858,13 +810,12 @@ function isSpecialTriggerItem(item: SuggestModalItem): item is SpecialTriggerIte
 class TemplateSuggestModal extends FuzzySuggestModal<SuggestModalItem> {
     templates: TFile[];
     onChoose: (result: TFile | null) => void;
-    appInstance: App; // Store app instance explicitly
+    appInstance: App;
 
-    searchMode: 'templates' | 'recent' | 'vault'; // Mode to determine search scope
-    recentTemplates: string[] = []; // Array of recent template paths
-    inputListener: () => void; // For listening to search input
+    searchMode: 'templates' | 'recent' | 'vault';
+    recentTemplates: string[] = [];
+    inputListener: () => void;
 
-    // Special item to trigger vault search
     private static readonly VAULT_SEARCH_TRIGGER: SpecialTriggerItem = {
         isVaultSearchTrigger: true,
         name: "Click to see recently used templates or search within the entire vault...",
@@ -872,10 +823,10 @@ class TemplateSuggestModal extends FuzzySuggestModal<SuggestModalItem> {
 
     constructor(
         app: App,
-        templates: TFile[], // Predefined templates
+        templates: TFile[],
         onChoose: (result: TFile | null) => void,
-        recentTemplates: string[] = [], // Paths of recently used templates
-        initialMode: 'templates' | 'recent' | 'vault' = 'templates' 
+        recentTemplates: string[] = [],
+        initialMode: 'templates' | 'recent' | 'vault' = 'templates'
     ) {
         super(app);
         this.appInstance = app;
@@ -884,201 +835,152 @@ class TemplateSuggestModal extends FuzzySuggestModal<SuggestModalItem> {
         this.recentTemplates = recentTemplates;
         this.searchMode = initialMode;
 
-        // Set placeholder based on mode
         this.updatePlaceholder();
-        
-        // Add input listener to detect typing in 'recent' mode
+
         if (this.searchMode === 'recent') {
             this.setupInputListener();
         }
     }
 
     private updatePlaceholder(): void {
-        // Set placeholder based on current mode
         if (this.searchMode === 'templates') {
             this.setPlaceholder("Search predefined templates...");
-        } else if (this.searchMode === 'recent') {
-            this.setPlaceholder("Search all vault files...");
         } else {
             this.setPlaceholder("Search all vault files...");
         }
     }
 
     private setupInputListener(): void {
-        // Remove existing listener if any
         if (this.inputListener) {
             this.inputEl.removeEventListener('input', this.inputListener);
         }
 
-        // Add listener for input changes in 'recent' mode
         this.inputListener = () => {
             if (this.searchMode === 'recent') {
-                // Switch to vault mode on first keystroke
                 this.searchMode = 'vault';
-                // No need to update placeholder as it's the same for both modes
             }
         };
-        
+
         this.inputEl.addEventListener('input', this.inputListener);
     }
 
     getItems(): SuggestModalItem[] {
-        // Create a unified sorting function that works the same way for both modes
         const getSortedFiles = (files: TFile[]): TFile[] => {
-            // Create a map of folder paths to their contained files
             const filesByFolder = new Map<string, TFile[]>();
             const rootFiles: TFile[] = [];
-            
-            // Identify all unique folders
+
             const folders = new Set<string>();
-            
-            // Group files by folder
+
             files.forEach(file => {
                 const path = file.path;
                 const lastSlashIndex = path.lastIndexOf('/');
-                
+
                 if (lastSlashIndex === -1) {
-                    // Root files
                     rootFiles.push(file);
                 } else {
-                    // Get the folder path
                     const folderPath = path.substring(0, lastSlashIndex);
                     folders.add(folderPath);
-                    
-                    // Add file to its folder's list
+
                     if (!filesByFolder.has(folderPath)) {
                         filesByFolder.set(folderPath, []);
                     }
                     filesByFolder.get(folderPath)?.push(file);
                 }
             });
-            
-            // Convert folders to array and sort
+
             const sortedFolders = Array.from(folders).sort();
-            
-            // Collect subfolders first, then direct files for each folder
+
             const result: TFile[] = [];
-            
-            // Function to get direct files in a folder (not in subfolders)
+
             const getDirectFiles = (folderPath: string): TFile[] => {
-                const files = filesByFolder.get(folderPath) || [];
-                return files.filter(file => {
+                const folderFiles = filesByFolder.get(folderPath) || [];
+                return folderFiles.filter(file => {
                     const fileFolderPath = file.path.substring(0, file.path.lastIndexOf('/'));
                     return fileFolderPath === folderPath;
                 }).sort((a, b) => a.basename.localeCompare(b.basename));
             };
-            
-            // Process each top-level folder
+
             sortedFolders.forEach(folder => {
                 if (!folder.includes('/') || folder.split('/').length === 1) {
-                    // This is a top-level folder
-                    
-                    // First add all subfolder content
                     sortedFolders
                         .filter(subFolder => subFolder !== folder && subFolder.startsWith(folder + '/'))
                         .sort()
                         .forEach(subFolder => {
                             result.push(...getDirectFiles(subFolder));
                         });
-                    
-                    // Then add direct files in this folder
+
                     result.push(...getDirectFiles(folder));
                 }
             });
-            
-            // Add root files at the end
+
             result.push(...rootFiles.sort((a, b) => a.basename.localeCompare(b.basename)));
-            
+
             return result;
         };
-    
-        // Filter by mode
+
         if (this.searchMode === 'vault') {
-            // Vault mode: all files
             return getSortedFiles(this.appInstance.vault.getMarkdownFiles());
         } else if (this.searchMode === 'recent') {
-            // Recent mode: only recent templates
             const recentFiles = this.appInstance.vault.getMarkdownFiles()
                 .filter(file => this.recentTemplates.includes(file.path));
             return getSortedFiles(recentFiles);
         } else {
-            // Templates mode: templates + trigger
             return [TemplateSuggestModal.VAULT_SEARCH_TRIGGER, ...getSortedFiles(this.templates)];
         }
     }
 
     getItemText(item: SuggestModalItem): string {
-        // Check if it's the special trigger item
         if (isSpecialTriggerItem(item)) {
             return item.name;
         }
 
-        // --- Construct path without extension for TFile ---
-        // If it's not the trigger, TypeScript knows 'item' is TFile here
         let displayPath: string;
-        const parentPath = item.parent?.path; // Get parent path (might be null for root)
+        const parentPath = item.parent?.path;
 
         if (parentPath && parentPath !== '/') {
-            // If parent exists and is not root, combine parent path and basename
             displayPath = `${parentPath}/${item.basename}`;
         } else {
-            // If file is in root, just use basename
             displayPath = item.basename;
         }
-        // --- End path construction ---
 
-        // Return the constructed path without extension for filtering
         return displayPath;
     }
 
     // Override renderSuggestion to handle both TFile and the special trigger item
     renderSuggestion(match: FuzzyMatch<SuggestModalItem>, el: HTMLElement): void {
-        // Clear previous content and add base class
         el.empty();
         el.addClass('suggestion-item');
         el.addClass('template-suggestion-item');
 
-        // Get the actual item (TFile or SpecialTriggerItem)
         const item = match.item;
 
-        // Create the main content container
-        const content = el.createDiv({ cls: 'suggestion-content' }); // Standard class
+        const content = el.createDiv({ cls: 'suggestion-content' });
 
-        // --- Type Check ---
         if (isSpecialTriggerItem(item)) {
-            // Render special trigger item
             el.addClass('template-suggestion-trigger');
-            const icon = content.createDiv({ cls: 'suggestion-icon' }); // Standard class
+            const icon = content.createDiv({ cls: 'suggestion-icon' });
             setIcon(icon, 'search');
 
             content.createDiv({
-                cls: 'suggestion-title is-trigger', // Standard class + custom marker
+                cls: 'suggestion-title is-trigger',
                 text: item.name
             });
         } else {
-            // It's a TFile
-
-            // Construct path without extension
             let displayPath: string;
-            const parentPath = item.parent?.path; // Get parent path (might be null for root)
+            const parentPath = item.parent?.path;
 
             if (parentPath && parentPath !== '/') {
-                // If parent exists and is not root, combine parent path and basename
                 displayPath = `${parentPath}/${item.basename}`;
             } else {
-                // If file is in root, just use basename
                 displayPath = item.basename;
             }
 
-            // Add title (Path without Extension)
             content.createDiv({
-                cls: 'suggestion-title', // Standard class
-                text: displayPath // Use the constructed path without extension
+                cls: 'suggestion-title',
+                text: displayPath
             });
 
-            // --- Add Recent Tag if applicable ---
             if (this.recentTemplates.includes(item.path)) {
-                // Create a "Recent" tag on the right
                 el.createDiv({
                     cls: 'recent-template-tag',
                     text: 'Recent'
@@ -1087,28 +989,23 @@ class TemplateSuggestModal extends FuzzySuggestModal<SuggestModalItem> {
         }
     }
 
-    onChooseItem(item: SuggestModalItem, evt: MouseEvent | KeyboardEvent): void {
-        // Use the type predicate function
+    onChooseItem(item: SuggestModalItem, _evt: MouseEvent | KeyboardEvent): void {
         if (isSpecialTriggerItem(item)) {
-            // Handle trigger selection - now goes to recent mode first
             new TemplateSuggestModal(
-                this.appInstance, 
-                [], // No predefined templates needed in recent mode
-                this.onChoose, 
+                this.appInstance,
+                [],
+                this.onChoose,
                 this.recentTemplates,
-                'recent' // Switch to recent mode
+                'recent'
             ).open();
         } else {
-            // If it's not the trigger, TypeScript now knows 'item' is TFile
-            // Handle TFile selection
-            this.onChoose(item); // No type assertion needed
+            this.onChoose(item);
         }
     }
 
     onClose() {
         super.onClose();
-        
-        // Clean up input listener
+
         if (this.inputListener) {
             this.inputEl.removeEventListener('input', this.inputListener);
         }

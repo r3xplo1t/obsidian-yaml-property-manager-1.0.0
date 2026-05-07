@@ -1424,3 +1424,32 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
 .inconsistent-file-item.is-excluded .bulk-editor-file-header:hover {
   background-color: var(--background-secondary) !important;
 }
+
+/* ======================
+   Utility Classes
+   ====================== */
+
+/* Info row directly below a heading: remove top border and padding */
+.yaml-property-manager-modal .setting-item.no-top-border {
+  border-top: none !important;
+  padding-top: 0 !important;
+}
+
+/* Same but keep a small top padding (used when the preceding row is hidden) */
+.yaml-property-manager-modal .setting-item.no-top-border-padded {
+  border-top: none !important;
+  padding-top: 8px !important;
+}
+
+/* Off-screen measurement clone for countVisualLines() */
+.yaml-pm-measurement-clone {
+  position: absolute !important;
+  visibility: hidden !important;
+  height: auto !important;
+  width: var(--yaml-pm-clone-width, auto) !important;
+}
+
+/* Selection warning shown inline when relevant */
+.selection-counter .selection-warning.is-shown {
+  display: inline;
+}

@@ -42,13 +42,13 @@ export class PropertyManagerMenu extends Modal {
     private createFileSelectionSection(containerEl: HTMLElement) {
         // Section heading
         new Setting(containerEl)
-            .setName('File(s) Selection Options')
+            .setName('File(s) selection options')
             .setHeading()
             .settingEl.setAttrs({ role: 'heading', 'aria-level': '2' });
 
         // Button: Select Current File (NEW)
         new Setting(containerEl)
-        .setName('Current File')
+        .setName('Current file')
         .setDesc('Select only the currently active file')
         .addButton(button => {
             button
@@ -63,7 +63,7 @@ export class PropertyManagerMenu extends Modal {
     
         // Button: Select All in Current Folder
         new Setting(containerEl)
-            .setName('Current Folder')
+            .setName('Current folder')
             .setDesc('Select all Markdown files in the currently active file\'s folder')
             .addButton(button => {
                 button
@@ -78,7 +78,7 @@ export class PropertyManagerMenu extends Modal {
 
         // Button: Select All in Current Folder and Subfolders
         new Setting(containerEl)
-            .setName('Current Folder and Subfolders')
+            .setName('Current folder and subfolders')
             .setDesc('Select all Markdown files in the current folder and all its subfolders')
             .addButton(button => {
                  button
@@ -94,7 +94,7 @@ export class PropertyManagerMenu extends Modal {
 
         // Button: Browse and Select Files
         new Setting(containerEl)
-            .setName('Manual Selection')
+            .setName('Manual selection')
             .setDesc('Browse and select specific files or folders from your vault')
             .addButton(button => {
                  button
@@ -207,13 +207,13 @@ export class PropertyManagerMenu extends Modal {
     private createBatchOperationsSection(containerEl: HTMLElement) {
         // Section heading
         new Setting(containerEl)
-            .setName('Batch Operations')
+            .setName('Batch operations')
             .setHeading()
             .settingEl.setAttrs({ role: 'heading', 'aria-level': '2' }); // Accessibility
 
         // Button: Apply Template to Selected Files
         const applyTemplateSetting = new Setting(containerEl)
-            .setName('Apply Template')
+            .setName('Apply template')
             .setDesc('Apply properties from a template file to the selected files');
 
         // Create and store the button component
@@ -239,7 +239,7 @@ export class PropertyManagerMenu extends Modal {
 
         // Button: Bulk Edit Properties
         const bulkEditSetting = new Setting(containerEl)
-            .setName('Bulk Edit')
+            .setName('Bulk edit')
             .setDesc('View and edit properties common across the selected files');
 
         // Create and store the button component

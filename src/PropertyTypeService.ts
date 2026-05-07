@@ -1,10 +1,11 @@
 import { App, TFile } from 'obsidian';
+import type { YamlPropertyValue } from './interfaces';
 
 /**
  * Types supported by the plugin, following Obsidian's property system
  */
-export type ObsidianPropertyType = 
-    'text' | 'number' | 'checkbox' | 
+export type ObsidianPropertyType =
+    'text' | 'number' | 'checkbox' |
     'date' | 'datetime' | 'list' | 'multitext';
 
 /**
@@ -20,7 +21,7 @@ export interface ObsidianPropertyDefinition {
  * Interface for properties with preserved type information
  */
 export interface PropertyWithType {
-    value: any;
+    value: YamlPropertyValue;
     type: string;
     originalString?: string;
 }
@@ -34,22 +35,22 @@ export class PropertyTypeService {
      * @param app - The Obsidian App instance
      */
     constructor(private app: App) {}
-    
+
     /**
      * Get the property type for a value using detection
-     * 
+     *
      * @param propertyName - Name of the property (unused in this implementation)
      * @param propertyValue - Value to detect type for
      * @returns The detected property type
      */
-    getValuePropertyType(propertyName: string, propertyValue: any): ObsidianPropertyType {
+    getValuePropertyType(_propertyName: string, propertyValue: YamlPropertyValue): ObsidianPropertyType {
         return this.detectPropertyType(propertyValue);
     }
 
     /**
      * Get the property type for a specific property in a file
      * Uses only public Obsidian API
-     * 
+     *
      * @param file - The file to check
      * @param propertyName - Name of the property
      * @returns The property type or null if not found
@@ -63,68 +64,68 @@ export class PropertyTypeService {
             if (!(propertyName in fileCache.frontmatter)) {
                 return null;
             }
-            return this.detectPropertyType(fileCache.frontmatter[propertyName]);
+            return this.detectPropertyType(fileCache.frontmatter[propertyName] as YamlPropertyValue);
         } catch {
             return null;
         }
     }
-    
+
 
     /**
      * Detect property type based on value analysis
-     * 
+     *
      * @param propertyValue - The value to detect type for
-     * @returns The detected type 
+     * @returns The detected type
      */
-    detectPropertyType(propertyValue: any): ObsidianPropertyType {
+    detectPropertyType(propertyValue: YamlPropertyValue): ObsidianPropertyType {
         // Null/undefined values are treated as text
         if (propertyValue === null || propertyValue === undefined) {
             return "text";
         }
-        
+
         // Arrays become list type properties
         if (Array.isArray(propertyValue)) {
             return "list";
         }
-        
+
         // Boolean values become checkbox properties
         if (typeof propertyValue === "boolean") {
             return "checkbox";
         }
-        
+
         // Numbers become number properties
         if (typeof propertyValue === "number") {
             return "number";
         }
-        
+
         // String values require more specific checking
         if (typeof propertyValue === "string") {
             // Date & Time format (YYYY-MM-DD HH:MM)
             if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}/.test(propertyValue)) {
                 return "datetime";
             }
-            
+
             // YYYY-MM-DD format (Date)
             if (/^\d{4}-\d{2}-\d{2}$/.test(propertyValue)) {
                 return "date";
             }
-            
+
             // Try to interpret as number
             if (!isNaN(Number(propertyValue)) && propertyValue.trim() !== '') {
                 return "number";
             }
-            
+
             // All other strings are text
             return "text";
         }
-        
+
         // Objects and other types default to text
         return "text";
     }
-    
+
     /**
      * Get display-friendly name for property type
-     * 
+     *
      * @param type - The type string
      * @returns User-friendly display name
      */
@@ -139,16 +140,16 @@ export class PropertyTypeService {
             default: return "Text";
         }
     }
-    
+
     /**
      * Modify the frontmatter of a file using Obsidian's public API
-     * 
+     *
      * @param file - The file to modify
      * @param propertyName - The property to change
      * @param propertyValue - The new value
      * @returns Promise resolving to true if successful
      */
-    async setFileProperty(file: TFile, propertyName: string, propertyValue: any): Promise<boolean> {
+    async setFileProperty(file: TFile, propertyName: string, propertyValue: YamlPropertyValue): Promise<boolean> {
         try {
             await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
                 frontmatter[propertyName] = propertyValue;
@@ -159,23 +160,23 @@ export class PropertyTypeService {
             return false;
         }
     }
-    
+
     /**
      * Preserves the type information of property values
-     * 
+     *
      * @param properties - Object of property values
      * @returns Object with preserved type information
      */
-    preservePropertyTypes(properties: Record<string, any>): Record<string, PropertyWithType> {
+    preservePropertyTypes(properties: Record<string, YamlPropertyValue>): Record<string, PropertyWithType> {
         const result: Record<string, PropertyWithType> = {};
-        
+
         for (const [key, value] of Object.entries(properties)) {
             if (value === null || value === undefined) {
-                result[key] = { value, type: 'null' };
+                result[key] = { value: null, type: 'null' };
             } else if (typeof value === 'string') {
                 // Check if it's a number-like string
                 const isNumericString = !isNaN(Number(value)) && value.trim() !== '';
-                result[key] = { 
+                result[key] = {
                     value,
                     type: 'string',
                     // Save original string format if it's numeric
@@ -195,17 +196,17 @@ export class PropertyTypeService {
                     }
                     return item;
                 });
-                result[key] = { value: processedArray, type: 'array' };
+                result[key] = { value: processedArray as YamlPropertyValue[], type: 'array' };
             } else if (typeof value === 'object') {
-                result[key] = { value: this.preservePropertyTypes(value), type: 'object' };
+                result[key] = { value: this.preservePropertyTypes(value as Record<string, YamlPropertyValue>) as unknown as YamlPropertyValue, type: 'object' };
             } else {
                 result[key] = { value, type: typeof value };
             }
         }
-        
+
         return result;
     }
-    
+
     /**
      * Convert from Obsidian property type to the plugin's internal type string
      *
@@ -227,13 +228,13 @@ export class PropertyTypeService {
 
     /**
      * Restores the original property values with preserved types
-     * 
+     *
      * @param properties - Object with preserved type information
      * @returns Object with original values
      */
-    restorePropertyValues(properties: Record<string, PropertyWithType>): Record<string, any> {
-        const result: Record<string, any> = {};
-        
+    restorePropertyValues(properties: Record<string, PropertyWithType>): Record<string, YamlPropertyValue> {
+        const result: Record<string, YamlPropertyValue> = {};
+
         for (const [key, propertyWithType] of Object.entries(properties)) {
             if (propertyWithType.type === 'string' && propertyWithType.originalString) {
                 // Restore the original string format
@@ -241,20 +242,20 @@ export class PropertyTypeService {
             } else if (propertyWithType.type === 'array' && Array.isArray(propertyWithType.value)) {
                 // Process arrays
                 result[key] = propertyWithType.value.map(item => {
-                    if (item && typeof item === 'object' && 'type' in item && item.type === 'string' && item.originalString) {
-                        return item.originalString;
+                    if (item && typeof item === 'object' && 'type' in item && (item as unknown as PropertyWithType).type === 'string' && (item as unknown as PropertyWithType).originalString) {
+                        return (item as unknown as PropertyWithType).originalString as string;
                     }
-                    return item;
+                    return item as YamlPropertyValue;
                 });
-            } else if (propertyWithType.type === 'object' && typeof propertyWithType.value === 'object') {
+            } else if (propertyWithType.type === 'object' && typeof propertyWithType.value === 'object' && propertyWithType.value !== null) {
                 // Recursively restore nested objects
-                result[key] = this.restorePropertyValues(propertyWithType.value);
+                result[key] = this.restorePropertyValues(propertyWithType.value as unknown as Record<string, PropertyWithType>) as unknown as YamlPropertyValue;
             } else {
                 // Use the original value for other types
                 result[key] = propertyWithType.value;
             }
         }
-        
+
         return result;
     }
 }

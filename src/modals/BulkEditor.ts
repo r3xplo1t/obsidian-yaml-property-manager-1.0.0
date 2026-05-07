@@ -1,9 +1,10 @@
-import { App, Modal, TFile, Setting, ButtonComponent, ExtraButtonComponent, DropdownComponent, ToggleComponent, Notice, setIcon, setTooltip, TextComponent, TextAreaComponent, FuzzySuggestModal, moment } from 'obsidian';
+import { App, Modal, TFile, Setting, ButtonComponent, ExtraButtonComponent, DropdownComponent, ToggleComponent, Notice, setIcon, FuzzySuggestModal, moment } from 'obsidian';
 import YAMLPropertyManagerPlugin from '../../main';
 import { PropertyManagerMenu } from './PropertyManagerMenu';
 import type { PropertyWithType } from '../PropertyTypeService';
-import { formatValuePreview, formatInputValue, isPotentialLink, handleLinkClick, parseValueLinks, debounce, logError, getEmptyValueForType, getDefaultTypeForKey } from '../commonHelpers';
+import { formatValuePreview, formatInputValue, handleLinkClick, debounce, logError, getEmptyValueForType, getDefaultTypeForKey } from '../commonHelpers';
 import { PROPERTY_TYPES } from '../constants';
+import type { YamlPropertyValue } from '../interfaces';
 
 // =================================================================
 // SECTION: Type Definitions & Interfaces
@@ -18,8 +19,8 @@ interface PropertyState {
     expanded: boolean;
     applyOrder: boolean;
     changeType: string | null;
-    overrideValue: any | null; // Can hold string, number, boolean, etc.
-    selectedValueOverride?: any | null; // Store dropdown selection (optional)
+    overrideValue: YamlPropertyValue | null;
+    selectedValueOverride?: YamlPropertyValue | null;
     disabledAction: 'global' | 'keep' | 'remove' | 'add_if_missing';
     excludedFiles: Set<string>;
     fileActions: Map<string, {
@@ -38,9 +39,9 @@ interface PropertyConsistencyStats {
     value: {
         total: number;
         consistent: number;
-        mostCommonValue: any;
-        firstEncounteredValue: any;
-        allUniqueValues: any[];
+        mostCommonValue: YamlPropertyValue;
+        firstEncounteredValue: YamlPropertyValue | undefined;
+        allUniqueValues: YamlPropertyValue[];
     };
 }
 
@@ -49,48 +50,14 @@ interface PropertyConsistencyStats {
 // =================================================================
 
 /**
- * Modal for suggesting notes from vault
- */
-class NoteSuggestModal extends FuzzySuggestModal<TFile> {
-    onChooseSuggestionAction: (result: TFile | null) => void;
-    onCloseExtra: () => void;
-    private allFiles: TFile[];
-
-    constructor(app: App, onChooseAction: (result: TFile | null) => void, onCloseCleanup: () => void) {
-        super(app);
-        this.allFiles = app.vault.getMarkdownFiles();
-        this.onChooseSuggestionAction = onChooseAction;
-        this.onCloseExtra = onCloseCleanup;
-        this.setPlaceholder("Search notes...");
-    }
-
-    getItems(): TFile[] {
-        return this.allFiles;
-    }
-
-    getItemText(item: TFile): string {
-        return item.basename;
-    }
-
-    onChooseItem(item: TFile, evt: MouseEvent | KeyboardEvent): void {
-        this.onChooseSuggestionAction(item);
-    }
-
-    onClose() {
-        super.onClose();
-        this.onCloseExtra();
-    }
-}
-
-/**
  * Modal for suggesting existing property values
  */
-class ExistingValueSuggestModal extends FuzzySuggestModal<any> {
-    values: any[];
+class ExistingValueSuggestModal extends FuzzySuggestModal<YamlPropertyValue> {
+    values: YamlPropertyValue[];
     propertyKey: string;
-    onChooseValue: (value: any) => void;
+    onChooseValue: (value: YamlPropertyValue) => void;
 
-    constructor(app: App, values: any[], propertyKey: string, onChoose: (value: any) => void) {
+    constructor(app: App, values: YamlPropertyValue[], propertyKey: string, onChoose: (value: YamlPropertyValue) => void) {
         super(app);
         this.values = values;
         this.propertyKey = propertyKey;
@@ -98,15 +65,15 @@ class ExistingValueSuggestModal extends FuzzySuggestModal<any> {
         this.setPlaceholder(`Select existing value for ${propertyKey}...`);
     }
 
-    getItems(): any[] {
+    getItems(): YamlPropertyValue[] {
         return this.values;
     }
 
-    getItemText(item: any): string {
+    getItemText(item: YamlPropertyValue): string {
         return formatValuePreview(item);
     }
 
-    onChooseItem(item: any, evt: MouseEvent | KeyboardEvent): void {
+    onChooseItem(item: YamlPropertyValue, _evt: MouseEvent | KeyboardEvent): void {
         this.onChooseValue(item);
     }
 }
@@ -373,7 +340,7 @@ class ToggleRelationship {
                 });
                 
                 // Then force a single reflow by reading a layout property
-                // eslint-disable-next-line @typescript-eslint/no-unused-vars
+                // eslint-disable-next-line @typescript-eslint/no-unused-vars -- triggers layout reflow for batched DOM updates
                 const forceReflow = document.body.offsetHeight;
                 
                 // Now update the visual state of all toggles at once
@@ -487,7 +454,7 @@ export class BulkEditor extends Modal {
     private toggleRelationships: Map<string, ToggleRelationship> = new Map();
 
     // Debounced function to update value counter
-    private debouncedUpdateValueCounter = debounce((propertyKey: string, inputValue: any, targetType: string) => {
+    private debouncedUpdateValueCounter = debounce((propertyKey: string, inputValue: YamlPropertyValue, _targetType: string) => {
         const count = this.calculateValueCount(propertyKey, inputValue);
         this.updateValueCounterUI(propertyKey, count);
     }, 300);
@@ -505,23 +472,27 @@ export class BulkEditor extends Modal {
     /**
      * Initialize the modal when opened
      */
-    async onOpen() {
+    onOpen(): void {
+        void this.initialize();
+    }
+
+    private async initialize(): Promise<void> {
         const { contentEl } = this;
         contentEl.empty();
         this.modalEl.addClass('yaml-property-manager-modal');
         this.titleEl.setText('Bulk Property Editor');
 
         // Add description about number of files
-        let fileCountSetting = new Setting(contentEl)
+        const fileCountSetting = new Setting(contentEl)
             .setDesc(`Editing properties across ${this.files.length} ${this.files.length === 1 ? 'file' : 'files'}.`);
         fileCountSetting.settingEl.addClass('bulk-editor-file-count');
-            
+
         // Add global options section
         this.createGlobalOptionsSection(contentEl);
-        
+
         // Properties list header + expand/collapse control in one row
         this.createExpandCollapseButton(contentEl);
-        
+
         // Properties list container
         const propertiesContainer = contentEl.createDiv({
             cls: 'properties-list-container',
@@ -553,15 +524,15 @@ export class BulkEditor extends Modal {
         const buttonContainer = this.modalEl.createDiv({
             cls: 'modal-button-container'
         });
-        
+
         // Apply button
         this.applyButton = new ButtonComponent(buttonContainer)
             .setButtonText('Apply Changes')
             .setCta()
             .onClick(() => {
-                this.applyChanges();
+                void this.applyChanges();
             });
-            
+
         // Cancel button
         new ButtonComponent(buttonContainer)
             .setButtonText('Cancel')
@@ -587,14 +558,14 @@ export class BulkEditor extends Modal {
      * Creates the global options section at the top of the modal
      */
     private createGlobalOptionsSection(container: HTMLElement) {
-        // Global Options Header
+        // Global options header
         new Setting(container)
-            .setName('Global Options')
+            .setName('Global options')
             .setHeading();
-        
-        // Enable/Disable All Edits
+
+        // Enable/disable all edits
         new Setting(container)
-            .setName('Enable/Disable All Edits')
+            .setName('Enable/disable all edits')
             .setDesc('Toggle to apply change for all properties below.')
             .addToggle(toggle => {
                 // Create a standardized toggle handler
@@ -619,9 +590,9 @@ export class BulkEditor extends Modal {
             this.toggleRelationships.set('global-enable', enableRelationship);
         }
             
-        // Action for Disabled Properties
+        // Action for disabled properties
         new Setting(container)
-            .setName('Action for Disabled Properties')
+            .setName('Action for disabled properties')
             .setDesc('Choose what happens to properties whose individual edit toggle is off.')
             .addDropdown(dropdown => {
                 dropdown
@@ -635,9 +606,9 @@ export class BulkEditor extends Modal {
                 return dropdown;
             });
             
-        // Apply Custom Order
+        // Apply custom order
         const applyOrderSetting = new Setting(container)
-            .setName('Apply Custom Order')
+            .setName('Apply custom order')
             .setDesc('Apply the manually dragged order of properties below.')
             .addToggle((toggle: ToggleComponent) => {
                 toggle
@@ -655,11 +626,11 @@ export class BulkEditor extends Modal {
      */
     private createExpandCollapseButton(container: HTMLElement) {
         new Setting(container)
-            .setName('Properties List')
+            .setName('Properties list')
             .setHeading();
 
         new Setting(container)
-            .setName('Expand / Collapse Properties')
+            .setName('Expand / collapse properties')
             .setDesc('Expand or collapse all property rows below.')
             .addButton(button => {
                 this.expandButton = button;
@@ -788,7 +759,7 @@ export class BulkEditor extends Modal {
                     this.updateOverwriteAllValuesToggleState(key);
 
                     // Update Value Counter
-                    const resetValue = stats?.value.mostCommonValue ?? stats?.value.firstEncounteredValue;
+                    const resetValue = stats?.value.mostCommonValue ?? stats?.value.firstEncounteredValue ?? null;
                     const resetValueCount = this.calculateValueCount(key, resetValue);
                     this.updateValueCounterUI(key, resetValueCount);
 
@@ -844,7 +815,7 @@ export class BulkEditor extends Modal {
         });
 
         // Drag Handle
-        const dragHandle = controlEl.createSpan({
+        controlEl.createSpan({
             cls: 'drag-handle', text: '☰',
             attr: { draggable: 'true', title: `Drag to reorder ${key} property` }
         });
@@ -899,7 +870,7 @@ export class BulkEditor extends Modal {
             // Update UI
             if (state.expanded) {
                 propertyItem.classList.remove('is-collapsed');
-                contentContainer.style.display = '';
+                contentContainer.show();
                 propertyHeaderSetting.settingEl.setAttribute('aria-expanded', 'true');
                 if (currentHintSpan) currentHintSpan.textContent = 'Toggle to hide options.';
                 
@@ -941,9 +912,9 @@ export class BulkEditor extends Modal {
         const stats = this.propertyConsistency.get(key);
         if (!state || !stats) return;
 
-        // Action if Edit Disabled
+        // Action if edit disabled
         const disabledActionSetting = new Setting(container)
-            .setName('Action if Edit Disabled')
+            .setName('Action if edit disabled')
             .setDesc('Overrides global setting if the edit toggle above is off.')
             .addDropdown((dropdown: DropdownComponent) => {
                 dropdown
@@ -958,9 +929,9 @@ export class BulkEditor extends Modal {
             });
         disabledActionSetting.settingEl.setAttr('data-setting-type', 'disabled-action-dropdown');
 
-        // Apply Order for This Property
+        // Apply order for this property
         const applyOrderSetting = new Setting(container)
-            .setName('Apply Order for This Property')
+            .setName('Apply order for this property')
             .setDesc('When enabled, the position of this property in the list will be preserved on apply.')
             .addToggle((toggle: ToggleComponent) => {
                 toggle
@@ -971,9 +942,9 @@ export class BulkEditor extends Modal {
             });
         applyOrderSetting.settingEl.setAttr('data-setting-type', 'apply-order-toggle');
 
-        // Property Type Selection
+        // Property type selection
         const propertyTypeSetting = new Setting(container)
-            .setName('Property Type')
+            .setName('Property type')
             .setDesc('Select the type to apply for this property.');
         propertyTypeSetting.settingEl.setAttr('data-setting-type', 'property-type');
 
@@ -995,15 +966,13 @@ export class BulkEditor extends Modal {
         // Create a line break element
         typeDescEl.createEl("br");
 
-        // Create the "Current Type" text span
+        // Create the "Current type" text span
         let definedType: string | null = null;
-        let currentTypeLine: string = "Current Type: Not defined in Obsidian settings";
-        let definedTypeNameForDefault: string = 'text';
+        let currentTypeLine: string = "Current type: Not defined in Obsidian settings";
 
         definedType = this.getObsidianDefinedType(key);
         if (definedType) {
-            definedTypeNameForDefault = definedType;
-            currentTypeLine = "Current Type: " + this.plugin.propertyTypeService.getPropertyTypeDisplayName(definedType);
+            currentTypeLine = "Current type: " + this.plugin.propertyTypeService.getPropertyTypeDisplayName(definedType);
         }
 
         typeDescEl.createSpan({
@@ -1011,9 +980,9 @@ export class BulkEditor extends Modal {
             cls: "setting-item-description setting-item-description-subtle"
         });
 
-        // Static Property Value Info Display
+        // Static property value info display
         const propertyValueDisplaySetting = new Setting(container)
-            .setName('Property Value')
+            .setName('Property value')
             .setDesc('Displays value consistency information.');
             
         propertyValueDisplaySetting.addButton(button => {
@@ -1065,7 +1034,7 @@ export class BulkEditor extends Modal {
 
         // Add the counter span and icon
         const valueCounterSpan = valueDescEl.createSpan({ cls: 'value-counter-span setting-item-description-subtle' });
-        const initialValue = state.overrideValue ?? stats.value.mostCommonValue ?? stats.value.firstEncounteredValue;
+        const initialValue = state.overrideValue ?? stats.value.mostCommonValue ?? stats.value.firstEncounteredValue ?? null;
         const initialValueCount = this.calculateValueCount(key, initialValue);
         const filesWithProperty = stats.property.present;
 
@@ -1208,11 +1177,11 @@ export class BulkEditor extends Modal {
             });
     
             // Determine Initial Value and Format for Display
-            let rawInitialValue: any = '';
+            let rawInitialValue: YamlPropertyValue = '';
             if (state.overrideValue !== null && state.overrideValue !== undefined) {
                 rawInitialValue = state.overrideValue;
             } else if (hasValueData) {
-                rawInitialValue = stats.value.mostCommonValue ?? stats.value.firstEncounteredValue;
+                rawInitialValue = stats.value.mostCommonValue ?? stats.value.firstEncounteredValue ?? null;
             }
             // Format for display
             const formattedValue = formatInputValue(rawInitialValue);
@@ -1344,7 +1313,7 @@ export class BulkEditor extends Modal {
         
         // Section header
         new Setting(container)
-            .setName('Inconsistent Files')
+            .setName('Inconsistent files')
             .setHeading()
             .settingEl.addClass('bulk-editor-section-heading');
         
@@ -1395,7 +1364,7 @@ export class BulkEditor extends Modal {
         const excludeAllSettingId = `exclude-all-${key.replace(/\s+/g, '-')}`;
 
         const excludeAllSetting = new Setting(inconsistentFilesControls)
-            .setName('Exclude All Files')
+            .setName('Exclude all files')
             .setDesc('Toggle to ignore all file on apply.');
 
         // Add a unique ID to the setting element
@@ -1415,17 +1384,8 @@ export class BulkEditor extends Modal {
         // Hide the setting completely if there are no inconsistent files
         if (!hasInconsistentFiles) {
             setTimeout(() => {
-                const settingEl = excludeAllSetting.settingEl;
-                if (settingEl) {
-                    settingEl.style.display = 'none';
-                    
-                    // Remove top border from Add All Missing Properties setting
-                    const addAllMissingSetting = addAllMissingSettings.settingEl;
-                    if (addAllMissingSetting) {
-                        addAllMissingSetting.style.borderTop = 'none';
-                        addAllMissingSetting.style.paddingTop = '8px';
-                    }
-                }
+                excludeAllSetting.settingEl.hide();
+                addAllMissingSettings.settingEl.addClass('no-top-border-padded');
             }, 0);
         }
 
@@ -1463,7 +1423,7 @@ export class BulkEditor extends Modal {
 
         // Add missing properties toggle (should be added after excludeAllSetting)
         const addAllMissingSettings = new Setting(inconsistentFilesControls)
-            .setName('Add All Missing Properties')
+            .setName('Add all missing properties')
             .setDesc('Toggle to add all missing properties.');
 
         // Get the description element to customize it
@@ -1542,12 +1502,8 @@ export class BulkEditor extends Modal {
 
             // Hide the toggle if there are no missing properties
             if (!hasMissingPropertyFiles) {
-                // We need to access the toggle control after it's created
                 setTimeout(() => {
-                    const toggleControl = addAllMissingSettings.controlEl;
-                    if (toggleControl) {
-                        toggleControl.style.display = 'none';
-                    }
+                    addAllMissingSettings.controlEl.hide();
                 }, 0);
             }
             
@@ -1561,9 +1517,9 @@ export class BulkEditor extends Modal {
             return toggle;
         });
 
-        // Add "Apply Value" toggle
+        // Add "Apply value" toggle
         const applyValueToAllSettings = new Setting(inconsistentFilesControls)
-            .setName('Apply Defined Property Value for All')
+            .setName('Apply defined property value for all')
             .setDesc('Applies the value entered or selected above for all the missing properties.');
 
         // Add the toggle
@@ -1587,10 +1543,7 @@ export class BulkEditor extends Modal {
             // Hide the entire setting if there are no missing properties
             if (!hasMissingPropertyFiles) {
                 setTimeout(() => {
-                    const settingEl = applyValueToAllSettings.settingEl;
-                    if (settingEl) {
-                        settingEl.style.display = 'none';
-                    }
+                    applyValueToAllSettings.settingEl.hide();
                 }, 0);
             }
 
@@ -1615,9 +1568,9 @@ export class BulkEditor extends Modal {
             return toggle;
         });
 
-        // Add "Overwrite All Values" toggle
+        // Add "Overwrite all values" toggle
         const overwriteAllValuesSetting = new Setting(inconsistentFilesControls)
-            .setName('Overwrite All Values')
+            .setName('Overwrite all values')
             .setDesc('Overwrites the existing values with the value entered or selected above.');
 
         // Get the description element to customize it
@@ -1708,10 +1661,7 @@ export class BulkEditor extends Modal {
             // Hide the toggle if there are no files with inconsistent values
             if (filesWithInconsistentValues === 0) {
                 setTimeout(() => {
-                    const toggleControl = overwriteAllValuesSetting.controlEl;
-                    if (toggleControl) {
-                        toggleControl.style.display = 'none';
-                    }
+                    overwriteAllValuesSetting.controlEl.hide();
                 }, 0);
             }
             
@@ -1731,7 +1681,7 @@ export class BulkEditor extends Modal {
         // Handle no inconsistencies case
         if (inconsistentFiles.length === 0) {
             // Hide the entire inconsistent files list container
-            inconsistentFilesList.style.display = 'none';
+            inconsistentFilesList.hide();
             return;
         }
         
@@ -1977,7 +1927,6 @@ export class BulkEditor extends Modal {
                     }
                 });
                 propertyValueDiv.textContent = formatInputValue(propertyValue);
-                const isMultiline = displayType === 'multitext' || (typeof propertyValue === 'string' && propertyValue.includes('\n'));
             }
 
             // Add toggle to control overwriting this value
@@ -2033,7 +1982,7 @@ export class BulkEditor extends Modal {
         if (!state) return;
 
         // Ensure listValue is an array
-        let listValue: any[] = [];
+        let listValue: YamlPropertyValue[] = [];
         // Prioritize overrideValue if it exists and is an array
         if (Array.isArray(state.overrideValue)) {
             listValue = state.overrideValue;
@@ -2155,7 +2104,7 @@ export class BulkEditor extends Modal {
     /**
      * Creates a pill element for a list item.
      */
-    private createPill(propertyKey: string, itemValue: any, index: number): HTMLElement {
+    private createPill(propertyKey: string, itemValue: YamlPropertyValue, index: number): HTMLElement {
         const state = this.propertiesState.get(propertyKey);
 
         const pill = createDiv({
@@ -2376,7 +2325,7 @@ export class BulkEditor extends Modal {
         try {
             // Load properties from all files
             for (const file of this.files) {
-                const properties = await this.plugin.parseFileProperties(file);
+                this.plugin.parseFileProperties(file);
                 const propertiesWithType = this.plugin.propertyCache.get(file.path) || {};
                 
                 // Store in our local cache
@@ -2483,11 +2432,11 @@ export class BulkEditor extends Modal {
         this.propertyConsistency.forEach((stats, key) => {
             const typeCount = new Map<string, number>();
             const valueDetails = {
-                counts: new Map<string, { count: number; value: any }>(),
-                firstValue: undefined as any,
+                counts: new Map<string, { count: number; value: YamlPropertyValue }>(),
+                firstValue: undefined as YamlPropertyValue | undefined,
                 hasFoundFirst: false,
                 uniqueValuesSet: new Set<string>(),
-                uniqueValues: [] as any[]
+                uniqueValues: [] as YamlPropertyValue[]
             };
 
             // Process each file's property
@@ -2532,7 +2481,7 @@ export class BulkEditor extends Modal {
             });
 
             // Find most common value
-            let mostCommonValue: any = null;
+            let mostCommonValue: YamlPropertyValue = null;
             let maxValueCount = 0;
             valueDetails.counts.forEach(({ count, value }) => {
                 if (count > maxValueCount) {
@@ -2603,9 +2552,8 @@ export class BulkEditor extends Modal {
     /**
      * Calculates how many files have the property with a specific value.
      */
-    private calculateValueCount(propertyKey: string, targetValue: any): number {
+    private calculateValueCount(propertyKey: string, targetValue: YamlPropertyValue): number {
         let count = 0;
-        const totalFiles = this.files.length;
         const targetValueString = JSON.stringify(targetValue);
 
         for (const file of this.files) {
@@ -2625,14 +2573,15 @@ export class BulkEditor extends Modal {
     /**
      * Parses user input from the editor based on the target type.
      */
-    private parseUserInput(inputValue: string | null, targetType: string): any {
+    private parseUserInput(inputValue: string | null, targetType: string): YamlPropertyValue {
         if (inputValue === null) return null;
         const trimmedValue = inputValue.trim();
 
         switch (targetType) {
-            case 'number':
+            case 'number': {
                 const num = Number(trimmedValue);
                 return !isNaN(num) ? num : null;
+            }
             case 'checkbox':
                 return trimmedValue.toLowerCase() === 'true';
             case 'date':
@@ -2659,7 +2608,7 @@ export class BulkEditor extends Modal {
      * Processes an existing property value based on the property state and file actions.
      * Handles type conversions and overrides.
      */
-    private processPropertyValue(key: string, filePath: string, currentValue: any): any | undefined {
+    private processPropertyValue(key: string, filePath: string, currentValue: YamlPropertyValue): YamlPropertyValue | undefined {
         const state = this.propertiesState.get(key);
         if (!state) return currentValue;
 
@@ -2737,10 +2686,11 @@ export class BulkEditor extends Modal {
         if (hasOverride && typeof newValue === 'string') {
             const stringValue = newValue as string;
             switch (targetType) {
-                case 'number':
+                case 'number': {
                     const parsedNum = Number(stringValue.trim());
                     newValue = !isNaN(parsedNum) ? parsedNum : stringValue;
                     break;
+                }
                 case 'checkbox':
                     newValue = stringValue.trim().toLowerCase() === 'true';
                     break;
@@ -2763,7 +2713,7 @@ export class BulkEditor extends Modal {
     /**
      * Determines the value for a property that is missing from a file, based on state.
      */
-    private processMissingProperty(key: string, filePath: string): any | undefined {
+    private processMissingProperty(key: string, filePath: string): YamlPropertyValue | undefined {
         const state = this.propertiesState.get(key);
         if (!state) return undefined;
 
@@ -2772,7 +2722,6 @@ export class BulkEditor extends Modal {
             return undefined;
         }
 
-        const fileActions = state.fileActions.get(filePath) || { type: false, value: false, add: false };
         const stats = this.propertyConsistency.get(key);
         const targetType = state.changeType ||
                         (stats ? stats.type.mostCommonType : null) ||
@@ -2795,7 +2744,7 @@ export class BulkEditor extends Modal {
 
         // Determine the value to add
         const hasOverride = state.overrideValue !== null && state.overrideValue !== undefined;
-        let valueToAdd: any;
+        let valueToAdd: YamlPropertyValue;
 
         if (hasOverride) {
             if (targetType === 'list' && Array.isArray(state.overrideValue)) {
@@ -2803,10 +2752,11 @@ export class BulkEditor extends Modal {
             } else if (typeof state.overrideValue === 'string') {
                 const stringValue = state.overrideValue as string;
                 switch (targetType) {
-                    case 'number':
+                    case 'number': {
                         const parsedNum = Number(stringValue.trim());
                         valueToAdd = !isNaN(parsedNum) ? parsedNum : null;
                         break;
+                    }
                     case 'checkbox':
                         valueToAdd = stringValue.trim().toLowerCase() === 'true';
                         break;
@@ -3410,11 +3360,11 @@ export class BulkEditor extends Modal {
 
             if (expanded) {
                 item.classList.remove('is-collapsed');
-                if (contentContainer) contentContainer.style.display = '';
+                contentContainer?.show();
                 if (header) header.setAttribute('aria-expanded', 'true');
             } else {
                 item.classList.add('is-collapsed');
-                if (contentContainer) contentContainer.style.display = 'none';
+                contentContainer?.hide();
                 if (header) header.setAttribute('aria-expanded', 'false');
             }
 
@@ -4159,16 +4109,24 @@ export class BulkEditor extends Modal {
             const element = item as HTMLElement;
 
             if (filterBy === 'all') {
-                element.style.display = '';
+                element.show();
             } else if (filterBy === 'value') {
-                element.style.display = element.hasAttribute('data-inconsistency-value') ? '' : 'none';
+                if (element.hasAttribute('data-inconsistency-value')) {
+                    element.show();
+                } else {
+                    element.hide();
+                }
             } else if (filterBy === 'missing') {
-                element.style.display = element.hasAttribute('data-inconsistency-missing') ? '' : 'none';
+                if (element.hasAttribute('data-inconsistency-missing')) {
+                    element.show();
+                } else {
+                    element.hide();
+                }
             }
         });
-        
+
         // Apply ordering
-        const visibleItems = fileItems.filter(item => 
+        const visibleItems = fileItems.filter(item =>
             (item as HTMLElement).style.display !== 'none'
         );
         
@@ -4338,7 +4296,11 @@ export class BulkEditor extends Modal {
         // Find and update the toggle visibility
         const overwriteAllToggleControl = container.querySelector('.setting-item:nth-child(4) .setting-item-control');
         if (overwriteAllToggleControl instanceof HTMLElement) {
-            overwriteAllToggleControl.style.display = filesWithInconsistentValues > 0 ? '' : 'none';
+            if (filesWithInconsistentValues > 0) {
+                overwriteAllToggleControl.show();
+            } else {
+                overwriteAllToggleControl.hide();
+            }
         }
     }
 
@@ -4367,36 +4329,47 @@ export class BulkEditor extends Modal {
         
         // Update visibility - for Add All Missing, just hide the toggle control
         if (addAllMissingToggleControl instanceof HTMLElement) {
-            addAllMissingToggleControl.style.display = hasMissingPropertyFiles ? '' : 'none';
+            if (hasMissingPropertyFiles) {
+                addAllMissingToggleControl.show();
+            } else {
+                addAllMissingToggleControl.hide();
+            }
         }
-        
+
         // For Apply Value, hide the entire setting
         if (applyValueSetting instanceof HTMLElement) {
-            applyValueSetting.style.display = hasMissingPropertyFiles ? '' : 'none';
+            if (hasMissingPropertyFiles) {
+                applyValueSetting.show();
+            } else {
+                applyValueSetting.hide();
+            }
         }
-        
+
         // For Exclude All, hide the entire setting if no inconsistent files
         if (excludeAllSetting instanceof HTMLElement) {
-            excludeAllSetting.style.display = hasInconsistentFiles ? '' : 'none';
-            
+            if (hasInconsistentFiles) {
+                excludeAllSetting.show();
+            } else {
+                excludeAllSetting.hide();
+            }
+
             // Handle Add All Missing Properties top border based on Exclude All visibility
             if (addAllMissingSetting instanceof HTMLElement) {
                 if (!hasInconsistentFiles) {
-                    // Remove top border when it becomes the first visible item
-                    addAllMissingSetting.style.borderTop = 'none';
-                    // Add some top padding to maintain spacing
-                    addAllMissingSetting.style.paddingTop = '8px';
+                    addAllMissingSetting.addClass('no-top-border-padded');
                 } else {
-                    // Restore default styling when Exclude All is visible
-                    addAllMissingSetting.style.borderTop = '';
-                    addAllMissingSetting.style.paddingTop = '';
+                    addAllMissingSetting.removeClass('no-top-border-padded');
                 }
             }
         }
-        
+
         // Hide the inconsistent files list container if empty
         if (inconsistentFilesList instanceof HTMLElement) {
-            inconsistentFilesList.style.display = hasInconsistentFiles ? '' : 'none';
+            if (hasInconsistentFiles) {
+                inconsistentFilesList.show();
+            } else {
+                inconsistentFilesList.hide();
+            }
         }
     }
 
@@ -4720,10 +4693,8 @@ export class BulkEditor extends Modal {
         
         // Create a clone to measure without affecting the original
         const clone = element.cloneNode(true) as HTMLElement;
-        clone.style.position = 'absolute';
-        clone.style.visibility = 'hidden';
-        clone.style.height = 'auto';
-        clone.style.width = element.offsetWidth + 'px';
+        clone.addClass('yaml-pm-measurement-clone');
+        clone.setCssProps({ '--yaml-pm-clone-width': element.offsetWidth + 'px' });
         this.modalEl.appendChild(clone);
 
         const contentHeight = clone.scrollHeight;
@@ -4774,7 +4745,7 @@ export class BulkEditor extends Modal {
     /**
      * Creates an array value display with expand/collapse functionality
      */
-    private createArrayValueDisplay(container: HTMLElement, arrayValue: any[], propertyType: string | null) {
+    private createArrayValueDisplay(container: HTMLElement, arrayValue: YamlPropertyValue[], propertyType: string | null) {
         // Collapsed view
         const collapsedView = container.createSpan({ cls: 'array-property-collapsed-view' });
         
@@ -4876,9 +4847,6 @@ export class BulkEditor extends Modal {
             const fileItem = inconsistentFilesContainer.querySelector(`.inconsistent-file-item[data-path="${file.path}"]`);
             if (!fileItem) return;
             
-            // Update "Use Value" toggle
-            const useValueToggleEl = fileItem.querySelector('.setting-item[data-action-key="useValueOnAdd"] .setting-item-control') as HTMLElement | null;
-            
             // Update header appearance
             this.updateFileHeaderAppearance(fileItem as HTMLElement, propertyKey);
         });
@@ -4934,10 +4902,10 @@ export class BulkEditor extends Modal {
             for (const file of this.files) {
                 try {
                     // Get existing properties
-                    const existingProperties = await this.plugin.parseFileProperties(file);
-                    
+                    const existingProperties = this.plugin.parseFileProperties(file);
+
                     // Start with a fresh object to control property order
-                    const newProperties: Record<string, any> = {};
+                    const newProperties: Record<string, YamlPropertyValue> = {};
                     const orderedKeys = this.globalSettings.applyCustomOrder ? this.propertyOrder : [];
                     
                     // First add keys in order (if custom order is enabled)

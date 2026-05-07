@@ -5,11 +5,12 @@
 
 // -------- Models & Types --------
 // Core interfaces and types
-export type { 
-    YAMLPropertyManagerSettings, 
+export type {
+    YAMLPropertyManagerSettings,
     TemplatePath,
     TemplateNode,
-    TreeNode 
+    TreeNode,
+    YamlPropertyValue
 } from './interfaces';
 
 // Property-related types

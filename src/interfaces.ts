@@ -1,6 +1,25 @@
 import { TFile, TFolder } from 'obsidian';
 
 /**
+ * Represents an object with YAML property values (avoids circular reference).
+ */
+interface YamlPropertyValueObject {
+    [key: string]: YamlPropertyValue;
+}
+
+/**
+ * Represents any value that can appear in YAML frontmatter.
+ * Covers all types Obsidian's metadata cache may return.
+ */
+export type YamlPropertyValue =
+    | string
+    | number
+    | boolean
+    | null
+    | YamlPropertyValue[]
+    | YamlPropertyValueObject;
+
+/**
  * Plugin settings interface
  * Defines the structure of the settings that are saved to data.json
  */

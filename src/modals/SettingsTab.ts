@@ -48,8 +48,6 @@ export class SettingTab extends PluginSettingTab {
         try {
             // Save the current scroll position of the container
             const container = nodeElement.closest('#template-paths-container');
-            const scrollPosition = container ? container.scrollTop : 0;
-            
             // Start animation - use animation class that comes with Obsidian
             nodeElement.addClass('is-removing');
             
@@ -146,7 +144,7 @@ export class SettingTab extends PluginSettingTab {
         
         // Template Paths Section - Using Setting component for heading
         new Setting(containerEl)
-            .setName('Template Paths')
+            .setName('Template paths')
             .setHeading();
         
         // Create a container for template paths using Obsidian's native classes
@@ -167,7 +165,7 @@ export class SettingTab extends PluginSettingTab {
         
         // Single button to add templates - using Obsidian's native Setting API
         new Setting(containerEl)
-            .setName('Template Selection')
+            .setName('Template selection')
             .setDesc('Browse and select template files or folders to use with YAML Property Manager')
             .addButton(button => {
                 // Get the button element after setting up the button
@@ -278,7 +276,7 @@ export class SettingTab extends PluginSettingTab {
         
         // Max recent templates - With proper method chaining
         new Setting(containerEl)
-        .setName('Max Recent Templates')
+        .setName('Max recent templates')
         .setDesc('Maximum number of recent templates to remember')
         .addSlider(slider => slider
             .setLimits(1, 10, 1)
@@ -296,7 +294,7 @@ export class SettingTab extends PluginSettingTab {
         
         // Clear recent templates
         new Setting(containerEl)
-        .setName('Recent Templates')
+        .setName('Recent templates')
         .setDesc('Clear the list of recently used templates')
         .addButton(button => button
             .setButtonText('Clear Recent Templates')
@@ -313,7 +311,7 @@ export class SettingTab extends PluginSettingTab {
                 
         // Reset Template Paths button
         new Setting(containerEl)
-            .setName('Reset Template Paths')
+            .setName('Reset template paths')
             .setDesc('If you experience issues with template paths not being removed correctly, use this button to reset all template paths.')
             .addButton(button => button
                 .setButtonText('Reset All Template Paths')
@@ -321,7 +319,7 @@ export class SettingTab extends PluginSettingTab {
                 .onClick(async () => {
                     // Improve the confirmation modal for resetting template paths
                     const modal = new Modal(this.app);
-                    modal.titleEl.setText('Confirm Reset');
+                    modal.titleEl.setText('Confirm reset');
 
                     // Use Obsidian's setting pattern for modal content
                     new Setting(modal.contentEl)
@@ -339,8 +337,8 @@ export class SettingTab extends PluginSettingTab {
                             modal.close();
                         });
 
-                    const confirmButton = new ButtonComponent(buttonContainer)
-                        .setButtonText('Reset All Paths')
+                    new ButtonComponent(buttonContainer)
+                        .setButtonText('Reset all paths')
                         .setWarning()
                         .onClick(async () => {
                             // Reset all template paths
@@ -554,7 +552,7 @@ export class SettingTab extends PluginSettingTab {
             
             // Set visibility based on expanded state
             if (!this.expandedPaths.has(node.path)) {
-                childrenEl.style.display = 'none';
+                childrenEl.hide();
             }
             
             // Register click handler for toggling
@@ -570,13 +568,13 @@ export class SettingTab extends PluginSettingTab {
                 if (isExpanded) {
                     // Folder going from expanded to collapsed
                     this.expandedPaths.delete(node.path);
-                    childrenEl.style.display = 'none';
+                    childrenEl.hide();
                     selfEl.setAttribute('aria-expanded', 'false');
                     selfEl.querySelector('.collapse-icon')?.addClass('is-collapsed');
                 } else {
                     // Folder going from collapsed to expanded
                     this.expandedPaths.add(node.path);
-                    childrenEl.style.display = '';
+                    childrenEl.show();
                     selfEl.setAttribute('aria-expanded', 'true');
                     selfEl.querySelector('.collapse-icon')?.removeClass('is-collapsed');
                     
