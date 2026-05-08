@@ -1,6 +1,6 @@
 import { App, Modal, Notice, TFile, Setting, FuzzySuggestModal, FuzzyMatch, setIcon, ToggleComponent, DropdownComponent } from 'obsidian';
 import YAMLPropertyManagerPlugin from '../../main';
-import { formatValuePreview } from '../commonHelpers';
+import { formatValuePreview, formatInputValue } from '../commonHelpers';
 import type { PropertyWithType } from '../PropertyTypeService';
 import type { YamlPropertyValue } from '../interfaces';
 import { isPotentialLink, handleLinkClick } from '../commonHelpers';
@@ -79,7 +79,7 @@ export class TemplateApplication extends Modal {
                             if (selectedFile) {
                                 this.selectedTemplate = selectedFile;
                                 this.updateSelectedTemplateDisplay();
-                                void this.loadTemplateProperties();
+                                this.loadTemplateProperties();
                                 button.setButtonText('Change template');
                             }
                         },
@@ -91,7 +91,7 @@ export class TemplateApplication extends Modal {
         // Initial Display Update / Load
         this.updateSelectedTemplateDisplay();
         if (this.selectedTemplate) {
-            void this.loadTemplateProperties();
+            this.loadTemplateProperties();
         } else {
             this.updateApplyButtonState();
         }
@@ -211,7 +211,7 @@ export class TemplateApplication extends Modal {
     }
 
     // Load and display properties from the selected template
-    async loadTemplateProperties() {
+    loadTemplateProperties(): void {
         const { contentEl } = this;
 
         // Clear existing content after the template selection
@@ -365,7 +365,7 @@ export class TemplateApplication extends Modal {
             });
 
             // Set the text content directly to preserve line breaks
-            multilineContainer.setText(String(originalValue));
+            multilineContainer.setText(formatInputValue(originalValue));
 
             } else if (Array.isArray(originalValue) && originalValue.length > 1) {
             // --- Array Handling ---
