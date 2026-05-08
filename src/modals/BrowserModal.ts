@@ -20,9 +20,9 @@ export class BrowserModal extends Modal {
     initialSelectedFilePaths: string[] = [];
     initialSelectedFolderPaths: string[] = [];
     singleFileSelectionMode: boolean = false;
-    title: string = "Select Files and Folders";
+    title: string = "Select files and folders";
     description: string = "Select files or folders to use.";
-    confirmButtonText: string = "Confirm Selection";
+    confirmButtonText: string = "Confirm selection";
     expandedFolders: Set<string> = new Set();
     
     // New property for tree structure
@@ -201,7 +201,7 @@ export class BrowserModal extends Modal {
         // Get all markdown files and folders
         const allFiles = this.app.vault.getMarkdownFiles();
         const allFolders = this.app.vault.getAllLoadedFiles()
-            .filter(file => file instanceof TFolder && !file.path.startsWith('.')) as TFolder[];
+            .filter((file): file is TFolder => file instanceof TFolder && !file.path.startsWith('.'));
         
         // Sort folders by path length to process parent folders first
         allFolders.sort((a, b) => a.path.length - b.path.length);
@@ -410,7 +410,7 @@ export class BrowserModal extends Modal {
                     'tabindex': '-1',
                     'data-indeterminate': isIndeterminate ? 'true' : 'false' // Add data attribute
                 }
-            }) as HTMLInputElement;
+            });
             
             // Set initial checkbox state
             checkbox.checked = isSelected;
@@ -614,7 +614,7 @@ export class BrowserModal extends Modal {
             const isSelected = this.selectedFolders.some(f => f.path === pathEl);
             
             // Get checkbox
-            const checkboxEl = folderEl.querySelector('.tree-item-checkbox') as HTMLInputElement | null;
+            const checkboxEl = folderEl.querySelector<HTMLInputElement>('.tree-item-checkbox');
             if (!checkboxEl) return;
             
             // Check for indeterminate state
@@ -653,7 +653,7 @@ export class BrowserModal extends Modal {
             const isSelected = this.selectedFiles.some(f => f.path === pathEl);
             
             // Get checkbox
-            const checkboxEl = fileEl.querySelector('.tree-item-checkbox') as HTMLInputElement | null;
+            const checkboxEl = fileEl.querySelector<HTMLInputElement>('.tree-item-checkbox');
             if (!checkboxEl) return;
             
             // Update checkbox state
@@ -674,7 +674,7 @@ export class BrowserModal extends Modal {
             e.preventDefault();
             
             // For files or selecting folders, toggle checkbox
-            const checkbox = selfEl.querySelector('.tree-item-checkbox') as HTMLInputElement | null;
+            const checkbox = selfEl.querySelector<HTMLInputElement>('.tree-item-checkbox');
             if (checkbox) {
                 checkbox.checked = !checkbox.checked;
                 checkbox.dispatchEvent(new Event('change'));
@@ -728,7 +728,7 @@ export class BrowserModal extends Modal {
                 selfEl.click();
             } else {
                 // Move to first child if expanded
-                const firstChild = childrenEl.querySelector('.tree-item-self') as HTMLElement | null;
+                const firstChild = childrenEl.querySelector<HTMLElement>('.tree-item-self');
                 if (firstChild) firstChild.focus();
             }
         } else if (e.key === 'ArrowLeft') {
@@ -740,7 +740,7 @@ export class BrowserModal extends Modal {
             } else {
                 // Move to parent
                 const parentItem = selfEl.closest('.tree-item-children')?.parentElement;
-                const parentSelf = parentItem?.querySelector('.tree-item-self') as HTMLElement | null;
+                const parentSelf = parentItem?.querySelector<HTMLElement>('.tree-item-self') ?? null;
                 if (parentSelf) parentSelf.focus();
             }
         } else if (e.key === 'ArrowDown') {
@@ -826,7 +826,7 @@ export class BrowserModal extends Modal {
         }
         
         // Show warning when folders are selected but none contain .md files
-        const warningEl = selCountEl?.querySelector('.selection-warning') as HTMLElement | null;
+        const warningEl = selCountEl?.querySelector<HTMLElement>('.selection-warning') ?? null;
         if (warningEl) {
             const showWarning = !this.singleFileSelectionMode &&
                                 folderCount > 0 &&
@@ -835,7 +835,7 @@ export class BrowserModal extends Modal {
         }
 
         // Update confirm button state
-        const confirmButton = this.modalEl.querySelector('.mod-cta') as HTMLButtonElement | null;
+        const confirmButton = this.modalEl.querySelector<HTMLButtonElement>('.mod-cta');
         if (confirmButton) {
             if (this.singleFileSelectionMode) {
                 confirmButton.disabled = fileCount !== 1;
@@ -962,7 +962,7 @@ export class BrowserModal extends Modal {
         
         // Process all folders in the vault
         const allFolders = this.app.vault.getAllLoadedFiles()
-            .filter(file => file instanceof TFolder && !file.path.startsWith('.')) as TFolder[];
+            .filter((file): file is TFolder => file instanceof TFolder && !file.path.startsWith('.'));
         
         // Sort by path length to process parent folders first
         allFolders.sort((a, b) => a.path.length - b.path.length);

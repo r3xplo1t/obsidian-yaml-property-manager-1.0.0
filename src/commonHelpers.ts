@@ -95,7 +95,10 @@ export function formatInputValue(value: YamlPropertyValue): string {
     if (Array.isArray(value)) {
         // Join array elements with commas for simple editing
         return value.map(item =>
-            typeof item === 'string' ? item : String(item)
+            typeof item === 'string' ? item
+            : typeof item === 'number' || typeof item === 'boolean' ? String(item)
+            : item === null ? ''
+            : JSON.stringify(item)
         ).join(', ');
     }
 
@@ -187,34 +190,35 @@ export function formatValuePreview(value: YamlPropertyValue, propertyType?: stri
             )) {
             // For small arrays, show all items
             if (value.length <= 3) {
-                return (value as string[]).join(', ');
+                return value.join(', ');
             }
 
             // For larger arrays, show the first item and count
-            return `${value[0]}, ${value.length - 1} more items`;
+            const firstUrl = value[0];
+            return `${typeof firstUrl === 'string' ? firstUrl : formatInputValue(firstUrl)}, ${value.length - 1} more items`;
         }
 
         // For regular arrays, just display them as strings (not as links)
         // For small arrays, show all items
         if (value.length <= 3) {
-            return value.map(item => String(item)).join(', ');
+            return value.map(item => formatInputValue(item)).join(', ');
         }
 
         // For larger arrays, show the first item and count
-        return `${String(value[0])}, ${value.length - 1} more items`;
+        return `${formatInputValue(value[0])}, ${value.length - 1} more items`;
     }
 
     // Handle objects
     if (typeof value === 'object' && value !== null) {
-        const rec = value as Record<string, YamlPropertyValue>;
+        const rec = value;
         const keys = Object.keys(rec);
         if (keys.length === 0) return '';
 
         if (keys.length <= 2) {
-            return keys.map(key => `${key}: ${String(rec[key])}`).join(', ');
+            return keys.map(key => `${key}: ${formatInputValue(rec[key])}`).join(', ');
         }
 
-        return `${keys[0]}: ${String(rec[keys[0]])}, ... +${keys.length - 1} more!`;
+        return `${keys[0]}: ${formatInputValue(rec[keys[0]])}, ... +${keys.length - 1} more!`;
     }
 
     // For booleans, numbers, etc.
@@ -515,8 +519,8 @@ export function handleLinkClick(app: App, linkTarget: YamlPropertyValue, event: 
  */
 export function findNextFocusableElement(currentEl: HTMLElement, scope: HTMLElement = document.body): HTMLElement | null {
     const allFocusable = Array.from(
-        scope.querySelectorAll('.tree-item-self[tabindex="0"], .clickable-icon[tabindex="0"]')
-    ) as HTMLElement[];
+        scope.querySelectorAll<HTMLElement>('.tree-item-self[tabindex="0"], .clickable-icon[tabindex="0"]')
+    );
 
     const currentIndex = allFocusable.indexOf(currentEl);
     if (currentIndex >= 0 && currentIndex < allFocusable.length - 1) {
@@ -527,8 +531,8 @@ export function findNextFocusableElement(currentEl: HTMLElement, scope: HTMLElem
 
 export function findPrevFocusableElement(currentEl: HTMLElement, scope: HTMLElement = document.body): HTMLElement | null {
     const allFocusable = Array.from(
-        scope.querySelectorAll('.tree-item-self[tabindex="0"], .clickable-icon[tabindex="0"]')
-    ) as HTMLElement[];
+        scope.querySelectorAll<HTMLElement>('.tree-item-self[tabindex="0"], .clickable-icon[tabindex="0"]')
+    );
 
     const currentIndex = allFocusable.indexOf(currentEl);
     if (currentIndex > 0) {

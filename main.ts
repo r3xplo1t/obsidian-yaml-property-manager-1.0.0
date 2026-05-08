@@ -1,4 +1,4 @@
-import { App, MarkdownView, Notice, Plugin, TFile, TFolder, TAbstractFile, normalizePath } from 'obsidian';
+import { MarkdownView, Notice, Plugin, TFile, TFolder, TAbstractFile, normalizePath } from 'obsidian';
 import {
     // Models
     DEFAULT_SETTINGS,
@@ -76,13 +76,13 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
             this.settings = Object.assign({}, DEFAULT_SETTINGS, loadedData);
 
             // Migrate from old format if needed
-            if (loadedData && 'defaultTemplateFilePath' in loadedData &&
-                loadedData.defaultTemplateFilePath &&
+            const legacyPath = loadedData?.defaultTemplateFilePath;
+            if (loadedData && typeof legacyPath === 'string' && legacyPath &&
                 !('templatePaths' in loadedData)) {
 
                 this.settings.templatePaths = [{
                     type: 'file' as TemplatePathType,
-                    path: normalizePath(String(loadedData.defaultTemplateFilePath)),
+                    path: normalizePath(legacyPath),
                     includeSubdirectories: false
                 }];
 
@@ -145,7 +145,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
         // Add command to open the property manager
         this.addCommand({
             id: 'open-property-manager',
-            name: 'Open Property Manager',
+            name: 'Open property manager',
             callback: () => {
                 new PropertyManagerMenu(this.app, this).open();
             }
@@ -154,7 +154,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
         // Add command to apply template to current file
         this.addCommand({
             id: 'apply-template-to-current-file',
-            name: 'Apply Template to Current File',
+            name: 'Apply template to current file',
             checkCallback: (checking: boolean) => {
                 const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
                 if (activeView) {
@@ -169,7 +169,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
 
         this.addCommand({
             id: 'apply-template-to-multiple-files',
-            name: 'Apply Template to Multiple Files',
+            name: 'Apply template to multiple files',
             callback: () => {
                 const browser = new BrowserModal(
                     this.app,
@@ -385,7 +385,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
         }
     }
 
-    async findFilesByProperty(propertyName: string, propertyValue: YamlPropertyValue): Promise<TFile[]> {
+    findFilesByProperty(propertyName: string, propertyValue: YamlPropertyValue): TFile[] {
         const files = this.app.vault.getMarkdownFiles();
         const matchingFiles: TFile[] = [];
 

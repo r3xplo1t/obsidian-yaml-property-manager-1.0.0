@@ -1,6 +1,6 @@
 import { App, PluginSettingTab, Setting, Notice, ButtonComponent, Modal, setTooltip, setIcon } from 'obsidian';
 import YAMLPropertyManagerPlugin from '../../main';
-import { BrowserModal } from './BrowserModal';
+import { BrowserModal, BrowserModalResult } from './BrowserModal';
 import { TreeNode } from '../interfaces';
 import { findNextFocusableElement, findPrevFocusableElement } from '../commonHelpers';
 
@@ -47,7 +47,7 @@ export class SettingTab extends PluginSettingTab {
         
         try {
             // Save the current scroll position of the container
-            const container = nodeElement.closest('#template-paths-container');
+            const container = nodeElement.closest<HTMLElement>('#template-paths-container');
             // Start animation - use animation class that comes with Obsidian
             nodeElement.addClass('is-removing');
             
@@ -103,7 +103,7 @@ export class SettingTab extends PluginSettingTab {
                 if (this.plugin.settings.templatePaths.some(tp => tp.path === ancestorPath)) break;
 
                 const selfEl = container?.querySelector(`.tree-item-self[data-path="${ancestorPath}"]`);
-                (selfEl?.closest('.tree-item') as HTMLElement | null)?.remove();
+                (selfEl?.closest<HTMLElement>('.tree-item') ?? null)?.remove();
                 this.removeNodeFromTree(ancestorPath);
 
                 ancestorPath = ancestorPath.includes('/')
@@ -113,7 +113,7 @@ export class SettingTab extends PluginSettingTab {
 
             // Refresh display ONLY if there are no template paths left
             if (this.plugin.settings.templatePaths.length === 0) {
-                const templatePathsContainer = container as HTMLElement;
+                const templatePathsContainer = container;
                 
                 // Instead of full refresh, just update the container
                 if (templatePathsContainer) {
@@ -170,96 +170,17 @@ export class SettingTab extends PluginSettingTab {
             .addButton(button => {
                 // Get the button element after setting up the button
                 const buttonEl = button
-                    .setButtonText('Browse and Select Templates')
+                    .setButtonText('Browse and select templates')
                     .setCta()
                     .onClick(() => {
                         new BrowserModal(
                             this.app,
                             this.plugin,
-                            async (result) => {
-                            // Process selected files and folders
-                            let countAdded = 0;
-                            let countRemoved = 0;
-                            
-                            // Create sets for easier lookup
-                            const resultFilePaths = new Set(result.files.map(f => f.path));
-                            const resultFolderPaths = new Set(result.folders.map(f => f.path));
-                            
-                            // Check which existing templates should be removed
-                            const pathsToKeep = [];
-                            
-                            for (const templatePath of this.plugin.settings.templatePaths) {
-                                const isFile = templatePath.type === 'file';
-                                const isFolder = templatePath.type === 'directory';
-                                
-                                if ((isFile && resultFilePaths.has(templatePath.path)) || 
-                                    (isFolder && resultFolderPaths.has(templatePath.path))) {
-                                    // This path is still selected, keep it
-                                    pathsToKeep.push(templatePath);
-                                } else {
-                                    // This path is no longer selected, remove it
-                                    countRemoved++;
-                                }
-                            }
-                            
-                            // Update settings with paths to keep
-                            this.plugin.settings.templatePaths = pathsToKeep;
-                            
-                            // Now add new files and folders that aren't already in the settings
-                            for (const file of result.files) {
-                                const alreadyExists = this.plugin.settings.templatePaths.some(
-                                    tp => tp.type === 'file' && tp.path === file.path
-                                );
-                                
-                                if (!alreadyExists) {
-                                    this.plugin.settings.templatePaths.push({
-                                        type: 'file',
-                                        path: file.path,
-                                        includeSubdirectories: true
-                                    });
-                                    countAdded++;
-                                }
-                            }
-                            
-                            for (const folder of result.folders) {
-                                const alreadyExists = this.plugin.settings.templatePaths.some(
-                                    tp => tp.type === 'directory' && tp.path === folder.path
-                                );
-                                
-                                if (!alreadyExists) {
-                                    this.plugin.settings.templatePaths.push({
-                                        type: 'directory',
-                                        path: folder.path,
-                                        includeSubdirectories: true
-                                    });
-                                    countAdded++;
-                                }
-                            }
-                            
-                            // Save settings and refresh if any changes were made
-                            if (countAdded > 0 || countRemoved > 0) {
-                                await this.plugin.saveSettings();
-                                
-                                // Build notification message
-                                let noticeMsg = '';
-                                if (countAdded > 0) {
-                                    noticeMsg += `Added ${countAdded} template source${countAdded !== 1 ? 's' : ''}`;
-                                }
-                                if (countRemoved > 0) {
-                                    if (noticeMsg) noticeMsg += ' and ';
-                                    noticeMsg += `Removed ${countRemoved} template source${countRemoved !== 1 ? 's' : ''}`;
-                                }
-                                
-                                new Notice(noticeMsg);
-                                this.display(); // Refresh view
-                            } else if (result.files.length > 0 || result.folders.length > 0) {
-                                new Notice('No changes made to your template list');
-                            }
-                        },
+                            (result) => { void this.applyBrowserSelection(result); },
                         {
-                            title: "Select Template Files and Directories",
+                            title: "Select template files and directories",
                             description: "Select files to use as templates, or select entire directories. Check the box to include a file or folder.",
-                            confirmButtonText: "Apply Selected Files & Folders",
+                            confirmButtonText: "Apply selected files & folders",
                             existingPathsToHighlight: this.plugin.settings.templatePaths
                         }
                     ).open();
@@ -297,7 +218,7 @@ export class SettingTab extends PluginSettingTab {
         .setName('Recent templates')
         .setDesc('Clear the list of recently used templates')
         .addButton(button => button
-            .setButtonText('Clear Recent Templates')
+            .setButtonText('Clear recent templates')
             .onClick(async () => {
                 this.plugin.settings.recentTemplates = [];
                 await this.plugin.saveSettings();
@@ -314,9 +235,9 @@ export class SettingTab extends PluginSettingTab {
             .setName('Reset template paths')
             .setDesc('If you experience issues with template paths not being removed correctly, use this button to reset all template paths.')
             .addButton(button => button
-                .setButtonText('Reset All Template Paths')
+                .setButtonText('Reset all template paths')
                 .setWarning()
-                .onClick(async () => {
+                .onClick(() => {
                     // Improve the confirmation modal for resetting template paths
                     const modal = new Modal(this.app);
                     modal.titleEl.setText('Confirm reset');
@@ -612,7 +533,7 @@ export class SettingTab extends PluginSettingTab {
                         selfEl.click();
                     } else {
                         // Move to the first child if folder is already expanded
-                        const firstChild = childrenEl.querySelector('[tabindex="0"]') as HTMLElement;
+                        const firstChild = childrenEl.querySelector<HTMLElement>('[tabindex="0"]');
                         if (firstChild) firstChild.focus();
                     }
                 } else if (e.key === 'ArrowLeft') {
@@ -622,7 +543,7 @@ export class SettingTab extends PluginSettingTab {
                         selfEl.click();
                     } else {
                         // Move to parent if folder is already collapsed
-                        const parentFolder = itemEl.parentElement?.closest('.tree-item-self') as HTMLElement;
+                        const parentFolder = itemEl.parentElement?.closest<HTMLElement>('.tree-item-self') ?? null;
                         if (parentFolder) parentFolder.focus();
                     }
                 } else if (e.key === 'ArrowDown') {
@@ -654,30 +575,94 @@ export class SettingTab extends PluginSettingTab {
         }
         
         // Handle delete button keyboard and click events
-        this.plugin.registerDomEvent(deleteButton, 'click', async (e: MouseEvent) => {
+        this.plugin.registerDomEvent(deleteButton, 'click', (e: MouseEvent) => {
             e.stopPropagation();
             deleteButton.addClass('is-disabled');
-            try {
-                await this.removeTemplateWithScrollPreservation(node.templatePathIndex, node, itemEl);
-            } catch (error) {
-                console.error("Removal failed:", error);
-                deleteButton.removeClass('is-disabled');
-            }
+            void this.removeTemplateWithScrollPreservation(node.templatePathIndex, node, itemEl)
+                .catch((error: unknown) => {
+                    console.error("Removal failed:", error);
+                    deleteButton.removeClass('is-disabled');
+                });
         });
-        
-        this.plugin.registerDomEvent(deleteButton, 'keydown', async (e: KeyboardEvent) => {
+
+        this.plugin.registerDomEvent(deleteButton, 'keydown', (e: KeyboardEvent) => {
             if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 e.stopPropagation();
                 deleteButton.addClass('is-disabled');
-                try {
-                    await this.removeTemplateWithScrollPreservation(node.templatePathIndex, node, itemEl);
-                } catch (error) {
-                    console.error("Removal failed:", error);
-                    deleteButton.removeClass('is-disabled');
-                }
+                void this.removeTemplateWithScrollPreservation(node.templatePathIndex, node, itemEl)
+                    .catch((error: unknown) => {
+                        console.error("Removal failed:", error);
+                        deleteButton.removeClass('is-disabled');
+                    });
             }
         });
+    }
+
+    private async applyBrowserSelection(result: BrowserModalResult): Promise<void> {
+        let countAdded = 0;
+        let countRemoved = 0;
+
+        const resultFilePaths = new Set(result.files.map(f => f.path));
+        const resultFolderPaths = new Set(result.folders.map(f => f.path));
+
+        const pathsToKeep = [];
+        for (const templatePath of this.plugin.settings.templatePaths) {
+            const isFile = templatePath.type === 'file';
+            const isFolder = templatePath.type === 'directory';
+            if ((isFile && resultFilePaths.has(templatePath.path)) ||
+                (isFolder && resultFolderPaths.has(templatePath.path))) {
+                pathsToKeep.push(templatePath);
+            } else {
+                countRemoved++;
+            }
+        }
+
+        this.plugin.settings.templatePaths = pathsToKeep;
+
+        for (const file of result.files) {
+            const alreadyExists = this.plugin.settings.templatePaths.some(
+                tp => tp.type === 'file' && tp.path === file.path
+            );
+            if (!alreadyExists) {
+                this.plugin.settings.templatePaths.push({
+                    type: 'file',
+                    path: file.path,
+                    includeSubdirectories: true
+                });
+                countAdded++;
+            }
+        }
+
+        for (const folder of result.folders) {
+            const alreadyExists = this.plugin.settings.templatePaths.some(
+                tp => tp.type === 'directory' && tp.path === folder.path
+            );
+            if (!alreadyExists) {
+                this.plugin.settings.templatePaths.push({
+                    type: 'directory',
+                    path: folder.path,
+                    includeSubdirectories: true
+                });
+                countAdded++;
+            }
+        }
+
+        if (countAdded > 0 || countRemoved > 0) {
+            await this.plugin.saveSettings();
+            let noticeMsg = '';
+            if (countAdded > 0) {
+                noticeMsg += `Added ${countAdded} template source${countAdded !== 1 ? 's' : ''}`;
+            }
+            if (countRemoved > 0) {
+                if (noticeMsg) noticeMsg += ' and ';
+                noticeMsg += `Removed ${countRemoved} template source${countRemoved !== 1 ? 's' : ''}`;
+            }
+            new Notice(noticeMsg);
+            this.display();
+        } else if (result.files.length > 0 || result.folders.length > 0) {
+            new Notice('No changes made to your template list');
+        }
     }
 
     private debouncedSaveSettings(delay: number = 500): void {

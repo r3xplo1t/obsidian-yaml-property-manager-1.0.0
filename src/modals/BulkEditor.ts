@@ -512,7 +512,7 @@ export class BulkEditor extends Modal {
 
         try {
             // Load and display properties
-            await this.loadProperties();
+            this.loadProperties();
             loadingEl.remove();
         } catch (error) {
             logError('YAML Property Manager', 'Error loading properties:', error);
@@ -527,7 +527,7 @@ export class BulkEditor extends Modal {
 
         // Apply button
         this.applyButton = new ButtonComponent(buttonContainer)
-            .setButtonText('Apply Changes')
+            .setButtonText('Apply changes')
             .setCta()
             .onClick(() => {
                 void this.applyChanges();
@@ -596,9 +596,9 @@ export class BulkEditor extends Modal {
             .setDesc('Choose what happens to properties whose individual edit toggle is off.')
             .addDropdown(dropdown => {
                 dropdown
-                    .addOption('keep', 'Keep Existing (Do Nothing if Missing)')
-                    .addOption('remove', 'Remove Property')
-                    .addOption('add_if_missing', 'Add Empty if Missing (Keep Existing)')
+                    .addOption('keep', 'Keep existing (do nothing if missing)')
+                    .addOption('remove', 'Remove property')
+                    .addOption('add_if_missing', 'Add empty if missing (keep existing)')
                     .setValue(this.globalSettings.disabledAction)
                     .onChange(value => {
                         this.globalSettings.disabledAction = value as 'keep' | 'remove' | 'add_if_missing';
@@ -634,21 +634,21 @@ export class BulkEditor extends Modal {
             .setDesc('Expand or collapse all property rows below.')
             .addButton(button => {
                 this.expandButton = button;
-                button.setButtonText('Expand All')
+                button.setButtonText('Expand all')
                     .onClick(() => {
                         this.globalSettings.expandAll = true;
                         this.updateAllExpansionState(true);
                         setTimeout(() => {
                             if (!this.propertiesListContainer) return;
-                            this.propertiesListContainer.querySelectorAll('.property-value-editor').forEach(el => {
-                                this.autoResizeEditableDiv(el as HTMLElement);
+                            this.propertiesListContainer.querySelectorAll<HTMLElement>('.property-value-editor').forEach(el => {
+                                this.autoResizeEditableDiv(el);
                             });
                         }, 10);
                     });
             })
             .addButton(button => {
                 this.collapseButton = button;
-                button.setButtonText('Collapse All')
+                button.setButtonText('Collapse all')
                     .onClick(() => {
                         this.globalSettings.expandAll = false;
                         this.updateAllExpansionState(false);
@@ -734,21 +734,21 @@ export class BulkEditor extends Modal {
                     this.overwriteAllValuesToggles.get(key)?.setDisabled(false);
 
                     // Reset Type Dropdown
-                    const typeDropdown = propertyItemEl.querySelector('[data-setting-type="property-type"] select') as HTMLSelectElement | null;
+                    const typeDropdown = propertyItemEl.querySelector<HTMLSelectElement>('[data-setting-type="property-type"] select');
                     if (typeDropdown) typeDropdown.value = '';
 
                     // Reset Value Input (state.overrideValue is already null, so this renders the observed value)
-                    const valueControlContainer = propertyItemEl.querySelector('.property-main-value-container') as HTMLElement | null;
+                    const valueControlContainer = propertyItemEl.querySelector<HTMLElement>('.property-main-value-container');
                     if (valueControlContainer) {
                         this.updateValueControl(valueControlContainer, key, null);
                     }
 
                     // Reset Apply Order Toggle
-                    const applyOrderToggleEl = propertyItemEl.querySelector('[data-setting-type="apply-order-toggle"] input[type="checkbox"]') as HTMLInputElement | null;
+                    const applyOrderToggleEl = propertyItemEl.querySelector<HTMLInputElement>('[data-setting-type="apply-order-toggle"] input[type="checkbox"]');
                     if (applyOrderToggleEl) this.setCheckboxVisualState(applyOrderToggleEl, state.applyOrder);
 
                     // Reset Disabled Action Dropdown
-                    const disabledActionDropdownEl = propertyItemEl.querySelector('[data-setting-type="disabled-action-dropdown"] select') as HTMLSelectElement | null;
+                    const disabledActionDropdownEl = propertyItemEl.querySelector<HTMLSelectElement>('[data-setting-type="disabled-action-dropdown"] select');
                     if (disabledActionDropdownEl) disabledActionDropdownEl.value = state.disabledAction;
 
                     // Reset Inconsistent Files List
@@ -764,7 +764,7 @@ export class BulkEditor extends Modal {
                     this.updateValueCounterUI(key, resetValueCount);
 
                     // Reset Edit Enabled Toggle
-                    const editToggle = propertyHeaderSetting.controlEl.querySelector('.edit-toggle-control-wrapper input[type="checkbox"]') as HTMLInputElement | null;
+                    const editToggle = propertyHeaderSetting.controlEl.querySelector<HTMLInputElement>('.edit-toggle-control-wrapper input[type="checkbox"]');
                     if (editToggle) {
                         state.enabled = true;
                         this.setCheckboxVisualState(editToggle, true);
@@ -918,10 +918,10 @@ export class BulkEditor extends Modal {
             .setDesc('Overrides global setting if the edit toggle above is off.')
             .addDropdown((dropdown: DropdownComponent) => {
                 dropdown
-                    .addOption('global', 'Use Global Setting')
-                    .addOption('keep', 'Keep Existing (Do Nothing if Missing)')
-                    .addOption('remove', 'Remove Property')
-                    .addOption('add_if_missing', 'Add Empty if Missing (Keep Existing)')
+                    .addOption('global', 'Use global setting')
+                    .addOption('keep', 'Keep existing (do nothing if missing)')
+                    .addOption('remove', 'Remove property')
+                    .addOption('add_if_missing', 'Add empty if missing (keep existing)')
                     .setValue(state.disabledAction)
                     .onChange((value: string) => {
                         state.disabledAction = value as 'global' | 'keep' | 'remove' | 'add_if_missing';
@@ -987,7 +987,7 @@ export class BulkEditor extends Modal {
             
         propertyValueDisplaySetting.addButton(button => {
             button
-                .setButtonText("Select Existing")
+                .setButtonText("Select existing")
                 .setTooltip("Select from existing values found in files")
                 .setDisabled(stats.value.allUniqueValues.length < 2)
                 .onClick(() => {
@@ -1001,7 +1001,7 @@ export class BulkEditor extends Modal {
 
                             // Find the input container for this property
                             const propertyItemEl = this.propertiesListContainer?.querySelector(`#prop-${key}`);
-                            const valueInputContainer = propertyItemEl?.querySelector('.dynamic-value-input-container') as HTMLElement | null;
+                            const valueInputContainer = propertyItemEl?.querySelector<HTMLElement>('.dynamic-value-input-container') ?? null;
 
                             // Refresh the UI input control if container found
                             if (valueInputContainer) {
@@ -1147,12 +1147,16 @@ export class BulkEditor extends Modal {
             if (state.overrideValue !== null && state.overrideValue !== undefined) {
                 initialBoolValue = typeof state.overrideValue === 'boolean'
                     ? state.overrideValue
-                    : String(state.overrideValue).toLowerCase() === 'true';
+                    : typeof state.overrideValue === 'string'
+                    ? state.overrideValue.toLowerCase() === 'true'
+                    : false;
             } else if (hasValueData) {
                 const rawInitialValue = stats.value.mostCommonValue ?? stats.value.firstEncounteredValue;
                 initialBoolValue = typeof rawInitialValue === 'boolean'
                     ? rawInitialValue
-                    : String(rawInitialValue).toLowerCase() === 'true';
+                    : typeof rawInitialValue === 'string'
+                    ? rawInitialValue.toLowerCase() === 'true'
+                    : false;
             }
             checkboxInput.checked = initialBoolValue;
     
@@ -1740,8 +1744,8 @@ export class BulkEditor extends Modal {
                 .setTooltip(`View File: ${file.path}`)
                 .onClick(() => {
                     // Open File in New Window
-                    this.app.workspace.getLeaf('window').openFile(file)
-                        .catch(err => {
+                    void this.app.workspace.getLeaf('window').openFile(file)
+                        .catch((err: unknown) => {
                             console.error(`Error opening file ${file.path} in new window:`, err);
                             new Notice(`Error opening file: ${file.name}`);
                         });
@@ -1815,7 +1819,7 @@ export class BulkEditor extends Modal {
         if (inconsistencyTypes.missing) {
             // Add missing property toggle
             const addMissingSetting = new Setting(fileContent)
-                .setName('Add Missing Property')
+                .setName('Add missing property')
                 .setDesc('Adds this property to the file.')
                 .addToggle((toggle: ToggleComponent) => {
                     // Get initial value from file actions
@@ -1844,7 +1848,7 @@ export class BulkEditor extends Modal {
         
             // Set "Use Defined Property Value" toggle
             const useValueOnAddSetting = new Setting(fileContent)
-                .setName('Use Defined Property Value')
+                .setName('Use defined property value')
                 .setDesc('Applies the value entered or selected above. If unchecked, adds an empty value.')
                 .addToggle((toggle: ToggleComponent) => {
                     // Get initial value from file actions
@@ -1878,7 +1882,7 @@ export class BulkEditor extends Modal {
             const fileActions = state.fileActions.get(file.path) || { type: false, value: false, add: false };
             if (!fileActions.add) {
                 // For any toggle within this setting, make sure it's properly disabled
-                const toggleEl = useValueOnAddSetting.controlEl.querySelector('input[type="checkbox"]') as HTMLInputElement;
+                const toggleEl = useValueOnAddSetting.controlEl.querySelector<HTMLInputElement>('input[type="checkbox"]');
                 if (toggleEl) {
                     toggleEl.disabled = true;
                     
@@ -1886,7 +1890,7 @@ export class BulkEditor extends Modal {
                     useValueOnAddSetting.settingEl.addClass('setting-disabled');
                     
                     // If there's a toggle handler, update it too
-                    const toggleHandler = useValueOnAddSetting.controlEl.querySelector('.toggle-handler') as HTMLElement | null;
+                    const toggleHandler = useValueOnAddSetting.controlEl.querySelector<HTMLElement>('.toggle-handler');
                     if (toggleHandler instanceof HTMLElement) {
                         toggleHandler.classList.add('is-disabled');
                     }
@@ -1923,7 +1927,7 @@ export class BulkEditor extends Modal {
                     attr: {
                         contenteditable: 'false',
                         tabindex: '-1',
-                        ...( (!propertyValue || String(propertyValue).trim() === '') && { 'data-placeholder': this.getPlaceholderForType(displayType) } )
+                        ...( (!propertyValue || formatInputValue(propertyValue).trim() === '') && { 'data-placeholder': this.getPlaceholderForType(displayType) } )
                     }
                 });
                 propertyValueDiv.textContent = formatInputValue(propertyValue);
@@ -1931,7 +1935,7 @@ export class BulkEditor extends Modal {
 
             // Add toggle to control overwriting this value
             const overwriteValueSetting = new Setting(fileContent)
-                .setName('Overwrite with Defined Property Value')
+                .setName('Overwrite with defined property value')
                 .setDesc('Applies the value entered or selected above, overwriting the current value shown.')
                 .addToggle((toggle: ToggleComponent) => {
                     // Get initial value from file actions
@@ -2050,7 +2054,7 @@ export class BulkEditor extends Modal {
                     this.renderListEditorContent(propertyKey, container);
                     
                     // Find the *new* input element after re-rendering and focus it
-                    const newInputElement = container.querySelector('.new-item-input') as HTMLElement | null;
+                    const newInputElement = container.querySelector<HTMLElement>('.new-item-input');
                     newInputElement?.focus();
                 }
             } else if (e.key === 'Backspace') {
@@ -2062,7 +2066,7 @@ export class BulkEditor extends Modal {
                 if (isEmpty || isAtStart) {
                     e.preventDefault();
                     // Find the last pill in this container
-                    const pills = container.querySelectorAll('.list-item-pill[tabindex="0"]') as NodeListOf<HTMLElement>;
+                    const pills = container.querySelectorAll<HTMLElement>('.list-item-pill[tabindex="0"]');
                     const lastPill = pills[pills.length - 1];
                     if (lastPill) {
                         lastPill.focus();
@@ -2143,7 +2147,7 @@ export class BulkEditor extends Modal {
                     if (listEditorContainer instanceof HTMLElement) {
                         this.renderListEditorContent(propertyKey, listEditorContainer);
                         // Focus the input after removing an item
-                        const input = listEditorContainer.querySelector('.new-item-input') as HTMLInputElement | null;
+                        const input = listEditorContainer.querySelector<HTMLInputElement>('.new-item-input');
                         input?.focus();
                     }
                 }
@@ -2230,8 +2234,8 @@ export class BulkEditor extends Modal {
                     const listEditorContainer = pill.closest('.list-editor-container');
                     if (listEditorContainer instanceof HTMLElement) {
                         // Find all pills and the input field *after* re-render
-                        const pillsAfterRender = listEditorContainer.querySelectorAll('.list-item-pill[tabindex="0"]') as NodeListOf<HTMLElement>;
-                        const newItemInputAfterRender = listEditorContainer.querySelector('.new-item-input') as HTMLElement | null;
+                        const pillsAfterRender = listEditorContainer.querySelectorAll<HTMLElement>('.list-item-pill[tabindex="0"]');
+                        const newItemInputAfterRender = listEditorContainer.querySelector<HTMLElement>('.new-item-input');
     
                         // Determine the next element to focus based on the original itemIndex
                         let elementToFocus: HTMLElement | null = null;
@@ -2290,8 +2294,8 @@ export class BulkEditor extends Modal {
                 this.renderListEditorContent(propertyKey, listEditorContainer);
 
                 // Set Focus After Deletion
-                const pillsAfterRender = listEditorContainer.querySelectorAll('.list-item-pill[tabindex="0"]') as NodeListOf<HTMLElement>;
-                const newItemInputAfterRender = listEditorContainer.querySelector('.new-item-input') as HTMLElement | null;
+                const pillsAfterRender = listEditorContainer.querySelectorAll<HTMLElement>('.list-item-pill[tabindex="0"]');
+                const newItemInputAfterRender = listEditorContainer.querySelector<HTMLElement>('.new-item-input');
 
                 let elementToFocus: HTMLElement | null = null;
                 if (itemIndex > 0 && pillsAfterRender.length > 0) {
@@ -2316,7 +2320,7 @@ export class BulkEditor extends Modal {
     /**
      * Loads properties from all files and calculates consistency statistics
      */
-    async loadProperties() {
+    loadProperties(): void {
         if (!this.propertiesListContainer) return;
         
         // Clear existing content
@@ -2617,8 +2621,6 @@ export class BulkEditor extends Modal {
             return currentValue;
         }
 
-        const fileActions = state.fileActions.get(filePath) || { type: false, value: false, add: false };
-
         // Check if this property is disabled for editing
         if (!state.enabled) {
             const action = state.disabledAction === 'global'
@@ -2650,32 +2652,34 @@ export class BulkEditor extends Modal {
                 case 'checkbox':
                     if (typeof override === 'boolean') {
                         newValue = override;
+                    } else if (typeof override === 'string') {
+                        newValue = override.toLowerCase() === 'true';
                     } else {
-                        newValue = String(override).toLowerCase() === 'true';
+                        newValue = false;
                     }
                     break;
                 case 'number':
                     if (typeof override === 'number') {
                         newValue = override;
                     } else {
-                        const num = Number(String(override).trim());
+                        const num = Number(formatInputValue(override).trim());
                         newValue = !isNaN(num) ? num : 0;
                     }
                     break;
                 case 'date':
                 case 'datetime':
-                    newValue = String(override).trim();
+                    newValue = formatInputValue(override).trim();
                     break;
                 case 'list':
                     if (Array.isArray(override)) {
                         newValue = [...override];
                     } else {
-                        newValue = String(override).split(',').map((s: string) => s.trim()).filter(s => s);
+                        newValue = formatInputValue(override).split(',').map((s: string) => s.trim()).filter(s => s);
                     }
                     break;
                 case 'text':
                 default:
-                    newValue = String(override);
+                    newValue = formatInputValue(override);
                     break;
             }
         } else {
@@ -2684,7 +2688,7 @@ export class BulkEditor extends Modal {
 
         // Add Parsing Logic
         if (hasOverride && typeof newValue === 'string') {
-            const stringValue = newValue as string;
+            const stringValue = newValue;
             switch (targetType) {
                 case 'number': {
                     const parsedNum = Number(stringValue.trim());
@@ -2750,7 +2754,7 @@ export class BulkEditor extends Modal {
             if (targetType === 'list' && Array.isArray(state.overrideValue)) {
                 valueToAdd = state.overrideValue;
             } else if (typeof state.overrideValue === 'string') {
-                const stringValue = state.overrideValue as string;
+                const stringValue = state.overrideValue;
                 switch (targetType) {
                     case 'number': {
                         const parsedNum = Number(stringValue.trim());
@@ -2840,7 +2844,7 @@ export class BulkEditor extends Modal {
         
         try {
             // Get inconsistent files container to find UI elements
-            const inconsistentFilesContainer = this.propertiesListContainer?.querySelector(`#prop-${propertyKey} .inconsistent-files-container`) as HTMLElement | null;
+            const inconsistentFilesContainer = this.propertiesListContainer?.querySelector<HTMLElement>(`#prop-${propertyKey} .inconsistent-files-container`);
             if (!inconsistentFilesContainer) return;
             
             // Get files that have this property (not missing)
@@ -2858,17 +2862,17 @@ export class BulkEditor extends Modal {
                 state.fileActions.set(file.path, fileActions);
                 
                 // Find this file's toggle in the DOM
-                const fileItem = inconsistentFilesContainer.querySelector(`.inconsistent-file-item[data-path="${file.path}"]`);
+                const fileItem = inconsistentFilesContainer.querySelector<HTMLElement>(`.inconsistent-file-item[data-path="${file.path}"]`);
                 if (!fileItem) return;
                 
                 // Update "Overwrite Value" toggle
-                const overwriteValueToggleEl = fileItem.querySelector('.setting-item[data-action-key="overwriteValue"] input[type="checkbox"]') as HTMLInputElement | null;
+                const overwriteValueToggleEl = fileItem.querySelector<HTMLInputElement>('.setting-item[data-action-key="overwriteValue"] input[type="checkbox"]');
                 if (overwriteValueToggleEl) {
                     this.setCheckboxVisualState(overwriteValueToggleEl, value);
                 }
                 
                 // Update header appearance
-                this.updateFileHeaderAppearance(fileItem as HTMLElement, propertyKey);
+                this.updateFileHeaderAppearance(fileItem, propertyKey);
             });
             
             // Update property and value counters
@@ -2928,7 +2932,7 @@ export class BulkEditor extends Modal {
         this.isUpdatingFromIndividualToggle = true;
 
         try {
-            const inconsistentFilesContainer = this.propertiesListContainer?.querySelector(`#prop-${propertyKey} .inconsistent-files-container`) as HTMLElement | null;
+            const inconsistentFilesContainer = this.propertiesListContainer?.querySelector<HTMLElement>(`#prop-${propertyKey} .inconsistent-files-container`);
             if (!inconsistentFilesContainer) return;
 
             const inconsistentFiles = this.getInconsistentFiles(propertyKey);
@@ -2947,13 +2951,13 @@ export class BulkEditor extends Modal {
                 fileActions.value = value;
                 state.fileActions.set(file.path, fileActions);
 
-                const fileItem = inconsistentFilesContainer.querySelector(`.inconsistent-file-item[data-path="${file.path}"]`);
+                const fileItem = inconsistentFilesContainer.querySelector<HTMLElement>(`.inconsistent-file-item[data-path="${file.path}"]`);
                 if (!fileItem) return;
 
-                const checkbox = fileItem.querySelector('.setting-item[data-action-key="useValueOnAdd"] input[type="checkbox"]') as HTMLInputElement | null;
+                const checkbox = fileItem.querySelector<HTMLInputElement>('.setting-item[data-action-key="useValueOnAdd"] input[type="checkbox"]');
                 if (checkbox) this.setCheckboxVisualState(checkbox, value);
 
-                this.updateFileHeaderAppearance(fileItem as HTMLElement, propertyKey);
+                this.updateFileHeaderAppearance(fileItem, propertyKey);
             });
 
             this.updatePropertyCountersUI(propertyKey);
@@ -3036,7 +3040,7 @@ export class BulkEditor extends Modal {
             });
             
             // Get container for finding UI elements
-            const inconsistentFilesContainer = this.propertiesListContainer?.querySelector(`#prop-${propertyKey} .inconsistent-files-container`) as HTMLElement | null;
+            const inconsistentFilesContainer = this.propertiesListContainer?.querySelector<HTMLElement>(`#prop-${propertyKey} .inconsistent-files-container`);
             if (!inconsistentFilesContainer) return;
             
             if (value) {
@@ -3054,23 +3058,23 @@ export class BulkEditor extends Modal {
                         state.fileActions.set(file.path, fileActions);
                         
                         // Find this file's toggles in the DOM
-                        const fileItem = inconsistentFilesContainer.querySelector(`.inconsistent-file-item[data-path="${file.path}"]`);
+                        const fileItem = inconsistentFilesContainer.querySelector<HTMLElement>(`.inconsistent-file-item[data-path="${file.path}"]`);
                         if (!fileItem) return;
                         
                         // Update "Add Missing Property" toggle
-                        const addMissingToggleEl = fileItem.querySelector('.setting-item[data-action-key="addMissing"] input[type="checkbox"]') as HTMLInputElement | null;
+                        const addMissingToggleEl = fileItem.querySelector<HTMLInputElement>('.setting-item[data-action-key="addMissing"] input[type="checkbox"]');
                         if (addMissingToggleEl) {
                             this.setCheckboxVisualState(addMissingToggleEl, true);
                         }
                         
                         // 2. Enable "Use Defined Property Value" toggle
-                        const useValueSettingItem = fileItem.querySelector('.setting-item[data-action-key="useValueOnAdd"]') as HTMLElement | null;
+                        const useValueSettingItem = fileItem.querySelector<HTMLElement>('.setting-item[data-action-key="useValueOnAdd"]');
                         if (useValueSettingItem) {
                             this.setUseValueToggleEnabled(useValueSettingItem, true);
                         }
                         
                         // Update header appearance
-                        this.updateFileHeaderAppearance(fileItem as HTMLElement, propertyKey);
+                        this.updateFileHeaderAppearance(fileItem, propertyKey);
                     }
                 });
                 
@@ -3087,7 +3091,7 @@ export class BulkEditor extends Modal {
                     
                     if (!isExcluded) {
                         // Find this file's DOM elements
-                        const fileItem = inconsistentFilesContainer.querySelector(`.inconsistent-file-item[data-path="${file.path}"]`);
+                        const fileItem = inconsistentFilesContainer.querySelector<HTMLElement>(`.inconsistent-file-item[data-path="${file.path}"]`);
                         if (!fileItem) return;
                         
                         // Get file actions
@@ -3098,7 +3102,7 @@ export class BulkEditor extends Modal {
                             // Case: "Add Missing Property" is ON
 
                             // Disable "Use Defined Property Value" toggle
-                            const useValueSettingItem = fileItem.querySelector('.setting-item[data-action-key="useValueOnAdd"]') as HTMLElement | null;
+                            const useValueSettingItem = fileItem.querySelector<HTMLElement>('.setting-item[data-action-key="useValueOnAdd"]');
                             if (useValueSettingItem) {
                                 fileActions.value = false;
                                 this.setUseValueToggleEnabled(useValueSettingItem, false);
@@ -3108,7 +3112,7 @@ export class BulkEditor extends Modal {
                             fileActions.add = false;
                             
                             // Update "Add Missing Property" toggle in the UI
-                            const addMissingToggleEl = fileItem.querySelector('.setting-item[data-action-key="addMissing"] input[type="checkbox"]') as HTMLInputElement | null;
+                            const addMissingToggleEl = fileItem.querySelector<HTMLInputElement>('.setting-item[data-action-key="addMissing"] input[type="checkbox"]');
                             if (addMissingToggleEl) {
                                 this.setCheckboxVisualState(addMissingToggleEl, false);
                             }
@@ -3118,7 +3122,7 @@ export class BulkEditor extends Modal {
                         state.fileActions.set(file.path, fileActions);
                         
                         // Update header appearance
-                        this.updateFileHeaderAppearance(fileItem as HTMLElement, propertyKey);
+                        this.updateFileHeaderAppearance(fileItem, propertyKey);
                     }
                 });
                 
@@ -3154,11 +3158,11 @@ export class BulkEditor extends Modal {
                 state.fileActions.set(filePath, fileActions);
                 
                 // Update "Add Missing Property" toggle visual state
-                const addMissingCheckbox = fileItem.querySelector('.setting-item[data-action-key="addMissing"] input[type="checkbox"]') as HTMLInputElement | null;
+                const addMissingCheckbox = fileItem.querySelector<HTMLInputElement>('.setting-item[data-action-key="addMissing"] input[type="checkbox"]');
                 if (addMissingCheckbox) this.setCheckboxVisualState(addMissingCheckbox, false);
 
                 // Disable and turn off "Use Defined Property Value" toggle
-                const useValueSettingItem = fileItem.querySelector('.setting-item[data-action-key="useValueOnAdd"]') as HTMLElement | null;
+                const useValueSettingItem = fileItem.querySelector<HTMLElement>('.setting-item[data-action-key="useValueOnAdd"]');
                 if (useValueSettingItem) this.setUseValueToggleEnabled(useValueSettingItem, false);
             }
             
@@ -3168,7 +3172,7 @@ export class BulkEditor extends Modal {
                 state.fileActions.set(filePath, fileActions);
                 
                 // Update "Overwrite Value" toggle visual state
-                const overwriteCheckbox = fileItem.querySelector('.setting-item[data-action-key="overwriteValue"] input[type="checkbox"]') as HTMLInputElement | null;
+                const overwriteCheckbox = fileItem.querySelector<HTMLInputElement>('.setting-item[data-action-key="overwriteValue"] input[type="checkbox"]');
                 if (overwriteCheckbox) this.setCheckboxVisualState(overwriteCheckbox, false);
             }
             
@@ -3204,7 +3208,7 @@ export class BulkEditor extends Modal {
         
         // Get the inconsistent files and container
         const inconsistentFiles = this.getInconsistentFiles(propertyKey);
-        const inconsistentFilesContainer = this.propertiesListContainer?.querySelector(`#prop-${propertyKey} .inconsistent-files-container`) as HTMLElement | null;
+        const inconsistentFilesContainer = this.propertiesListContainer?.querySelector<HTMLElement>(`#prop-${propertyKey} .inconsistent-files-container`);
         if (!inconsistentFilesContainer) return;
         
         // Update file exclusions based on the toggle state
@@ -3220,7 +3224,7 @@ export class BulkEditor extends Modal {
                 state.fileActions.set(file.path, { add: false, value: false, type: false });
                 
                 // Find and update the file item in the UI
-                const fileItem = inconsistentFilesContainer.querySelector(`.inconsistent-file-item[data-path="${file.path}"]`) as HTMLElement | null;
+                const fileItem = inconsistentFilesContainer.querySelector<HTMLElement>(`.inconsistent-file-item[data-path="${file.path}"]`);
                 if (fileItem) {
                     // Add excluded class to the file item
                     fileItem.classList.add('is-excluded');
@@ -3259,7 +3263,7 @@ export class BulkEditor extends Modal {
                 state.excludedFiles.delete(file.path);
                 
                 // Find and update the file item in the UI
-                const fileItem = inconsistentFilesContainer.querySelector(`.inconsistent-file-item[data-path="${file.path}"]`) as HTMLElement | null;
+                const fileItem = inconsistentFilesContainer.querySelector<HTMLElement>(`.inconsistent-file-item[data-path="${file.path}"]`);
                 if (fileItem) {
                     // Remove excluded class from the file item
                     fileItem.classList.remove('is-excluded');
@@ -3356,7 +3360,7 @@ export class BulkEditor extends Modal {
         const propertyItems = this.propertiesListContainer?.querySelectorAll('.bulk-property-item') || [];
         propertyItems.forEach(item => {
             const header = item.querySelector('.setting-item.bulk-property-item-header-setting');
-            const contentContainer = item.querySelector('.property-content') as HTMLElement | null;
+            const contentContainer = item.querySelector<HTMLElement>('.property-content');
 
             if (expanded) {
                 item.classList.remove('is-collapsed');
@@ -3583,7 +3587,7 @@ export class BulkEditor extends Modal {
                 item.classList.remove('setting-disabled');
             }
 
-            const checkbox = item.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+            const checkbox = item.querySelector<HTMLInputElement>('input[type="checkbox"]');
             if (checkbox) {
                 if (isExcluded) {
                     checkbox.checked = false;
@@ -3593,7 +3597,7 @@ export class BulkEditor extends Modal {
                 }
             }
 
-            const checkboxContainer = item.querySelector('.checkbox-container') as HTMLElement | null;
+            const checkboxContainer = item.querySelector<HTMLElement>('.checkbox-container');
             if (checkboxContainer) {
                 if (isExcluded) {
                     checkboxContainer.classList.remove('is-enabled');
@@ -3601,13 +3605,13 @@ export class BulkEditor extends Modal {
                 } else {
                     checkboxContainer.classList.remove('is-disabled');
                 }
-                const indicator = checkboxContainer.querySelector('.checkbox-indicator') as HTMLElement | null;
+                const indicator = checkboxContainer.querySelector<HTMLElement>('.checkbox-indicator');
                 if (indicator && isExcluded) {
                     indicator.classList.remove('is-enabled');
                 }
             }
 
-            const toggleControl = item.querySelector('.setting-item-control') as HTMLElement | null;
+            const toggleControl = item.querySelector<HTMLElement>('.setting-item-control');
             if (toggleControl) {
                 if (isExcluded) {
                     toggleControl.classList.add('is-disabled');
@@ -3623,7 +3627,7 @@ export class BulkEditor extends Modal {
         const container = checkbox.closest('.checkbox-container');
         if (container instanceof HTMLElement) {
             container.classList.toggle('is-enabled', checked);
-            const indicator = container.querySelector('.checkbox-indicator') as HTMLElement | null;
+            const indicator = container.querySelector<HTMLElement>('.checkbox-indicator');
             if (indicator) indicator.classList.toggle('is-enabled', checked);
         }
     }
@@ -3657,10 +3661,10 @@ export class BulkEditor extends Modal {
     }
 
     private setUseValueToggleEnabled(settingEl: HTMLElement, enabled: boolean): void {
-        const control = settingEl.querySelector('.setting-item-control') as HTMLElement | null;
-        const checkboxContainer = settingEl.querySelector('.checkbox-container') as HTMLElement | null;
-        const indicator = checkboxContainer?.querySelector('.checkbox-indicator') as HTMLElement | null;
-        const checkbox = settingEl.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+        const control = settingEl.querySelector<HTMLElement>('.setting-item-control');
+        const checkboxContainer = settingEl.querySelector<HTMLElement>('.checkbox-container');
+        const indicator = checkboxContainer?.querySelector<HTMLElement>('.checkbox-indicator');
+        const checkbox = settingEl.querySelector<HTMLInputElement>('input[type="checkbox"]');
 
         if (enabled) {
             settingEl.classList.remove('setting-disabled');
@@ -3937,13 +3941,13 @@ export class BulkEditor extends Modal {
         this.syncExclusionToggles(propertyKey, 'master');
         
         // Update the missing files counter - ADD THIS LINE
-        const inconsistentFilesContainer = this.propertiesListContainer?.querySelector(`#prop-${propertyKey} .inconsistent-files-container`);
+        const inconsistentFilesContainer = this.propertiesListContainer?.querySelector<HTMLElement>(`#prop-${propertyKey} .inconsistent-files-container`);
         if (inconsistentFilesContainer) {
-            this.updateMissingFilesCounter(propertyKey, inconsistentFilesContainer as HTMLElement);
-            this.updateInconsistentValuesCounter(propertyKey, inconsistentFilesContainer as HTMLElement);
-            
+            this.updateMissingFilesCounter(propertyKey, inconsistentFilesContainer);
+            this.updateInconsistentValuesCounter(propertyKey, inconsistentFilesContainer);
+
             // Update toggle visibility based on missing properties
-            this.updateMissingPropertyTogglesVisibility(propertyKey, inconsistentFilesContainer as HTMLElement);
+            this.updateMissingPropertyTogglesVisibility(propertyKey, inconsistentFilesContainer);
         }
 
         // NEW: Update property and value counters in the property header
@@ -3968,10 +3972,10 @@ export class BulkEditor extends Modal {
         const contentEl = fileItemEl.querySelector('.file-item-content');
         if (contentEl) {
             if (isMissing) {
-                const addMissingToggle = contentEl.querySelector('.setting-item[data-action-key="addMissing"] input[type="checkbox"]') as HTMLInputElement | null;
+                const addMissingToggle = contentEl.querySelector<HTMLInputElement>('.setting-item[data-action-key="addMissing"] input[type="checkbox"]');
                 isResolved = addMissingToggle?.checked || fileActions.add;
             } else if (isValueMismatch) {
-                const overwriteToggle = contentEl.querySelector('.setting-item[data-action-key="overwriteValue"] input[type="checkbox"]') as HTMLInputElement | null;
+                const overwriteToggle = contentEl.querySelector<HTMLInputElement>('.setting-item[data-action-key="overwriteValue"] input[type="checkbox"]');
                 isResolved = overwriteToggle?.checked || fileActions.value;
             }
         } else {
@@ -3998,7 +4002,7 @@ export class BulkEditor extends Modal {
      */
     private updateToggleState(toggleEl: HTMLElement, checked: boolean, isDisabled = false): void {
         // Update the checkbox input directly
-        const input = toggleEl.querySelector('input[type="checkbox"]') as HTMLInputElement | null;
+        const input = toggleEl.querySelector<HTMLInputElement>('input[type="checkbox"]');
         if (input) {
             // Set properties directly on the input element
             input.checked = checked;
@@ -4040,38 +4044,36 @@ export class BulkEditor extends Modal {
      * Refreshes the UI of the inconsistent files list for a specific property.
      */
     private refreshInconsistentFilesUI(propertyItemEl: Element, propertyKey: string) {
-        const inconsistentFilesContainer = propertyItemEl.querySelector('.inconsistent-files-container') as HTMLElement | null;
+        const inconsistentFilesContainer = propertyItemEl.querySelector<HTMLElement>('.inconsistent-files-container');
         if (!inconsistentFilesContainer) return;
 
         // Remove the "exclude all active" lock class
         inconsistentFilesContainer.classList.remove('is-exclude-all-active');
 
         // Reset filter/order dropdowns to their defaults
-        const orderBySelect = inconsistentFilesContainer.querySelector('.inconsistent-order-by') as HTMLSelectElement | null;
-        const filterBySelect = inconsistentFilesContainer.querySelector('.inconsistent-filter-by') as HTMLSelectElement | null;
+        const orderBySelect = inconsistentFilesContainer.querySelector<HTMLSelectElement>('.inconsistent-order-by');
+        const filterBySelect = inconsistentFilesContainer.querySelector<HTMLSelectElement>('.inconsistent-filter-by');
         if (orderBySelect) orderBySelect.value = 'name-asc';
         if (filterBySelect) filterBySelect.value = 'all';
 
         // Re-apply the default ordering/filtering on the file list
-        const inconsistentFilesList = inconsistentFilesContainer.querySelector('.inconsistent-files-list') as HTMLElement | null;
+        const inconsistentFilesList = inconsistentFilesContainer.querySelector<HTMLElement>('.inconsistent-files-list');
         if (inconsistentFilesList) {
             this.reorderInconsistentFiles(propertyKey, inconsistentFilesList, 'name-asc', 'all');
         }
 
         // Reset "Exclude All" toggle
-        const excludeAllCheckbox = inconsistentFilesContainer.querySelector('.inconsistent-files-controls input[type="checkbox"]') as HTMLInputElement | null;
+        const excludeAllCheckbox = inconsistentFilesContainer.querySelector<HTMLInputElement>('.inconsistent-files-controls input[type="checkbox"]');
         if (excludeAllCheckbox) this.setCheckboxVisualState(excludeAllCheckbox, false);
 
         // Reset individual file items
-        const fileItems = inconsistentFilesContainer.querySelectorAll('.inconsistent-file-item');
-        fileItems.forEach(item => {
-            const fileItem = item as HTMLElement;
-
+        const fileItems = inconsistentFilesContainer.querySelectorAll<HTMLElement>('.inconsistent-file-item');
+        fileItems.forEach(fileItem => {
             // Remove excluded state
             fileItem.classList.remove('is-excluded');
 
             // Reset the exclude toggle in the file header
-            const excludeCheckbox = fileItem.querySelector('.bulk-editor-file-header input[type="checkbox"]') as HTMLInputElement | null;
+            const excludeCheckbox = fileItem.querySelector<HTMLInputElement>('.bulk-editor-file-header input[type="checkbox"]');
             if (excludeCheckbox) this.setCheckboxVisualState(excludeCheckbox, false);
 
             // Re-enable all file-content setting items, then restore initial disabled states
@@ -4079,12 +4081,12 @@ export class BulkEditor extends Modal {
 
             // "Use Defined Property Value" must stay disabled when "Add Missing" defaults to OFF
             if (fileItem.hasAttribute('data-inconsistency-missing')) {
-                const useValueSettingItem = fileItem.querySelector('.setting-item[data-action-key="useValueOnAdd"]') as HTMLElement | null;
+                const useValueSettingItem = fileItem.querySelector<HTMLElement>('.setting-item[data-action-key="useValueOnAdd"]');
                 if (useValueSettingItem) this.setUseValueToggleEnabled(useValueSettingItem, false);
             }
 
             // Reset the checked state of all action toggles to OFF
-            const actionCheckboxes = fileItem.querySelectorAll('.file-item-content input[type="checkbox"]') as NodeListOf<HTMLInputElement>;
+            const actionCheckboxes = fileItem.querySelectorAll<HTMLInputElement>('.file-item-content input[type="checkbox"]');
             actionCheckboxes.forEach(cb => this.setCheckboxVisualState(cb, false));
 
             // Restore file header appearance to its default (warning) state
@@ -4101,33 +4103,31 @@ export class BulkEditor extends Modal {
         orderBy: string, 
         filterBy: string
     ) {
-        const fileItems = Array.from(container.querySelectorAll('.inconsistent-file-item'));
+        const fileItems = Array.from(container.querySelectorAll<HTMLElement>('.inconsistent-file-item'));
         if (fileItems.length === 0) return;
-        
+
         // Apply filtering
         fileItems.forEach(item => {
-            const element = item as HTMLElement;
-
             if (filterBy === 'all') {
-                element.show();
+                item.show();
             } else if (filterBy === 'value') {
-                if (element.hasAttribute('data-inconsistency-value')) {
-                    element.show();
+                if (item.hasAttribute('data-inconsistency-value')) {
+                    item.show();
                 } else {
-                    element.hide();
+                    item.hide();
                 }
             } else if (filterBy === 'missing') {
-                if (element.hasAttribute('data-inconsistency-missing')) {
-                    element.show();
+                if (item.hasAttribute('data-inconsistency-missing')) {
+                    item.show();
                 } else {
-                    element.hide();
+                    item.hide();
                 }
             }
         });
 
         // Apply ordering
         const visibleItems = fileItems.filter(item =>
-            (item as HTMLElement).style.display !== 'none'
+            item.style.display !== 'none'
         );
         
         if (visibleItems.length === 0) {
@@ -4185,10 +4185,11 @@ export class BulkEditor extends Modal {
         visibleItems.forEach(item => {
             container.appendChild(item);
         });
-        const inconsistentFilesContainer = container.closest('.inconsistent-files-container') as HTMLElement;
-        // Update the missing files counter based on the current view
-        this.updateMissingFilesCounter(propertyKey, container.closest('.inconsistent-files-container') as HTMLElement);
+        const inconsistentFilesContainer = container.closest<HTMLElement>('.inconsistent-files-container');
+        if (!inconsistentFilesContainer) return;
 
+        // Update the missing files counter based on the current view
+        this.updateMissingFilesCounter(propertyKey, inconsistentFilesContainer);
         this.updateInconsistentValuesCounter(propertyKey, inconsistentFilesContainer);
 
         // Update toggle visibility based on missing properties
@@ -4389,11 +4390,10 @@ export class BulkEditor extends Modal {
         this.plugin.registerDomEvent(this.propertiesListContainer, 'drop', this.handleDrop.bind(this));
         
         // Add event listeners to each drag handle
-        const dragHandles = this.propertiesListContainer.querySelectorAll('.drag-handle');
-        dragHandles.forEach(handle => { 
-            const htmlHandle = handle as HTMLElement; 
-            this.plugin.registerDomEvent(htmlHandle, 'dragstart', this.handleDragStart.bind(this)); 
-            this.plugin.registerDomEvent(htmlHandle, 'dragend', this.handleDragEnd.bind(this));   
+        const dragHandles = this.propertiesListContainer.querySelectorAll<HTMLElement>('.drag-handle');
+        dragHandles.forEach(handle => {
+            this.plugin.registerDomEvent(handle, 'dragstart', this.handleDragStart.bind(this));
+            this.plugin.registerDomEvent(handle, 'dragend', this.handleDragEnd.bind(this));
         });
     }
     
@@ -4492,8 +4492,8 @@ export class BulkEditor extends Modal {
         
         // Get all draggable elements except the one being dragged
         const draggableElements = Array.from(
-            this.propertiesListContainer.querySelectorAll('.bulk-property-item:not(.dragging)')
-        ) as HTMLElement[];
+            this.propertiesListContainer.querySelectorAll<HTMLElement>('.bulk-property-item:not(.dragging)')
+        );
         
         // Find the element whose top half is closest to the mouse position
         return draggableElements.reduce((closest, child) => {
@@ -4833,22 +4833,22 @@ export class BulkEditor extends Modal {
         });
         
         // Get relevant container
-        const inconsistentFilesContainer = this.propertiesListContainer?.querySelector(`#prop-${propertyKey} .inconsistent-files-container`);
+        const inconsistentFilesContainer = this.propertiesListContainer?.querySelector<HTMLElement>(`#prop-${propertyKey} .inconsistent-files-container`);
         if (!inconsistentFilesContainer) return;
-        
+
         // Update each file
         targetFiles.forEach(file => {
             // Update data model
             const fileActions = state.fileActions.get(file.path) || { type: false, value: false, add: false };
             fileActions.value = checked;
             state.fileActions.set(file.path, fileActions);
-            
+
             // Find this file's toggle in the DOM
-            const fileItem = inconsistentFilesContainer.querySelector(`.inconsistent-file-item[data-path="${file.path}"]`);
+            const fileItem = inconsistentFilesContainer.querySelector<HTMLElement>(`.inconsistent-file-item[data-path="${file.path}"]`);
             if (!fileItem) return;
             
             // Update header appearance
-            this.updateFileHeaderAppearance(fileItem as HTMLElement, propertyKey);
+            this.updateFileHeaderAppearance(fileItem, propertyKey);
         });
         
         // Update property and value counters in the property header
