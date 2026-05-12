@@ -39,12 +39,6 @@ The plugin registers three commands accessible from the Command Palette (`Ctrl/C
 
 ## Installation
 
-### Community Plugins (recommended)
-1. Open Obsidian **Settings** → **Community plugins**
-2. Disable Safe mode if prompted
-3. Click **Browse** and search for `YAML Property Manager`
-4. Click **Install**, then **Enable**
-
 ### Manual Installation
 1. Download `manifest.json`, `main.js`, and `styles.css` from the [latest release](https://github.com/r3xplo1t/obsidian-yaml-property-manager/releases/latest)
 2. Create a folder at `<your vault>/.obsidian/plugins/yaml-property-manager/`
