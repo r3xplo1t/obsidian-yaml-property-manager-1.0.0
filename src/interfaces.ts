@@ -1,4 +1,4 @@
-import { TFile, TFolder } from 'obsidian';
+import { TFile } from 'obsidian';
 
 /**
  * Represents an object with YAML property values (avoids circular reference).

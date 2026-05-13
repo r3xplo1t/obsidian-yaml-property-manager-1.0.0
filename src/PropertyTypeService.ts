@@ -151,7 +151,7 @@ export class PropertyTypeService {
      */
     async setFileProperty(file: TFile, propertyName: string, propertyValue: YamlPropertyValue): Promise<boolean> {
         try {
-            await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+            await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, YamlPropertyValue>) => {
                 frontmatter[propertyName] = propertyValue;
             });
             return true;

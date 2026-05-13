@@ -105,7 +105,7 @@ class ToggleHandler {
         const toggleContainer = this.toggleEl.closest('.checkbox-container') || this.toggleEl;
 
         // Ensure toggleContainer is an HTMLElement before registering the event
-        if (toggleContainer instanceof HTMLElement) {
+        if (toggleContainer.instanceOf(HTMLElement)) {
             // Add click handler ONLY to the toggle container, not the entire setting
             plugin.registerDomEvent(toggleContainer, 'click', (e: MouseEvent) => {
                 // Skip if toggle is disabled
@@ -126,7 +126,7 @@ class ToggleHandler {
                 
                 if (isCheckboxClick) {
                     // For direct checkbox clicks, wait for checkbox state to update
-                    setTimeout(() => {
+                    activeWindow.setTimeout(() => {
                         if (!this.isUpdating && this.inputEl) {
                             this.isUpdating = true;
                             try {
@@ -207,17 +207,17 @@ class ToggleHandler {
         
         // Update classes for visual state
         if (disabled) {
-            if (toggleContainer instanceof HTMLElement) {
+            if (toggleContainer.instanceOf(HTMLElement)) {
                 toggleContainer.classList.add('is-disabled');
             }
-            if (settingItem instanceof HTMLElement) {
+            if (settingItem?.instanceOf(HTMLElement)) {
                 settingItem.classList.add('setting-disabled');
             }
         } else {
-            if (toggleContainer instanceof HTMLElement) {
+            if (toggleContainer.instanceOf(HTMLElement)) {
                 toggleContainer.classList.remove('is-disabled');
             }
-            if (settingItem instanceof HTMLElement) {
+            if (settingItem?.instanceOf(HTMLElement)) {
                 settingItem.classList.remove('setting-disabled');
             }
         }
@@ -231,7 +231,7 @@ class ToggleHandler {
     isDisabled(): boolean {
         const toggleContainer = this.toggleEl.closest('.checkbox-container') || this.toggleEl;
         
-        return (toggleContainer instanceof HTMLElement && toggleContainer.classList.contains('is-disabled')) || 
+        return (toggleContainer.instanceOf(HTMLElement) && toggleContainer.classList.contains('is-disabled')) ||
                !!(this.toggleEl.closest('.setting-disabled')) ||
                !!(this.inputEl && this.inputEl.disabled);
     }
@@ -266,17 +266,17 @@ class ToggleHandler {
             // Find and update the checkbox container
             const container = this.toggleEl.closest('.checkbox-container') || 
                             this.toggleEl.querySelector('.checkbox-container');
-            if (container instanceof HTMLElement) {
+            if (container?.instanceOf(HTMLElement)) {
                 if (checked) {
                     container.classList.add('is-enabled');
                 } else {
                     container.classList.remove('is-enabled');
                 }
             }
-            
+
             // Find and update the indicator if it exists
-            const indicator = container instanceof HTMLElement ? container.querySelector('.checkbox-indicator') : null;
-            if (indicator instanceof HTMLElement) {
+            const indicator = container?.instanceOf(HTMLElement) ? container.querySelector('.checkbox-indicator') : null;
+            if (indicator?.instanceOf(HTMLElement)) {
                 if (checked) {
                     indicator.classList.add('is-enabled');
                 } else {
@@ -341,14 +341,14 @@ class ToggleRelationship {
                 
                 // Then force a single reflow by reading a layout property
                 // eslint-disable-next-line @typescript-eslint/no-unused-vars -- triggers layout reflow for batched DOM updates
-                const forceReflow = document.body.offsetHeight;
+                const forceReflow = activeDocument.body.offsetHeight;
                 
                 // Now update the visual state of all toggles at once
                 this.individualToggles.forEach(toggle => {
                     const element = toggle.getElement();
                     if (element) {
                         const input = element.querySelector('input[type="checkbox"]');
-                        if (input instanceof HTMLInputElement) {
+                        if (input?.instanceOf(HTMLInputElement)) {
                             input.checked = value;
                         }
                     }
@@ -440,7 +440,8 @@ export class BulkEditor extends Modal {
         enableAll: true,
         disabledAction: 'keep' as 'keep' | 'remove' | 'add_if_missing',
         applyCustomOrder: false,
-        expandAll: false
+        expandAll: false,
+        excludeAllFiles: false
     };
 
     private propertiesState: Map<string, PropertyState> = new Map();
@@ -501,11 +502,11 @@ export class BulkEditor extends Modal {
         this.propertiesListContainer = propertiesContainer;
 
         // Empty-state message (shown in place of the properties list when no properties exist)
-        this.emptyStateEl = contentEl.createEl('div', { cls: 'property-empty-state' });
+        this.emptyStateEl = contentEl.createDiv({ cls: 'property-empty-state' });
         this.emptyStateEl.hide();
 
         // Loading indicator
-        const loadingEl = this.propertiesListContainer.createEl('div', {
+        const loadingEl = this.propertiesListContainer.createDiv({
             cls: 'property-loading-container',
             text: 'Loading properties...'
         });
@@ -615,10 +616,34 @@ export class BulkEditor extends Modal {
                     .setValue(this.globalSettings.applyCustomOrder)
                     .onChange((value: boolean) => {
                         this.globalSettings.applyCustomOrder = value;
+                        this.propertiesState.forEach((state, key) => {
+                            state.applyOrder = value;
+                            const propertyItemEl = this.propertiesListContainer?.querySelector(`#prop-${key}`);
+                            if (!propertyItemEl) return;
+                            const applyOrderToggleEl = propertyItemEl.querySelector<HTMLInputElement>('[data-setting-type="apply-order-toggle"] input[type="checkbox"]');
+                            if (applyOrderToggleEl) this.setCheckboxVisualState(applyOrderToggleEl, value);
+                        });
                     });
             });
         applyOrderSetting.descEl.createEl('br');
         applyOrderSetting.descEl.appendText('Alternatively, enable ordering for specific properties in their settings below.');
+
+        // Global exclude all files
+        new Setting(container)
+            .setName('Exclude all files globally')
+            .setDesc('Activates "Exclude All Files" on every property at once. Un-exclude individual properties below to target only those.')
+            .addToggle((toggle: ToggleComponent) => {
+                toggle
+                    .setValue(this.globalSettings.excludeAllFiles)
+                    .onChange((value: boolean) => {
+                        this.globalSettings.excludeAllFiles = value;
+                        this.propertiesState.forEach((_, key) => {
+                            this.handleExcludeAllToggled(key, value);
+                            const masterToggle = this.getMasterToggleElement(key);
+                            if (masterToggle) this.setCheckboxVisualState(masterToggle, value);
+                        });
+                    });
+            });
     }
 
     /**
@@ -638,7 +663,7 @@ export class BulkEditor extends Modal {
                     .onClick(() => {
                         this.globalSettings.expandAll = true;
                         this.updateAllExpansionState(true);
-                        setTimeout(() => {
+                        activeWindow.setTimeout(() => {
                             if (!this.propertiesListContainer) return;
                             this.propertiesListContainer.querySelectorAll<HTMLElement>('.property-value-editor').forEach(el => {
                                 this.autoResizeEditableDiv(el);
@@ -701,78 +726,77 @@ export class BulkEditor extends Modal {
             button
                 .setIcon('rotate-ccw')
                 .setTooltip(`Revert all changes for property "${key}"`)
-                .onClick(async () => {
+                .onClick(() => {
                     if (!state) return;
+                    void this.confirmRevert(`Revert all edits for property "${key}"?`).then(confirmed => {
+                        if (!confirmed || !state) return;
 
-                    if (!await this.confirmRevert(`Revert all edits for property "${key}"?`)) {
-                        return;
-                    }
+                        // Reset State
+                        state.overrideValue = null;
+                        state.changeType = null;
+                        state.disabledAction = 'global';
+                        state.applyOrder = true;
+                        state.excludedFiles.clear();
+                        state.fileActions.clear();
 
-                    // Reset State
-                    state.overrideValue = null;
-                    state.changeType = null;
-                    state.disabledAction = 'global';
-                    state.applyOrder = true;
-                    state.excludedFiles.clear();
-                    state.fileActions.clear();
+                        // Refresh UI Elements
+                        const propertyItemEl = this.propertiesListContainer?.querySelector(`#prop-${key}`);
+                        if (!propertyItemEl) return;
 
-                    // Refresh UI Elements
-                    const propertyItemEl = this.propertiesListContainer?.querySelector(`#prop-${key}`);
-                    if (!propertyItemEl) return;
+                        // Reset master control toggles via ToggleHandler so visual state is fully synced
+                        const excludeAllHandler = this.fileToggleComponents.get(key)?.excludeAllToggle;
+                        excludeAllHandler?.setValue(false);
+                        excludeAllHandler?.setDisabled(false);
 
-                    // Reset master control toggles via ToggleHandler so visual state is fully synced
-                    const excludeAllHandler = this.fileToggleComponents.get(key)?.excludeAllToggle;
-                    excludeAllHandler?.setValue(false);
-                    excludeAllHandler?.setDisabled(false);
+                        this.addAllMissingToggles.get(key)?.setValue(false);
+                        this.addAllMissingToggles.get(key)?.setDisabled(false);
 
-                    this.addAllMissingToggles.get(key)?.setValue(false);
-                    this.addAllMissingToggles.get(key)?.setDisabled(false);
+                        this.applyValueToAllToggles.get(key)?.setValue(false);
 
-                    this.applyValueToAllToggles.get(key)?.setValue(false);
+                        this.overwriteAllValuesToggles.get(key)?.setValue(false);
+                        this.overwriteAllValuesToggles.get(key)?.setDisabled(false);
 
-                    this.overwriteAllValuesToggles.get(key)?.setValue(false);
-                    this.overwriteAllValuesToggles.get(key)?.setDisabled(false);
+                        // Reset Type Dropdown
+                        const typeDropdown = propertyItemEl.querySelector<HTMLSelectElement>('[data-setting-type="property-type"] select');
+                        if (typeDropdown) typeDropdown.value = '';
 
-                    // Reset Type Dropdown
-                    const typeDropdown = propertyItemEl.querySelector<HTMLSelectElement>('[data-setting-type="property-type"] select');
-                    if (typeDropdown) typeDropdown.value = '';
+                        // Reset Value Input (state.overrideValue is already null, so this renders the observed value)
+                        const valueControlContainer = propertyItemEl.querySelector<HTMLElement>('.property-main-value-container');
+                        if (valueControlContainer) {
+                            this.updateValueControl(valueControlContainer, key, null);
+                        }
 
-                    // Reset Value Input (state.overrideValue is already null, so this renders the observed value)
-                    const valueControlContainer = propertyItemEl.querySelector<HTMLElement>('.property-main-value-container');
-                    if (valueControlContainer) {
-                        this.updateValueControl(valueControlContainer, key, null);
-                    }
+                        // Reset Apply Order Toggle
+                        const applyOrderToggleEl = propertyItemEl.querySelector<HTMLInputElement>('[data-setting-type="apply-order-toggle"] input[type="checkbox"]');
+                        if (applyOrderToggleEl) this.setCheckboxVisualState(applyOrderToggleEl, state.applyOrder);
 
-                    // Reset Apply Order Toggle
-                    const applyOrderToggleEl = propertyItemEl.querySelector<HTMLInputElement>('[data-setting-type="apply-order-toggle"] input[type="checkbox"]');
-                    if (applyOrderToggleEl) this.setCheckboxVisualState(applyOrderToggleEl, state.applyOrder);
+                        // Reset Disabled Action Dropdown
+                        const disabledActionDropdownEl = propertyItemEl.querySelector<HTMLSelectElement>('[data-setting-type="disabled-action-dropdown"] select');
+                        if (disabledActionDropdownEl) disabledActionDropdownEl.value = state.disabledAction;
 
-                    // Reset Disabled Action Dropdown
-                    const disabledActionDropdownEl = propertyItemEl.querySelector<HTMLSelectElement>('[data-setting-type="disabled-action-dropdown"] select');
-                    if (disabledActionDropdownEl) disabledActionDropdownEl.value = state.disabledAction;
+                        // Reset Inconsistent Files List
+                        this.refreshInconsistentFilesUI(propertyItemEl, key);
 
-                    // Reset Inconsistent Files List
-                    this.refreshInconsistentFilesUI(propertyItemEl, key);
+                        // Recalculate disabled state of Apply Value To All and Overwrite All from fresh state
+                        this.updateApplyValueToAllToggleState(key);
+                        this.updateOverwriteAllValuesToggleState(key);
 
-                    // Recalculate disabled state of Apply Value To All and Overwrite All from fresh state
-                    this.updateApplyValueToAllToggleState(key);
-                    this.updateOverwriteAllValuesToggleState(key);
+                        // Update Value Counter
+                        const resetValue = stats?.value.mostCommonValue ?? stats?.value.firstEncounteredValue ?? null;
+                        const resetValueCount = this.calculateValueCount(key, resetValue);
+                        this.updateValueCounterUI(key, resetValueCount);
 
-                    // Update Value Counter
-                    const resetValue = stats?.value.mostCommonValue ?? stats?.value.firstEncounteredValue ?? null;
-                    const resetValueCount = this.calculateValueCount(key, resetValue);
-                    this.updateValueCounterUI(key, resetValueCount);
+                        // Reset Edit Enabled Toggle
+                        const editToggle = propertyHeaderSetting.controlEl.querySelector<HTMLInputElement>('.edit-toggle-control-wrapper input[type="checkbox"]');
+                        if (editToggle) {
+                            state.enabled = true;
+                            this.setCheckboxVisualState(editToggle, true);
+                            this.updateMasterEnableToggleState();
+                            this.updatePropertyEnabledState(key, true);
+                        }
 
-                    // Reset Edit Enabled Toggle
-                    const editToggle = propertyHeaderSetting.controlEl.querySelector<HTMLInputElement>('.edit-toggle-control-wrapper input[type="checkbox"]');
-                    if (editToggle) {
-                        state.enabled = true;
-                        this.setCheckboxVisualState(editToggle, true);
-                        this.updateMasterEnableToggleState();
-                        this.updatePropertyEnabledState(key, true);
-                    }
-
-                    new Notice(`Reverted changes for property "${key}"`);
+                        new Notice(`Reverted changes for property "${key}"`);
+                    });
                 });
         });
 
@@ -791,7 +815,7 @@ export class BulkEditor extends Modal {
                     if (propertyContent) {
                         const editors = propertyContent.querySelectorAll('.property-value-editor');
                         editors.forEach(editor => {
-                            if (editor instanceof HTMLElement) {
+                            if (editor.instanceOf(HTMLElement)) {
                                 const editorType = state.changeType || 
                                                 stats?.type.mostCommonType || 
                                                 'text';
@@ -875,10 +899,10 @@ export class BulkEditor extends Modal {
                 if (currentHintSpan) currentHintSpan.textContent = 'Toggle to hide options.';
                 
                 // Resize all contenteditable elements when they become visible
-                setTimeout(() => {
+                activeWindow.setTimeout(() => {
                     const editors = contentContainer.querySelectorAll('.property-value-editor');
                     editors.forEach(editor => {
-                        if (editor instanceof HTMLElement) {
+                        if (editor.instanceOf(HTMLElement)) {
                             this.autoResizeEditableDiv(editor);
                         }
                     });
@@ -894,7 +918,8 @@ export class BulkEditor extends Modal {
         this.plugin.registerDomEvent(propertyHeaderSetting.settingEl, 'keydown', (e: KeyboardEvent) => {
             if (e.key === 'Enter' || e.key === ' ') {
                 // Prevent toggling if focus is on the actual checkbox toggle in controls
-                if (e.target instanceof HTMLElement && controlEl.contains(e.target) && e.target.closest('.checkbox-container')) { return; }
+                const keydownTarget = e.target as Node | null;
+                if (keydownTarget?.instanceOf(HTMLElement) && controlEl.contains(keydownTarget) && keydownTarget.closest('.checkbox-container')) { return; }
                 // Allow toggling if focus is anywhere else in the header, except controls
                 if (!controlEl.contains(e.target as Node)) {
                     e.preventDefault();
@@ -1236,7 +1261,7 @@ export class BulkEditor extends Modal {
                     const linkSpans = propertyValueDiv.querySelectorAll('.metadata-link');
                     if (linkSpans.length > 0) {
                         linkSpans.forEach(span => {
-                            const textNode = document.createTextNode(span.textContent || '');
+                            const textNode = activeDocument.createTextNode(span.textContent || '');
                             span.parentNode?.replaceChild(textNode, span);
                         });
                     }
@@ -1259,7 +1284,7 @@ export class BulkEditor extends Modal {
                     this.processLinksInEditor(propertyValueDiv, actualType);
                 }
                 
-                setTimeout(() => this.autoResizeEditableDiv(propertyValueDiv), 0);
+                activeWindow.setTimeout(() => this.autoResizeEditableDiv(propertyValueDiv), 0);
             });
     
             // Prevent Enter key for single-line types
@@ -1289,7 +1314,7 @@ export class BulkEditor extends Modal {
                             if (selection && selection.rangeCount > 0) {
                                 const range = selection.getRangeAt(0);
                                 range.deleteContents();
-                                const textNode = document.createTextNode(filteredText);
+                                const textNode = activeDocument.createTextNode(filteredText);
                                 range.insertNode(textNode);
                                 range.setStartAfter(textNode);
                                 range.collapse(true);
@@ -1387,7 +1412,7 @@ export class BulkEditor extends Modal {
 
         // Hide the setting completely if there are no inconsistent files
         if (!hasInconsistentFiles) {
-            setTimeout(() => {
+            activeWindow.setTimeout(() => {
                 excludeAllSetting.settingEl.hide();
                 addAllMissingSettings.settingEl.addClass('no-top-border-padded');
             }, 0);
@@ -1506,7 +1531,7 @@ export class BulkEditor extends Modal {
 
             // Hide the toggle if there are no missing properties
             if (!hasMissingPropertyFiles) {
-                setTimeout(() => {
+                activeWindow.setTimeout(() => {
                     addAllMissingSettings.controlEl.hide();
                 }, 0);
             }
@@ -1546,7 +1571,7 @@ export class BulkEditor extends Modal {
 
             // Hide the entire setting if there are no missing properties
             if (!hasMissingPropertyFiles) {
-                setTimeout(() => {
+                activeWindow.setTimeout(() => {
                     applyValueToAllSettings.settingEl.hide();
                 }, 0);
             }
@@ -1664,7 +1689,7 @@ export class BulkEditor extends Modal {
             
             // Hide the toggle if there are no files with inconsistent values
             if (filesWithInconsistentValues === 0) {
-                setTimeout(() => {
+                activeWindow.setTimeout(() => {
                     overwriteAllValuesSetting.controlEl.hide();
                 }, 0);
             }
@@ -1891,7 +1916,7 @@ export class BulkEditor extends Modal {
                     
                     // If there's a toggle handler, update it too
                     const toggleHandler = useValueOnAddSetting.controlEl.querySelector<HTMLElement>('.toggle-handler');
-                    if (toggleHandler instanceof HTMLElement) {
+                    if (toggleHandler?.instanceOf(HTMLElement)) {
                         toggleHandler.classList.add('is-disabled');
                     }
                 }
@@ -2093,7 +2118,7 @@ export class BulkEditor extends Modal {
                 if (selection && selection.rangeCount > 0) {
                     const range = selection.getRangeAt(0);
                     range.deleteContents();
-                    const textNode = document.createTextNode(sanitizedText);
+                    const textNode = activeDocument.createTextNode(sanitizedText);
                     range.insertNode(textNode);
                     range.setStartAfter(textNode);
                     range.collapse(true);
@@ -2144,7 +2169,7 @@ export class BulkEditor extends Modal {
                     this.debouncedUpdateValueCounter(propertyKey, [...currentItems], 'list');
                     // Find the container and re-render its content
                     const listEditorContainer = pill.closest('.list-editor-container');
-                    if (listEditorContainer instanceof HTMLElement) {
+                    if (listEditorContainer?.instanceOf(HTMLElement)) {
                         this.renderListEditorContent(propertyKey, listEditorContainer);
                         // Focus the input after removing an item
                         const input = listEditorContainer.querySelector<HTMLInputElement>('.new-item-input');
@@ -2201,7 +2226,7 @@ export class BulkEditor extends Modal {
                     // Clean up the temporary input
                     editingInput.remove();
                     // Re-render ONLY on save
-                    if (listEditorContainer instanceof HTMLElement) {
+                    if (listEditorContainer?.instanceOf(HTMLElement)) {
                         this.renderListEditorContent(propertyKey, listEditorContainer);
                     } else {
                         // Fallback - unlikely
@@ -2216,7 +2241,7 @@ export class BulkEditor extends Modal {
             // Event listeners for the temporary input
             this.plugin.registerDomEvent(editingInput, 'blur', () => {
                 // Use a small delay to avoid race conditions with click/enter
-                setTimeout(() => {
+                activeWindow.setTimeout(() => {
                     // Check if the element still exists (might have been removed by Enter/Escape)
                     if (editingInput.isConnected) {
                         finalizeEdit(true);
@@ -2232,7 +2257,7 @@ export class BulkEditor extends Modal {
     
                     // Add Focus Logic
                     const listEditorContainer = pill.closest('.list-editor-container');
-                    if (listEditorContainer instanceof HTMLElement) {
+                    if (listEditorContainer?.instanceOf(HTMLElement)) {
                         // Find all pills and the input field *after* re-render
                         const pillsAfterRender = listEditorContainer.querySelectorAll<HTMLElement>('.list-item-pill[tabindex="0"]');
                         const newItemInputAfterRender = listEditorContainer.querySelector<HTMLElement>('.new-item-input');
@@ -2264,7 +2289,7 @@ export class BulkEditor extends Modal {
             // Focus the input and select its content
             editingInput.focus();
             const selection = window.getSelection();
-            const range = document.createRange();
+            const range = activeDocument.createRange();
             range.selectNodeContents(editingInput);
             selection?.removeAllRanges();
             selection?.addRange(range);
@@ -2288,7 +2313,7 @@ export class BulkEditor extends Modal {
 
                 // Get container reference *before* potentially removing the pill element during re-render
                 const listEditorContainer = pill.closest('.list-editor-container');
-                if (!(listEditorContainer instanceof HTMLElement)) return;
+                if (!listEditorContainer?.instanceOf(HTMLElement)) return;
 
                 // Re-render the list container
                 this.renderListEditorContent(propertyKey, listEditorContainer);
@@ -2993,7 +3018,7 @@ export class BulkEditor extends Modal {
             
             // Find and update the "Use Value" toggle
             const useValueToggle = fileContent.querySelector('.setting-item[data-action-key="useValueOnAdd"]');
-            if (useValueToggle instanceof HTMLElement) {
+            if (useValueToggle?.instanceOf(HTMLElement)) {
                 this.setUseValueToggleEnabled(useValueToggle, isChecked);
                 if (!isChecked) {
                     fileActions.value = false;
@@ -3301,7 +3326,7 @@ export class BulkEditor extends Modal {
 
     private updatePropertyEnabledState(key: string, enabled: boolean): void {
         const content = this.propertiesListContainer?.querySelector(`#prop-${key} .property-content`);
-        if (content instanceof HTMLElement) {
+        if (content?.instanceOf(HTMLElement)) {
             content.toggleClass('is-property-disabled', !enabled);
         }
     }
@@ -3325,7 +3350,7 @@ export class BulkEditor extends Modal {
         if (this.propertiesListContainer) {
             const editors = this.propertiesListContainer.querySelectorAll('.property-value-editor');
             editors.forEach(editor => {
-                if (editor instanceof HTMLElement) {
+                if (editor.instanceOf(HTMLElement)) {
                     // Find the property key for this editor
                     const propertyItem = editor.closest('.bulk-property-item');
                     if (propertyItem && propertyItem.id.startsWith('prop-')) {
@@ -3571,7 +3596,7 @@ export class BulkEditor extends Modal {
 
         // Find the checkbox input within this setting
         const toggleEl = settingEl.querySelector('input[type="checkbox"]');
-        return toggleEl instanceof HTMLInputElement ? toggleEl : null;
+        return toggleEl?.instanceOf(HTMLInputElement) ? toggleEl : null;
     }
 
     /**
@@ -3625,7 +3650,7 @@ export class BulkEditor extends Modal {
     private setCheckboxVisualState(checkbox: HTMLInputElement, checked: boolean): void {
         checkbox.checked = checked;
         const container = checkbox.closest('.checkbox-container');
-        if (container instanceof HTMLElement) {
+        if (container?.instanceOf(HTMLElement)) {
             container.classList.toggle('is-enabled', checked);
             const indicator = container.querySelector<HTMLElement>('.checkbox-indicator');
             if (indicator) indicator.classList.toggle('is-enabled', checked);
@@ -4110,25 +4135,28 @@ export class BulkEditor extends Modal {
         fileItems.forEach(item => {
             if (filterBy === 'all') {
                 item.show();
+                delete item.dataset.filterHidden;
             } else if (filterBy === 'value') {
                 if (item.hasAttribute('data-inconsistency-value')) {
                     item.show();
+                    delete item.dataset.filterHidden;
                 } else {
                     item.hide();
+                    item.dataset.filterHidden = 'true';
                 }
             } else if (filterBy === 'missing') {
                 if (item.hasAttribute('data-inconsistency-missing')) {
                     item.show();
+                    delete item.dataset.filterHidden;
                 } else {
                     item.hide();
+                    item.dataset.filterHidden = 'true';
                 }
             }
         });
 
         // Apply ordering
-        const visibleItems = fileItems.filter(item =>
-            item.style.display !== 'none'
-        );
+        const visibleItems = fileItems.filter(item => !item.dataset.filterHidden);
         
         if (visibleItems.length === 0) {
             // If all items are filtered out, show a message
@@ -4296,7 +4324,7 @@ export class BulkEditor extends Modal {
         
         // Find and update the toggle visibility
         const overwriteAllToggleControl = container.querySelector('.setting-item:nth-child(4) .setting-item-control');
-        if (overwriteAllToggleControl instanceof HTMLElement) {
+        if (overwriteAllToggleControl?.instanceOf(HTMLElement)) {
             if (filesWithInconsistentValues > 0) {
                 overwriteAllToggleControl.show();
             } else {
@@ -4329,7 +4357,7 @@ export class BulkEditor extends Modal {
         const inconsistentFilesList = container.querySelector('.inconsistent-files-list');
         
         // Update visibility - for Add All Missing, just hide the toggle control
-        if (addAllMissingToggleControl instanceof HTMLElement) {
+        if (addAllMissingToggleControl?.instanceOf(HTMLElement)) {
             if (hasMissingPropertyFiles) {
                 addAllMissingToggleControl.show();
             } else {
@@ -4338,7 +4366,7 @@ export class BulkEditor extends Modal {
         }
 
         // For Apply Value, hide the entire setting
-        if (applyValueSetting instanceof HTMLElement) {
+        if (applyValueSetting?.instanceOf(HTMLElement)) {
             if (hasMissingPropertyFiles) {
                 applyValueSetting.show();
             } else {
@@ -4347,7 +4375,7 @@ export class BulkEditor extends Modal {
         }
 
         // For Exclude All, hide the entire setting if no inconsistent files
-        if (excludeAllSetting instanceof HTMLElement) {
+        if (excludeAllSetting?.instanceOf(HTMLElement)) {
             if (hasInconsistentFiles) {
                 excludeAllSetting.show();
             } else {
@@ -4355,7 +4383,7 @@ export class BulkEditor extends Modal {
             }
 
             // Handle Add All Missing Properties top border based on Exclude All visibility
-            if (addAllMissingSetting instanceof HTMLElement) {
+            if (addAllMissingSetting?.instanceOf(HTMLElement)) {
                 if (!hasInconsistentFiles) {
                     addAllMissingSetting.addClass('no-top-border-padded');
                 } else {
@@ -4365,7 +4393,7 @@ export class BulkEditor extends Modal {
         }
 
         // Hide the inconsistent files list container if empty
-        if (inconsistentFilesList instanceof HTMLElement) {
+        if (inconsistentFilesList?.instanceOf(HTMLElement)) {
             if (hasInconsistentFiles) {
                 inconsistentFilesList.show();
             } else {
@@ -4398,17 +4426,18 @@ export class BulkEditor extends Modal {
     }
     
     private handleDragStart(e: DragEvent) {
-        if (!e.target || !(e.target instanceof HTMLElement)) return;
-        
+        const dragTarget = e.target as Node | null;
+        if (!dragTarget?.instanceOf(HTMLElement)) return;
+
         // Find the property item
-        const propertyItem = e.target.closest('.bulk-property-item');
-        if (!propertyItem || !(propertyItem instanceof HTMLElement)) return;
+        const propertyItem = dragTarget.closest('.bulk-property-item');
+        if (!propertyItem?.instanceOf(HTMLElement)) return;
         
         // Set the dragged item
         this.draggedItem = propertyItem;
         
         // Add dragging class after a short delay for visual feedback
-        setTimeout(() => {
+        activeWindow.setTimeout(() => {
             if (this.draggedItem) {
                 this.draggedItem.classList.add('dragging');
             }
@@ -4647,7 +4676,7 @@ export class BulkEditor extends Modal {
                 const linkSpans = element.querySelectorAll('.metadata-link');
                 if (linkSpans.length > 0) {
                     linkSpans.forEach(span => {
-                        const textNode = document.createTextNode(span.textContent || '');
+                        const textNode = activeDocument.createTextNode(span.textContent || '');
                         span.parentNode?.replaceChild(textNode, span);
                     });
                 }
@@ -4726,7 +4755,7 @@ export class BulkEditor extends Modal {
         const lineCount = this.countVisualLines(element);
         
         // Get current focus state
-        const isFocused = document.activeElement === element;
+        const isFocused = activeDocument.activeElement === element;
         
         // Remove all sizing classes first
         element.classList.remove('editor-lines-1', 'editor-lines-2', 'editor-lines-3', 'editor-lines-many');
@@ -4867,7 +4896,7 @@ export class BulkEditor extends Modal {
             // Disable any checkbox inputs within the setting
             const toggleInputs = settingItem.querySelectorAll('input[type="checkbox"]');
             toggleInputs.forEach(input => {
-                if (input instanceof HTMLInputElement) {
+                if (input.instanceOf(HTMLInputElement)) {
                     input.disabled = true;
                 }
             });
@@ -4877,7 +4906,7 @@ export class BulkEditor extends Modal {
             // Enable any checkbox inputs within the setting
             const toggleInputs = settingItem.querySelectorAll('input[type="checkbox"]');
             toggleInputs.forEach(input => {
-                if (input instanceof HTMLInputElement) {
+                if (input.instanceOf(HTMLInputElement)) {
                     input.disabled = false;
                 }
             });

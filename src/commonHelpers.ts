@@ -517,7 +517,7 @@ export function handleLinkClick(app: App, linkTarget: YamlPropertyValue, event: 
  * @param currentEl - The current element
  * @returns The next focusable element or null if none found
  */
-export function findNextFocusableElement(currentEl: HTMLElement, scope: HTMLElement = document.body): HTMLElement | null {
+export function findNextFocusableElement(currentEl: HTMLElement, scope: HTMLElement = activeDocument.body): HTMLElement | null {
     const allFocusable = Array.from(
         scope.querySelectorAll<HTMLElement>('.tree-item-self[tabindex="0"], .clickable-icon[tabindex="0"]')
     );
@@ -529,7 +529,7 @@ export function findNextFocusableElement(currentEl: HTMLElement, scope: HTMLElem
     return null;
 }
 
-export function findPrevFocusableElement(currentEl: HTMLElement, scope: HTMLElement = document.body): HTMLElement | null {
+export function findPrevFocusableElement(currentEl: HTMLElement, scope: HTMLElement = activeDocument.body): HTMLElement | null {
     const allFocusable = Array.from(
         scope.querySelectorAll<HTMLElement>('.tree-item-self[tabindex="0"], .clickable-icon[tabindex="0"]')
     );
@@ -612,7 +612,7 @@ export function setExpandedState(element: HTMLElement, expanded: boolean): void 
 
     // Find content container
     const contentEl = element.parentElement?.querySelector('.tree-item-children, .property-content');
-    if (contentEl instanceof HTMLElement) {
+    if (contentEl?.instanceOf(HTMLElement)) {
         if (expanded) {
             contentEl.show();
         } else {

@@ -70,7 +70,7 @@ export class BrowserModal extends Modal {
         
         // If Enter key on a focused element
         if (e.key === 'Enter') {
-            const focused = document.activeElement;
+            const focused = activeDocument.activeElement;
             if (focused && focused.classList.contains('tree-item-self')) {
                 // Simulate click on focused item
                 (focused as HTMLElement).click();
@@ -239,7 +239,7 @@ export class BrowserModal extends Modal {
     }
 
     // Helper to add a node to the tree
-    private addNodeToTree(root: TreeNode, path: string, name: string, isDirectory: boolean) {
+    private addNodeToTree(root: TreeNode, path: string, _name: string, isDirectory: boolean) {
         const parts = path.split('/').filter(part => part.trim() !== ''); // Filter out empty parts
         let currentNode = root;
         let currentPath = '';
@@ -456,9 +456,10 @@ export class BrowserModal extends Modal {
             // Add click handler for expansion toggling
             this.plugin.registerDomEvent(selfEl, 'click', (e: MouseEvent) => {
                 // Only process clicks that aren't on the checkbox
-                if (!(e.target instanceof HTMLElement) || 
-                    !e.target.closest('.tree-item-checkbox-container') && 
-                    !e.target.classList.contains('tree-item-checkbox')) {
+                const clickTarget = e.target as Node | null;
+                if (!clickTarget?.instanceOf(HTMLElement) ||
+                    !(e.target as HTMLElement).closest('.tree-item-checkbox-container') &&
+                    !(e.target as HTMLElement).classList.contains('tree-item-checkbox')) {
                     
                     // Toggle expanded state
                     const isExpanded = this.expandedFolders.has(node.path);
@@ -567,14 +568,14 @@ export class BrowserModal extends Modal {
 
             // Clear all file selections visually (scoped to this modal)
             this.contentEl.querySelectorAll('.nav-file').forEach((el: Element) => {
-                if (el instanceof HTMLElement) {
+                if (el.instanceOf(HTMLElement)) {
                     el.removeClass('is-selected');
                 }
             });
 
             // Reset all checkboxes in single selection mode (scoped to this modal)
             this.contentEl.querySelectorAll('.tree-item-checkbox').forEach((cb: Element) => {
-                if (cb instanceof HTMLInputElement && cb.closest('.nav-file') && cb.checked) {
+                if (cb.instanceOf(HTMLInputElement) && cb.closest('.nav-file') && cb.checked) {
                     cb.checked = false;
                 }
             });
@@ -606,7 +607,7 @@ export class BrowserModal extends Modal {
         
         // Update folder checkboxes (scoped to this modal)
         this.contentEl.querySelectorAll('.nav-folder').forEach((folderEl: Element) => {
-            if (!(folderEl instanceof HTMLElement)) return;
+            if (!folderEl.instanceOf(HTMLElement)) return;
             
             const pathEl = folderEl.querySelector('.tree-item-self')?.getAttribute('data-path');
             if (!pathEl) return;
@@ -645,7 +646,7 @@ export class BrowserModal extends Modal {
         
         // Update file checkboxes (scoped to this modal)
         this.contentEl.querySelectorAll('.nav-file').forEach((fileEl: Element) => {
-            if (!(fileEl instanceof HTMLElement)) return;
+            if (!fileEl.instanceOf(HTMLElement)) return;
             
             const pathEl = fileEl.querySelector('.tree-item-self')?.getAttribute('data-path');
             if (!pathEl) return;
@@ -704,7 +705,7 @@ export class BrowserModal extends Modal {
                     // Lazy load children if needed
                     if (childrenEl.childElementCount === 0 && node.children.length > 0) {
                         const selectionText = this.contentEl.querySelector('.selection-text');
-                        if (selectionText instanceof HTMLElement) {
+                        if (selectionText?.instanceOf(HTMLElement)) {
                             for (const child of node.children) {
                                 this.renderTreeItem(childrenEl, child, selectionText);
                             }
@@ -799,7 +800,7 @@ export class BrowserModal extends Modal {
         
         // Add or remove the has-selection class based on selection state
         const selCountEl = countEl.closest('.selection-counter');  // Changed from '.selected-count'
-        if (selCountEl instanceof HTMLElement) {
+        if (selCountEl?.instanceOf(HTMLElement)) {
             if (fileCount === 0 && folderCount === 0) {
                 selCountEl.addClass('has-no-selection');
                 selCountEl.removeClass('has-selection');

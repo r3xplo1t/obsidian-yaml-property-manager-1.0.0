@@ -556,9 +556,9 @@ export class TemplateApplication extends Modal {
 
                 try {
                     // Use processFrontMatter for atomic updates
-                    await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+                    await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, YamlPropertyValue>) => {
                         // Get existing properties with type info
-                        const existingProperties = (frontmatter ?? {}) as Record<string, YamlPropertyValue>;
+                        const existingProperties: Record<string, YamlPropertyValue> = frontmatter;
                         const existingPropertiesWithType = this.plugin.propertyTypeService.preservePropertyTypes(existingProperties);
 
                         let finalPropertiesToApply: Record<string, PropertyWithType> = {};

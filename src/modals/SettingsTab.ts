@@ -8,7 +8,7 @@ export class SettingTab extends PluginSettingTab {
     plugin: YAMLPropertyManagerPlugin;
     private expandedPaths: Set<string> = new Set();
     private rootNode: TreeNode;
-    private settingsSaveTimeout: ReturnType<typeof setTimeout> | null = null;
+    private settingsSaveTimeout: number | null = null;
 
     constructor(app: App, plugin: YAMLPropertyManagerPlugin) {
         super(app, plugin);
@@ -41,7 +41,7 @@ export class SettingTab extends PluginSettingTab {
         return this.rootNode ? findIn(this.rootNode.children) : null;
     }
 
-    private async removeTemplateWithScrollPreservation(templatePathIndex: number | undefined, node: TreeNode, nodeElement: HTMLElement): Promise<void> {
+    private async removeTemplateWithScrollPreservation(_templatePathIndex: number | undefined, node: TreeNode, nodeElement: HTMLElement): Promise<void> {
         // Create a notice that will stay until completion
         const progressNotice = new Notice(`Removing template: ${node.path}...`, 0);
         
@@ -52,7 +52,7 @@ export class SettingTab extends PluginSettingTab {
             nodeElement.addClass('is-removing');
             
             // Wait for animation
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise(resolve => activeWindow.setTimeout(resolve, 200));
             
             // Get all paths that should be KEPT (not matching our removal criteria)
             const pathsToKeep = this.plugin.settings.templatePaths.filter(tp => {
@@ -219,10 +219,11 @@ export class SettingTab extends PluginSettingTab {
         .setDesc('Clear the list of recently used templates')
         .addButton(button => button
             .setButtonText('Clear recent templates')
-            .onClick(async () => {
+            .onClick(() => {
                 this.plugin.settings.recentTemplates = [];
-                await this.plugin.saveSettings();
-                new Notice('Recent templates cleared');
+                void this.plugin.saveSettings().then(() => {
+                    new Notice('Recent templates cleared');
+                });
             }));
 
         // Troubleshooting Section
@@ -261,13 +262,13 @@ export class SettingTab extends PluginSettingTab {
                     new ButtonComponent(buttonContainer)
                         .setButtonText('Reset all paths')
                         .setWarning()
-                        .onClick(async () => {
-                            // Reset all template paths
+                        .onClick(() => {
                             this.plugin.settings.templatePaths = [];
-                            await this.plugin.saveSettings();
-                            new Notice('All template paths have been reset');
-                            this.display();
-                            modal.close();
+                            void this.plugin.saveSettings().then(() => {
+                                new Notice('All template paths have been reset');
+                                this.display();
+                                modal.close();
+                            });
                         });
 
                     // Handle keyboard navigation
@@ -278,7 +279,7 @@ export class SettingTab extends PluginSettingTab {
                     modal.open();
 
                     // Set focus to the cancel button (safer default)
-                    setTimeout(() => cancelButton.buttonEl.focus(), 50);
+                    activeWindow.setTimeout(() => cancelButton.buttonEl.focus(), 50);
                 })
             );
     }
@@ -666,14 +667,11 @@ export class SettingTab extends PluginSettingTab {
     }
 
     private debouncedSaveSettings(delay: number = 500): void {
-        // Clear any existing timeout
         if (this.settingsSaveTimeout) {
-            clearTimeout(this.settingsSaveTimeout);
+            activeWindow.clearTimeout(this.settingsSaveTimeout);
         }
-        
-        // Schedule a new save operation
-        this.settingsSaveTimeout = setTimeout(() => {
-            this.plugin.saveSettings();
+        this.settingsSaveTimeout = activeWindow.setTimeout(() => {
+            void this.plugin.saveSettings();
             this.settingsSaveTimeout = null;
         }, delay);
     }
@@ -686,9 +684,9 @@ export class SettingTab extends PluginSettingTab {
 
     hide(): void {
         if (this.settingsSaveTimeout !== null) {
-            clearTimeout(this.settingsSaveTimeout);
+            activeWindow.clearTimeout(this.settingsSaveTimeout);
             this.settingsSaveTimeout = null;
-            this.plugin.saveSettings();
+            void this.plugin.saveSettings();
         }
         super.hide();
     }

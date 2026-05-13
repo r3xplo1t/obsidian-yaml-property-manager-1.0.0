@@ -336,21 +336,15 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
     // Apply properties to a file
     async applyProperties(file: TFile, properties: Record<string, YamlPropertyValue>, preserveExisting: boolean = false): Promise<boolean> {
         try {
-            // Use Obsidian's built-in processFrontMatter method for consistent YAML formatting
-            await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+            await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, YamlPropertyValue>) => {
                 if (preserveExisting) {
-                    // Merge with existing properties
                     Object.entries(properties).forEach(([key, value]) => {
                         frontmatter[key] = value;
                     });
                 } else {
-                    // Replace frontmatter entirely
-                    // First, clear all existing keys
                     Object.keys(frontmatter).forEach(key => {
                         delete frontmatter[key];
                     });
-
-                    // Then add the new properties
                     Object.entries(properties).forEach(([key, value]) => {
                         frontmatter[key] = value;
                     });
@@ -373,8 +367,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
         }
 
         try {
-            // Use Obsidian's processFrontMatter for atomic and consistent updates
-            await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+            await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, YamlPropertyValue>) => {
                 frontmatter[propertyName] = propertyValue;
             });
 
@@ -447,27 +440,17 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
                     // For consistent properties, check if all files have the same value
                     if (consistentProperties.length > 0) {
                         // Use processFrontMatter for atomic operations
-                        await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
-                            const fileProperties = (frontmatter ?? {}) as Record<string, YamlPropertyValue>;
-
-                            // Create a copy of filteredProperties to modify
+                        await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, YamlPropertyValue>) => {
                             const propertiesForThisFile = {...filteredProperties};
 
-                            // Remove any consistent properties that don't match
                             for (const key of consistentProperties) {
-                                // Only check if the property is in the template and target file
-                                if (key in propertiesForThisFile && key in fileProperties) {
-                                    const templateValue = propertiesForThisFile[key];
-                                    const fileValue = fileProperties[key];
-
-                                    // If values don't match, remove from properties to apply
-                                    if (JSON.stringify(templateValue) !== JSON.stringify(fileValue)) {
+                                if (key in propertiesForThisFile && key in frontmatter) {
+                                    if (JSON.stringify(propertiesForThisFile[key]) !== JSON.stringify(frontmatter[key])) {
                                         delete propertiesForThisFile[key];
                                     }
                                 }
                             }
 
-                            // Apply the filtered properties
                             for (const [key, value] of Object.entries(propertiesForThisFile)) {
                                 frontmatter[key] = value;
                             }
@@ -475,8 +458,7 @@ export default class YAMLPropertyManagerPlugin extends Plugin {
 
                         successCount++;
                     } else {
-                        // No consistent properties check needed, just apply all filtered properties
-                        await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+                        await this.app.fileManager.processFrontMatter(file, (frontmatter: Record<string, YamlPropertyValue>) => {
                             for (const [key, value] of Object.entries(filteredProperties)) {
                                 frontmatter[key] = value;
                             }
