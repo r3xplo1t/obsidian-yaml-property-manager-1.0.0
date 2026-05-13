@@ -6,17 +6,14 @@ export default {
   input: 'main.ts',
   output: {
     dir: '.',
-    sourcemap: 'inline',
+    sourcemap: false,
     format: 'cjs',
     exports: 'default',
-    sourcemapExcludeSources: true
   },
   external: ['obsidian'],
   plugins: [
     typescript({
       tsconfig: './tsconfig.json',
-      sourceMap: true,
-      inlineSources: true
     }),
     nodeResolve({
       browser: true
