@@ -7,8 +7,6 @@ on:
 
 permissions:
   contents: write
-  id-token: write
-  attestations: write
 
 jobs:
   release:
@@ -30,16 +28,6 @@ jobs:
       - name: Read manifest version
         id: manifest
         run: echo "version=$(node -p "require('./manifest.json').version")" >> "$GITHUB_OUTPUT"
-
-      - name: Attest main.js
-        uses: actions/attest-build-provenance@v1
-        with:
-          subject-path: main.js
-
-      - name: Attest styles.css
-        uses: actions/attest-build-provenance@v1
-        with:
-          subject-path: styles.css
 
       - name: Create release
         uses: softprops/action-gh-release@v2
