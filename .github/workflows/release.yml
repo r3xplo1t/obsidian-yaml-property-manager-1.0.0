@@ -7,6 +7,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
   release:
@@ -29,10 +31,31 @@ jobs:
         id: manifest
         run: echo "version=$(node -p "require('./manifest.json').version")" >> "$GITHUB_OUTPUT"
 
+      - name: Attest main.js
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: main.js
+
+      - name: Attest styles.css
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: styles.css
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           name: "YAML Property Manager ${{ steps.manifest.outputs.version }}"
+          body: |
+            ## YAML Property Manager ${{ steps.manifest.outputs.version }}
+
+            ### Features
+
+            - **Single file editor** — View and edit all YAML frontmatter properties in one place via a property manager menu
+            - **Bulk editor** — Apply property changes across multiple files at once, with file filtering and conflict resolution
+            - **Template system** — Create and apply property templates to maintain consistent frontmatter structure
+            - **Property type support** — Handles text, number, boolean, date, datetime, and array (list, tags) property types
+            - **Conflict detection** — Identifies and resolves inconsistent property values across selected files
+            - **Undo/revert** — Revert individual files or all bulk changes before committing
           files: |
             main.js
             styles.css
