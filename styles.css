@@ -30,7 +30,7 @@
 
 /* Utility to hide elements — scoped to plugin modals only */
 .yaml-property-manager-modal .is-hidden {
-  display: none !important;
+  display: none;
 }
 
 /* Animation for removing nodes — scoped to plugin settings container */
@@ -175,9 +175,9 @@
 
 /* Remove padding/border from empty message setting item */
 #template-paths-container > .setting-item {
-  padding: 0 !important;
-  margin: 0 !important;
-  border: none !important;
+  padding: 0;
+  margin: 0;
+  border: none;
 }
 
 /* ===========================
@@ -281,51 +281,51 @@
 }
 
 /* Checked state */
-.tree-item-checkbox:checked {
-  background-color: var(--checkbox-color) !important;
-  border-color: var(--checkbox-color) !important;
+.yaml-property-manager-modal .tree-item-checkbox:checked {
+  background-color: var(--checkbox-color);
+  border-color: var(--checkbox-color);
 }
 
 /* Checkmark — mirrors Obsidian's mask-image approach so color adapts to theme */
-.tree-item-checkbox:checked::after {
-  content: "" !important;
-  position: absolute !important;
-  top: -1px !important;
-  inset-inline-start: -1px !important;
-  width: var(--checkbox-size) !important;
-  height: var(--checkbox-size) !important;
-  display: block !important;
-  background-color: var(--checkbox-marker-color) !important;
-  -webkit-mask-position: 52% 52% !important;
-  -webkit-mask-size: 65% !important;
-  -webkit-mask-repeat: no-repeat !important;
-  -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'><g transform='translate(-4 -6)'><path fill='%23000' d='M8.1043257,14.0367999 L4.52468714,10.5420499 C4.32525014,10.3497722 4.32525014,10.0368095 4.52468714,9.8424863 L5.24777413,9.1439454 C5.44721114,8.95166768 5.77142411,8.95166768 5.97086112,9.1439454 L8.46638057,11.5903727 L14.0291389,6.1442083 C14.2285759,5.95193057 14.5527889,5.95193057 14.7522259,6.1442083 L15.4753129,6.84377194 C15.6747499,7.03604967 15.6747499,7.35003511 15.4753129,7.54129009 L8.82741268,14.0367999 C8.62797568,14.2290777 8.3037627,14.2290777 8.1043257,14.0367999'/></g></svg>") !important;
+.yaml-property-manager-modal .tree-item-checkbox:checked::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  inset-inline-start: -1px;
+  width: var(--checkbox-size);
+  height: var(--checkbox-size);
+  display: block;
+  background-color: var(--checkbox-marker-color);
+  -webkit-mask-position: 52% 52%;
+  -webkit-mask-size: 65%;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 12 8'><g transform='translate(-4 -6)'><path fill='%23000' d='M8.1043257,14.0367999 L4.52468714,10.5420499 C4.32525014,10.3497722 4.32525014,10.0368095 4.52468714,9.8424863 L5.24777413,9.1439454 C5.44721114,8.95166768 5.77142411,8.95166768 5.97086112,9.1439454 L8.46638057,11.5903727 L14.0291389,6.1442083 C14.2285759,5.95193057 14.5527889,5.95193057 14.7522259,6.1442083 L15.4753129,6.84377194 C15.6747499,7.03604967 15.6747499,7.35003511 15.4753129,7.54129009 L8.82741268,14.0367999 C8.62797568,14.2290777 8.3037627,14.2290777 8.1043257,14.0367999'/></g></svg>");
 }
 
 /* Indeterminate checkbox state */
-.tree-item-checkbox:indeterminate,
-input[type="checkbox"][data-indeterminate="true"].tree-item-checkbox {
-  background-color: var(--checkbox-color) !important;
-  border-color: var(--checkbox-color) !important;
+.yaml-property-manager-modal .tree-item-checkbox:indeterminate,
+.yaml-property-manager-modal input[type="checkbox"][data-indeterminate="true"].tree-item-checkbox {
+  background-color: var(--checkbox-color);
+  border-color: var(--checkbox-color);
 }
 
 /* Indeterminate checkbox dash */
-.tree-item-checkbox:indeterminate::after,
-input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkbox::after {
-  content: "" !important;
-  position: absolute !important;
-  width: 8px !important;
-  height: 1.5px !important;
-  background-color: var(--checkbox-marker-color) !important;
-  left: 0 !important; 
-  right: 0 !important; 
-  top: 0 !important; 
-  bottom: 0 !important;
-  margin: auto !important;
-  will-change: transform !important;
-  transform: translateZ(0) !important;
-  -webkit-font-smoothing: antialiased !important;
-  -moz-osx-font-smoothing: grayscale !important;
+.yaml-property-manager-modal .tree-item-checkbox:indeterminate::after,
+.yaml-property-manager-modal input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkbox::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 1.5px;
+  background-color: var(--checkbox-marker-color);
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  margin: auto;
+  will-change: transform;
+  transform: translateZ(0);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 /* =================================
@@ -377,11 +377,13 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
 
 /* Expanded array container */
 .array-property-expanded-container {
-  display: block;
+  display: inline;
   margin-top: var(--size-4-1);
   font-size: var(--font-ui-smaller);
   color: var(--text-muted);
   animation: fade-in-down 0.2s ease-out;
+  word-break: break-word;
+  white-space: normal;
 }
 
 /* --- 5.3 Clickable Links --- */
@@ -442,14 +444,8 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
 
 /* --- 5.4 Array Value Display --- */
 
-.array-property-collapsed-view, 
-.array-property-expanded-container {
+.array-property-collapsed-view {
   display: inline;
-}
-
-.array-property-expanded-container {
-  word-break: break-word;
-  white-space: normal;
 }
 
 /* Multiline text display */
@@ -577,18 +573,18 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
 
 @media (prefers-reduced-motion: reduce) {
   /* Disable transitions and animations */
-  :is(.file-tree-container, .nav-folder-container) .tree-item-self,
-  .file-tree-container .is-selected > .tree-item-self,
-  :is(.file-tree-container, .nav-folder-container) .tree-item-icon.collapse-icon svg.svg-icon,
+  .yaml-property-manager-modal :is(.file-tree-container, .nav-folder-container) .tree-item-self,
+  .yaml-property-manager-modal .file-tree-container .is-selected > .tree-item-self,
+  .yaml-property-manager-modal :is(.file-tree-container, .nav-folder-container) .tree-item-icon.collapse-icon svg.svg-icon,
   #template-paths-container .is-removing,
-  .array-property-expanded-container,
-  .selection-counter,
-  .selection-text,
-  .clickable-link-item,
-  .property-value-link,
-  :is(.file-tree-container, .nav-folder-container) .collapse-icon {
-    transition: none !important;
-    animation: none !important;
+  .yaml-property-manager-modal .array-property-expanded-container,
+  .yaml-property-manager-modal .selection-counter,
+  .yaml-property-manager-modal .selection-text,
+  .yaml-property-manager-modal .clickable-link-item,
+  .yaml-property-manager-modal .property-value-link,
+  .yaml-property-manager-modal :is(.file-tree-container, .nav-folder-container) .collapse-icon {
+    transition: none;
+    animation: none;
   }
 }
 
@@ -682,9 +678,9 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
 }
 
 /* Header setting item styling */
-.bulk-property-item-header-setting {
-  padding-top: var(--size-4-2) !important;
-  padding-bottom: var(--size-4-2) !important;
+.bulk-property-item .bulk-property-item-header-setting {
+  padding-top: var(--size-4-2);
+  padding-bottom: var(--size-4-2);
 }
 
 /* Sticky header */
@@ -753,6 +749,7 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
   display: flex;
   align-items: center;
   gap: var(--size-4-1);
+  margin-top: 4px;
 }
 
 /* Property name */
@@ -847,10 +844,10 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
 }
 
 /* Prevent all interactions with disabled settings */
-.setting-disabled {
-  pointer-events: none !important;
+.yaml-property-manager-modal .setting-disabled {
+  pointer-events: none;
   opacity: 0.6;
-  cursor: not-allowed !important;
+  cursor: not-allowed;
 }
 
 /* Make it visually clear the entire setting is disabled */
@@ -992,10 +989,6 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
     color: var(--text-success);
 }
 
-.property-header-stat-row {
-    margin-top: 4px;
-}
-
 /* --- 8.12 Inconsistent File Items --- */
 
 .inconsistent-file-item {
@@ -1100,13 +1093,6 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
   pointer-events: none;
 }
 
-/* Focus state */
-.property-value-editor:focus {
-  border-color: var(--interactive-accent);
-  box-shadow: 0 0 0 1px var(--interactive-accent);
-  max-height: none !important;
-}
-
 /* Editor resizing based on line count */
 .property-value-editor.editor-lines-1 {
   height: calc(1.5em + 16px);
@@ -1126,20 +1112,27 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
   overflow-y: auto;
 }
 
-.property-value-editor.editor-focused {
-  height: auto !important;
-  max-height: none !important;
+/* Focus and active states — placed after line-count rules so they win at equal specificity */
+.property-value-editor:focus {
+  border-color: var(--interactive-accent);
+  box-shadow: 0 0 0 1px var(--interactive-accent);
+  max-height: none;
 }
 
-/* Invalid input styling */
+.property-value-editor.editor-focused {
+  height: auto;
+  max-height: none;
+}
+
+/* Invalid input styling — placed after :focus so equal-specificity wins by order */
 .property-value-editor.is-invalid {
-  border-color: var(--text-error) !important;
-  box-shadow: none !important;
+  border-color: var(--text-error);
+  box-shadow: none;
 }
 
 .property-value-editor.is-invalid:focus {
-  border-color: var(--text-error) !important;
-  box-shadow: 0 0 0 1px var(--text-error) !important;
+  border-color: var(--text-error);
+  box-shadow: 0 0 0 1px var(--text-error);
 }
 
 /* Type-specific styling */
@@ -1212,7 +1205,7 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
 .list-editor-container {
   display: flex;
   flex-wrap: wrap;
-  height: auto !important;
+  height: auto;
   gap: var(--size-2-3);
   align-items: center;
   width: 100%;
@@ -1332,8 +1325,8 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
 }
 
 /* Ensure ALL disabled property containers prevent focus and interaction */
-.dynamic-value-input-container.is-disabled-replica {
-  display: block !important;
+.property-content .dynamic-value-input-container.is-disabled-replica {
+  display: block;
   opacity: 1;
   background-color: var(--background-primary);
   border-radius: var(--radius-m);
@@ -1342,29 +1335,29 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
 }
 
 /* Specific style for property-value-editor within disabled containers */
-.dynamic-value-input-container.is-disabled-replica .property-value-editor {
-  pointer-events: none !important;
-  user-select: none !important;
+.property-content .dynamic-value-input-container.is-disabled-replica .property-value-editor {
+  pointer-events: none;
+  user-select: none;
   background-color: var(--background-primary);
-  border-color: var(--background-modifier-border) !important;
-  box-shadow: none !important;
-  color: var(--text-normal); /* Keep text readable */
+  border-color: var(--background-modifier-border);
+  box-shadow: none;
+  color: var(--text-normal);
   opacity: 0.9;
 }
 
 /* Prevent any focus effects within disabled containers */
-.dynamic-value-input-container.is-disabled-replica:focus-within,
-.dynamic-value-input-container.is-disabled-replica .property-value-editor:focus,
-.dynamic-value-input-container.is-disabled-replica input:focus,
-.dynamic-value-input-container.is-disabled-replica .list-item-pill:focus {
-  border-color: var(--background-modifier-border) !important;
-  box-shadow: none !important;
-  outline: none !important;
+.property-content .dynamic-value-input-container.is-disabled-replica:focus-within,
+.property-content .dynamic-value-input-container.is-disabled-replica .property-value-editor:focus,
+.property-content .dynamic-value-input-container.is-disabled-replica input:focus,
+.property-content .dynamic-value-input-container.is-disabled-replica .list-item-pill:focus {
+  border-color: var(--background-modifier-border);
+  box-shadow: none;
+  outline: none;
 }
 
 /* For list type specifically */
-.value-input-container-list.is-disabled-replica .list-item-pill {
-  display: inline-flex !important;
+.property-content .value-input-container-list.is-disabled-replica .list-item-pill {
+  display: inline-flex;
   background-color: var(--pill-background);
   border: var(--pill-border-width) solid var(--pill-border-color);
   color: var(--pill-color);
@@ -1401,10 +1394,10 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
 }
 
 /* Excluded State */
-.inconsistent-file-item.is-excluded .bulk-editor-file-header {
-  background-color: var(--background-secondary) !important;
-  opacity: 0.6 !important;
-  border-bottom-color: var(--background-modifier-border) !important;
+.inconsistent-files-container .inconsistent-file-item.is-excluded .bulk-editor-file-header {
+  background-color: var(--background-secondary);
+  opacity: 0.6;
+  border-bottom-color: var(--background-modifier-border);
 }
 
 .inconsistent-files-container.is-exclude-all-active .bulk-editor-file-header .checkbox-container {
@@ -1421,8 +1414,8 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
 }
 
 
-.inconsistent-file-item.is-excluded .bulk-editor-file-header:hover {
-  background-color: var(--background-secondary) !important;
+.inconsistent-files-container .inconsistent-file-item.is-excluded .bulk-editor-file-header:hover {
+  background-color: var(--background-secondary);
 }
 
 /* ======================
@@ -1431,22 +1424,22 @@ input[type="checkbox"][data-indeterminate="true"]:not(:checked).tree-item-checkb
 
 /* Info row directly below a heading: remove top border and padding */
 .yaml-property-manager-modal .setting-item.no-top-border {
-  border-top: none !important;
-  padding-top: 0 !important;
+  border-top: none;
+  padding-top: 0;
 }
 
 /* Same but keep a small top padding (used when the preceding row is hidden) */
 .yaml-property-manager-modal .setting-item.no-top-border-padded {
-  border-top: none !important;
-  padding-top: 8px !important;
+  border-top: none;
+  padding-top: 8px;
 }
 
 /* Off-screen measurement clone for countVisualLines() */
 .yaml-pm-measurement-clone {
-  position: absolute !important;
-  visibility: hidden !important;
-  height: auto !important;
-  width: var(--yaml-pm-clone-width, auto) !important;
+  position: absolute;
+  visibility: hidden;
+  height: auto;
+  width: var(--yaml-pm-clone-width, auto);
 }
 
 /* Selection warning shown inline when relevant */
