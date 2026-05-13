@@ -52,7 +52,7 @@ export class SettingTab extends PluginSettingTab {
             nodeElement.addClass('is-removing');
             
             // Wait for animation
-            await new Promise(resolve => activeWindow.setTimeout(resolve, 200));
+            await new Promise(resolve => window.setTimeout(resolve, 200));
             
             // Get all paths that should be KEPT (not matching our removal criteria)
             const pathsToKeep = this.plugin.settings.templatePaths.filter(tp => {
@@ -279,7 +279,7 @@ export class SettingTab extends PluginSettingTab {
                     modal.open();
 
                     // Set focus to the cancel button (safer default)
-                    activeWindow.setTimeout(() => cancelButton.buttonEl.focus(), 50);
+                    window.setTimeout(() => cancelButton.buttonEl.focus(), 50);
                 })
             );
     }
@@ -668,9 +668,9 @@ export class SettingTab extends PluginSettingTab {
 
     private debouncedSaveSettings(delay: number = 500): void {
         if (this.settingsSaveTimeout) {
-            activeWindow.clearTimeout(this.settingsSaveTimeout);
+            window.clearTimeout(this.settingsSaveTimeout);
         }
-        this.settingsSaveTimeout = activeWindow.setTimeout(() => {
+        this.settingsSaveTimeout = window.setTimeout(() => {
             void this.plugin.saveSettings();
             this.settingsSaveTimeout = null;
         }, delay);
@@ -684,7 +684,7 @@ export class SettingTab extends PluginSettingTab {
 
     hide(): void {
         if (this.settingsSaveTimeout !== null) {
-            activeWindow.clearTimeout(this.settingsSaveTimeout);
+            window.clearTimeout(this.settingsSaveTimeout);
             this.settingsSaveTimeout = null;
             void this.plugin.saveSettings();
         }

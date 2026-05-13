@@ -190,7 +190,7 @@ export function formatValuePreview(value: YamlPropertyValue, propertyType?: stri
             )) {
             // For small arrays, show all items
             if (value.length <= 3) {
-                return value.join(', ');
+                return value.map(String).join(', ');
             }
 
             // For larger arrays, show the first item and count
@@ -572,7 +572,7 @@ export function createToggle(
             'aria-label': label,
             'id': `toggle-${label.replace(/\s+/g, '-').toLowerCase()}`
         }
-    }) as HTMLInputElement;
+    });
 
     // Add aria label to container
     toggleContainer.setAttribute('aria-labelledby', checkbox.id);

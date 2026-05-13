@@ -126,7 +126,7 @@ class ToggleHandler {
                 
                 if (isCheckboxClick) {
                     // For direct checkbox clicks, wait for checkbox state to update
-                    activeWindow.setTimeout(() => {
+                    window.setTimeout(() => {
                         if (!this.isUpdating && this.inputEl) {
                             this.isUpdating = true;
                             try {
@@ -663,7 +663,7 @@ export class BulkEditor extends Modal {
                     .onClick(() => {
                         this.globalSettings.expandAll = true;
                         this.updateAllExpansionState(true);
-                        activeWindow.setTimeout(() => {
+                        window.setTimeout(() => {
                             if (!this.propertiesListContainer) return;
                             this.propertiesListContainer.querySelectorAll<HTMLElement>('.property-value-editor').forEach(el => {
                                 this.autoResizeEditableDiv(el);
@@ -899,7 +899,7 @@ export class BulkEditor extends Modal {
                 if (currentHintSpan) currentHintSpan.textContent = 'Toggle to hide options.';
                 
                 // Resize all contenteditable elements when they become visible
-                activeWindow.setTimeout(() => {
+                window.setTimeout(() => {
                     const editors = contentContainer.querySelectorAll('.property-value-editor');
                     editors.forEach(editor => {
                         if (editor.instanceOf(HTMLElement)) {
@@ -1284,7 +1284,7 @@ export class BulkEditor extends Modal {
                     this.processLinksInEditor(propertyValueDiv, actualType);
                 }
                 
-                activeWindow.setTimeout(() => this.autoResizeEditableDiv(propertyValueDiv), 0);
+                window.setTimeout(() => this.autoResizeEditableDiv(propertyValueDiv), 0);
             });
     
             // Prevent Enter key for single-line types
@@ -1412,7 +1412,7 @@ export class BulkEditor extends Modal {
 
         // Hide the setting completely if there are no inconsistent files
         if (!hasInconsistentFiles) {
-            activeWindow.setTimeout(() => {
+            window.setTimeout(() => {
                 excludeAllSetting.settingEl.hide();
                 addAllMissingSettings.settingEl.addClass('no-top-border-padded');
             }, 0);
@@ -1531,7 +1531,7 @@ export class BulkEditor extends Modal {
 
             // Hide the toggle if there are no missing properties
             if (!hasMissingPropertyFiles) {
-                activeWindow.setTimeout(() => {
+                window.setTimeout(() => {
                     addAllMissingSettings.controlEl.hide();
                 }, 0);
             }
@@ -1571,7 +1571,7 @@ export class BulkEditor extends Modal {
 
             // Hide the entire setting if there are no missing properties
             if (!hasMissingPropertyFiles) {
-                activeWindow.setTimeout(() => {
+                window.setTimeout(() => {
                     applyValueToAllSettings.settingEl.hide();
                 }, 0);
             }
@@ -1689,7 +1689,7 @@ export class BulkEditor extends Modal {
             
             // Hide the toggle if there are no files with inconsistent values
             if (filesWithInconsistentValues === 0) {
-                activeWindow.setTimeout(() => {
+                window.setTimeout(() => {
                     overwriteAllValuesSetting.controlEl.hide();
                 }, 0);
             }
@@ -1744,7 +1744,7 @@ export class BulkEditor extends Modal {
 
         const properties = this.fileProperties.get(file.path);
         const propertyExists = properties && propertyKey in properties;
-        const propertyValue = propertyExists ? properties![propertyKey].value : null;
+        const propertyValue = propertyExists ? properties[propertyKey].value : null;
 
         // Determine inconsistency types
         const inconsistencyTypes = {
@@ -1925,7 +1925,7 @@ export class BulkEditor extends Modal {
             // Render Disabled Value Replica Directly
             const disabledValueContainer = fileContent.createDiv();
             disabledValueContainer.addClass('dynamic-value-input-container');
-            const actualFileType = propertyExists ? properties![propertyKey].type : null;
+            const actualFileType = propertyExists ? properties[propertyKey].type : null;
             const displayType = actualFileType || this.plugin.propertyTypeService.detectPropertyType(propertyValue);
 
             disabledValueContainer.addClass(`value-input-container-${displayType}`);
@@ -2241,7 +2241,7 @@ export class BulkEditor extends Modal {
             // Event listeners for the temporary input
             this.plugin.registerDomEvent(editingInput, 'blur', () => {
                 // Use a small delay to avoid race conditions with click/enter
-                activeWindow.setTimeout(() => {
+                window.setTimeout(() => {
                     // Check if the element still exists (might have been removed by Enter/Escape)
                     if (editingInput.isConnected) {
                         finalizeEdit(true);
@@ -4244,9 +4244,6 @@ export class BulkEditor extends Modal {
             return !properties || !(propertyKey in properties);
         }).length;
 
-        // Check if there are any files missing this property
-        const hasMissingPropertyFiles = missingFilesCount > 0;
-        
         // Add the appropriate icon and text based on count
         if (missingFilesCount > 0) {
             missingFilesCounter.createSpan({
@@ -4413,15 +4410,15 @@ export class BulkEditor extends Modal {
         if (!this.propertiesListContainer) return;
         
         // Add event listeners to the container
-        this.plugin.registerDomEvent(this.propertiesListContainer, 'dragover', this.handleDragOver.bind(this));
-        this.plugin.registerDomEvent(this.propertiesListContainer, 'dragleave', this.handleDragLeave.bind(this));
-        this.plugin.registerDomEvent(this.propertiesListContainer, 'drop', this.handleDrop.bind(this));
-        
+        this.plugin.registerDomEvent(this.propertiesListContainer, 'dragover', (e: DragEvent) => this.handleDragOver(e));
+        this.plugin.registerDomEvent(this.propertiesListContainer, 'dragleave', (e: DragEvent) => this.handleDragLeave(e));
+        this.plugin.registerDomEvent(this.propertiesListContainer, 'drop', (e: DragEvent) => this.handleDrop(e));
+
         // Add event listeners to each drag handle
         const dragHandles = this.propertiesListContainer.querySelectorAll<HTMLElement>('.drag-handle');
         dragHandles.forEach(handle => {
-            this.plugin.registerDomEvent(handle, 'dragstart', this.handleDragStart.bind(this));
-            this.plugin.registerDomEvent(handle, 'dragend', this.handleDragEnd.bind(this));
+            this.plugin.registerDomEvent(handle, 'dragstart', (e: DragEvent) => this.handleDragStart(e));
+            this.plugin.registerDomEvent(handle, 'dragend', () => this.handleDragEnd());
         });
     }
     
@@ -4437,7 +4434,7 @@ export class BulkEditor extends Modal {
         this.draggedItem = propertyItem;
         
         // Add dragging class after a short delay for visual feedback
-        activeWindow.setTimeout(() => {
+        window.setTimeout(() => {
             if (this.draggedItem) {
                 this.draggedItem.classList.add('dragging');
             }

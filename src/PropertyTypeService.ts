@@ -245,7 +245,7 @@ export class PropertyTypeService {
                     if (item && typeof item === 'object' && 'type' in item && (item as unknown as PropertyWithType).type === 'string' && (item as unknown as PropertyWithType).originalString) {
                         return (item as unknown as PropertyWithType).originalString as string;
                     }
-                    return item as YamlPropertyValue;
+                    return item;
                 });
             } else if (propertyWithType.type === 'object' && typeof propertyWithType.value === 'object' && propertyWithType.value !== null) {
                 // Recursively restore nested objects

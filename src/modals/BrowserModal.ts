@@ -185,7 +185,7 @@ export class BrowserModal extends Modal {
         });
         
         // Register keyboard event handler
-        this.plugin.registerDomEvent(contentEl, 'keydown', this.handleKeyDown.bind(this));
+        this.plugin.registerDomEvent(contentEl, 'keydown', (e: KeyboardEvent) => this.handleKeyDown(e));
     }
 
     // Build hierarchical tree structure
